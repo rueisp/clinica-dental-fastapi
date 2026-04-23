@@ -1,0 +1,140 @@
+/* Resetear márgenes del body en móvil */
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* FullCalendar ocupa todo el ancho */
+.fc {
+  width: 100% !important;
+}
+
+.fc .fc-view-harness {
+  width: 100% !important;
+}
+
+.fc-daygrid-body {
+  width: 100% !important;
+}
+
+.fc-daygrid-day {
+  width: auto !important;
+}
+
+
+/* Texto de eventos */
+.fc-event-title {
+  font-weight: 700 !important;
+  font-size: 1.25rem !important;
+  color: #06ab45 !important;
+}
+
+.fc-event {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.fc-daygrid-day-number {
+  font-weight: 750 !important;
+  font-size: 1rem !important;
+  padding-right: 8px !important;
+  text-align: right !important;
+}
+
+/* Forzar ancho completo en móvil */
+@media (max-width: 768px) {
+  .fc .fc-daygrid-day-frame {
+    min-height: 80px !important;
+  }
+  
+  
+  .fc-header-toolbar {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    margin: 0 0 1rem 0 !important;
+    padding: 0 0.5rem !important;
+  }
+  
+  .fc-toolbar-title {
+    font-size: 3.1rem !important;
+  }
+  
+  .fc-event-title {
+    font-size: 1rem !important;
+  }
+  
+  .fc {
+    width: 100vw !important;
+    margin-left: calc(-50vw + 50%) !important;
+  }
+  
+  .bg-white {
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .fc-theme-standard td, 
+  .fc-theme-standard th {
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  .fc-daygrid-day {
+    border-bottom: 1px solid #f0f0f0 !important;
+  }
+
+  .fc-scrollgrid {
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  .fc-daygrid-day:first-child,
+  .fc-daygrid-day:last-child {
+    border-left: none !important;
+    border-right: none !important;
+  }
+}
+
+/* Forzar límite de ancho en PC */
+.sm\:max-w-5xl {
+  max-width: 80rem !important;
+}
+
+.sm\:mx-auto {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.sm\:px-4 {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+ 
+/* Día actual - círculo negro centrado */
+.fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  background-color: #000 !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  text-align: center !important;
+}
+
+/* Mantener el padding-right para todos los números normales */
+.fc .fc-daygrid-day-number {
+  font-size: 1rem !important;
+  padding: 4px 0 !important;
+  padding-right: 30px !important;
+}
+
+/* Remover fondo amarillo del día actual */
+.fc-daygrid-day.fc-day-today {
+  background-color: transparent !important;
+}
+
