@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { UserPlus, Home } from 'lucide-react';
 import { API_BASE_URL, authFetch } from '@/config/api';
 
 export default function ListaPacientes() {
+  const router = useRouter();
   const [pacientes, setPacientes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [buscar, setBuscar] = useState('');
@@ -15,10 +17,29 @@ export default function ListaPacientes() {
   const [haBuscado, setHaBuscado] = useState(false);
   const porPagina = 5;
 
-  // Cargar últimos pacientes al entrar
+// 1. Carga inicial: Se ejecuta solo una vez al entrar a la página
   useEffect(() => {
     cargarUltimosPacientes();
   }, []);
+
+  // 2. Búsqueda automática: Se ejecuta cada vez que cambia el texto en "buscar"
+  useEffect(() => {
+    // Definimos un temporizador para no saturar al servidor (Debounce)
+    const delayDebounceFn = setTimeout(() => {
+      
+      if (buscar.length >= 3) {
+        // Si hay 3 o más letras, buscamos
+        handleBuscar();
+      } else if (buscar.length === 0) {
+        // Si el usuario borra el buscador, volvemos a mostrar los últimos registros
+        cargarUltimosPacientes();
+      }
+      
+    }, 400); // Espera 400ms después de que el usuario deja de escribir
+
+    // Limpiamos el temporizador si el usuario sigue escribiendo antes de los 400ms
+    return () => clearTimeout(delayDebounceFn);
+  }, [buscar]);
 
   const cargarUltimosPacientes = async () => {
     setLoading(true);
@@ -71,66 +92,71 @@ export default function ListaPacientes() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-black">
+      {/* Cabecera */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <h1 className="text-3xl font-bold text-black">Pacientes</h1>
+        <h1 className="text-3xl font-black text-black tracking-tight">Pacientes</h1>
         <div className="flex gap-3">
           <Link href="/">
-            <button className="flex items-center justify-center bg-gray-600 text-white w-12 h-12 rounded-2xl hover:bg-gray-700 transition">
+            <button className="flex items-center justify-center bg-gray-100 text-gray-600 w-12 h-12 rounded-2xl hover:bg-gray-200 transition-all border border-gray-200">
               <Home className="w-6 h-6" />
             </button>
           </Link>
           <Link href="/pacientes/nuevo">
-            <button className="flex items-center gap-2 bg-black text-white px-6 py-2.5 rounded-2xl hover:bg-gray-800 transition">
-              <UserPlus className="w-7 h-7" /> 
+            <button className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-2xl hover:bg-gray-800 transition-all shadow-lg font-bold">
+              <UserPlus className="w-6 h-6" /> 
+              <span>Nuevo Paciente</span>
             </button>
           </Link>
         </div>
       </div>
 
+      {/* Buscador Estilo Unificado */}
       <div className="flex gap-3 mb-6">
         <input
           type="text"
           placeholder="Buscar por nombre o documento..."
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
-          className="flex-1 md:w-96 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20"
+          className="flex-1 md:w-96 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-black transition-all bg-white shadow-sm"
         />
         <button
           onClick={handleBuscar}
-          className="px-6 py-2.5 bg-black text-white rounded-xl hover:bg-gray-800 transition"
+          className="hidden md:block px-6 py-2.5 bg-black text-white rounded-xl hover:bg-gray-800 transition font-bold"
         >
           Buscar
         </button>
       </div>
 
+      {/* Contador de resultados */}
       {haBuscado && !loading && (
-        <div className="mb-4 text-sm text-gray-500">
-          Mostrando {pacientes.length} de {totalPacientes} pacientes
+        <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+          Mostrando {pacientes.length} de {totalPacientes} pacientes encontrados
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Tabla */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-100 border-b border-gray-100">
-              <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ID</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Nombre</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Documento</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Teléfono</th>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
+                <th className="px-6 py-4">ID</th>
+                <th className="px-6 py-4">Nombre</th>
+                <th className="px-6 py-4">Documento</th>
+                <th className="px-6 py-4">Teléfono</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
-                    Cargando...
+                  <td colSpan="4" className="px-6 py-12 text-center text-gray-400 italic">
+                    Cargando pacientes...
                   </td>
                 </tr>
               ) : pacientes.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan="4" className="px-6 py-12 text-center text-gray-400 italic">
                     No hay pacientes registrados
                   </td>
                 </tr>
@@ -138,13 +164,15 @@ export default function ListaPacientes() {
                 pacientes.map((p) => (
                   <tr 
                     key={p.id} 
-                    onClick={() => window.location.href = `/pacientes/${p.id}`}
-                    className="border-b border-gray-50 hover:bg-gray-200/50 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/pacientes/${p.id}`)}
+                    className="hover:bg-gray-50/50 transition-colors cursor-pointer group"
                   >
-                    <td className="px-6 py-4 text-sm text-gray-700">{p.id}</td>
-                    <td className="px-6 py-4 font-medium text-gray-900">{p.nombres} {p.apellidos}</td>
+                    <td className="px-6 py-4 text-sm text-gray-400 font-bold">#{p.id}</td>
+                    <td className="px-6 py-4 font-bold text-black group-hover:text-black transition-colors">
+                      {p.nombres} {p.apellidos}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{p.documento || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{p.telefono}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{p.telefono}</td>
                   </tr>
                 ))
               )}

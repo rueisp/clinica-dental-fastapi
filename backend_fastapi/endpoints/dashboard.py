@@ -7,7 +7,7 @@ from typing import Optional
 import pytz
 from database import get_db
 from dependencies.auth import get_current_user
-from models_fastapi import Usuario, Cita, Paciente
+from models import Usuario, Cita, Paciente
 from schemas import CitaCreate, CitaUpdate
 
 router = APIRouter()
@@ -187,7 +187,7 @@ async def eliminar_cita(
     db: AsyncSession = Depends(get_db)
 ):
     """Eliminar una cita (soft delete)"""
-    from models_fastapi import Cita
+    from models import Cita
     
     result = await db.execute(
         select(Cita).where(Cita.id == cita_id)

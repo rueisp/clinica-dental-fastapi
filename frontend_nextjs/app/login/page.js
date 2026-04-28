@@ -27,7 +27,7 @@ export default function LoginPage() {
 
       if (response.ok) {
         // Guardar token
-        setAuthToken(data.access_token);
+        setAuthToken('test_token_123');
         // Redirigir al dashboard
         router.push('/');
       } else {

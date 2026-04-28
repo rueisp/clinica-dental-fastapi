@@ -30,7 +30,7 @@ export default function EditarCita() {
 
   // Buscar pacientes
   const buscarPacientes = async (termino) => {
-    if (termino.length < 2) return;
+    if (termino.length < 3) return;
     try {
       const response = await authFetch(`${API_BASE_URL}/api/pacientes?search=${termino}`);
       const data = await response.json();
@@ -44,7 +44,7 @@ export default function EditarCita() {
   const buscarPacientesDebounced = (termino) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
-      if (termino.length >= 2) {
+      if (termino.length >= 3) {
         buscarPacientes(termino);
       } else {
         setPacientes([]);

@@ -1,7 +1,7 @@
 # create_admin.py
 import asyncio
 from database import AsyncSessionLocal
-from models_fastapi import Usuario
+from models import Usuario
 from utils.auth_utils import hash_password
 from sqlalchemy import select
 

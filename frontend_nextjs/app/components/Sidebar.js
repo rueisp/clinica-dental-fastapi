@@ -127,7 +127,7 @@ export default function Sidebar() {
             <span>Papelera</span>
           </Link>
           <Link
-            href="#"
+            href="/pagos"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
             onClick={closeSidebar}
           >

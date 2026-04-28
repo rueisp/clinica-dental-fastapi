@@ -5,7 +5,7 @@ from sqlalchemy import select
 from datetime import date
 from typing import Annotated
 from database import get_db
-from models_fastapi import Usuario, LimiteDiario, UsuarioPlan, Plan
+from models import Usuario, LimiteDiario, UsuarioPlan, Plan
 
 async def verificar_limite_pacientes(
     current_user: Usuario,

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react'; // Importamos iconos para el diseño
+import Link from 'next/link';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
 
@@ -26,34 +28,32 @@ export default function NuevaCita() {
   const [buscarPaciente, setBuscarPaciente] = useState('');
   const [pacientes, setPacientes] = useState([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
-  
-  // Función que busca en la API
+
+  // 1. LÓGICA DE BÚSQUEDA AUTOMÁTICA (DEBOUNCE)
+  useEffect(() => {
+    if (buscarPaciente.length >= 3) {
+      const delayDebounceFn = setTimeout(() => {
+        buscarPacientesAPI(buscarPaciente);
+      }, 400);
+
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setPacientes([]);
+      setMostrarResultados(false);
+    }
+  }, [buscarPaciente]);
+
   const buscarPacientesAPI = async (termino) => {
-    if (termino.length < 2) return;
     try {
       const response = await authFetch(`${API_BASE_URL}/api/pacientes?search=${termino}`);
       const data = await response.json();
       setPacientes(data.pacientes || []);
       setMostrarResultados(true);
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error buscando pacientes:', err);
     }
   };
-  
-  // Función con debounce
-  let timeoutId;
-  const buscarPacientesDebounced = (termino) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
-      if (termino.length >= 2) {
-        buscarPacientesAPI(termino);
-      } else {
-        setPacientes([]);
-        setMostrarResultados(false);
-      }
-    }, 300);
-  };
-  
+
   const seleccionarPaciente = (paciente) => {
     setFormData({
       ...formData,
@@ -64,23 +64,14 @@ export default function NuevaCita() {
     setBuscarPaciente('');
     setMostrarResultados(false);
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
     try {
       const response = await authFetch(`${API_BASE_URL}/api/citas`, {
         method: 'POST',
-        body: JSON.stringify({
-          fecha: formData.fecha,
-          hora: formData.hora,
-          paciente_id: formData.paciente_id,
-          paciente_nombre: formData.paciente_nombre,
-          paciente_telefono: formData.paciente_telefono,
-          motivo: formData.motivo,
-          doctor: formData.doctor
-        })
+        body: JSON.stringify(formData)
       });
       
       if (response.ok) {
@@ -95,119 +86,150 @@ export default function NuevaCita() {
       setLoading(false);
     }
   };
-  
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-black mb-6">Nueva Cita</h1>
+    <div className="max-w-3xl mx-auto px-4 py-8 text-black">
+      {/* Cabecera Estilo Pagos */}
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Nueva Cita</h1>
+          <p className="text-gray-400 font-medium">Agendar cita médica</p>
+        </div>
+        <Link href="/">
+          <button className="bg-gray-100 text-gray-600 p-3 rounded-2xl hover:bg-gray-200 transition-all">
+            <Home className="w-6 h-6" />
+          </button>
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
           
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* BUSCADOR DE PACIENTES - DISEÑO MEJORADO */}
+          <div className="relative">
+            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+              Buscar Paciente Existente
+            </label>
+            <div className="relative">
+              <Search className="absolute left-4 top-3.5 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                value={buscarPaciente}
+                onChange={(e) => setBuscarPaciente(e.target.value)}
+                placeholder="Escribe nombre o documento..."
+                className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black/5 transition-all text-black font-medium"
+              />
+            </div>
+            
+            {/* Resultados flotantes estilo profesional */}
+            {mostrarResultados && pacientes.length > 0 && (
+              <div className="absolute z-10 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                {pacientes.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => seleccionarPaciente(p)}
+                    className="w-full text-left px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors group"
+                  >
+                    <div className="font-bold text-black group-hover:text-blue-600">{p.nombres} {p.apellidos}</div>
+                    <div className="text-xs text-gray-400 font-medium">Doc: {p.documento || 'N/A'} • Tel: {p.telefono}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
+            {/* Fecha */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                <Calendar className="w-3.5 h-3.5" /> Fecha
+              </label>
               <input
                 type="date"
                 value={formData.fecha}
                 onChange={(e) => setFormData({...formData, fecha: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-black focus:border-black"
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
                 required
               />
             </div>
-            
+
+            {/* Hora */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
+              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                <span className="text-[10px]">⏰</span> Hora
+              </label>
               <input
                 type="time"
                 value={formData.hora}
                 onChange={(e) => setFormData({...formData, hora: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-black focus:border-black"
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
                 required
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Buscar Paciente</label>
-              <input
-                type="text"
-                value={buscarPaciente}
-                onChange={(e) => {
-                  setBuscarPaciente(e.target.value);
-                  buscarPacientesDebounced(e.target.value);
-                }}
-                onBlur={() => {
-                  setTimeout(() => {
-                    setMostrarResultados(false);
-                  }, 200);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="Escribe nombre o teléfono"
-              />
-              {mostrarResultados && pacientes.length > 0 && (
-                <div className="mt-1 border rounded-lg max-h-40 overflow-y-auto">
-                  {pacientes.map(paciente => (
-                    <button
-                      key={paciente.id}
-                      type="button"
-                      onClick={() => seleccionarPaciente(paciente)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b"
-                    >
-                      <div className="font-medium">{paciente.nombres} {paciente.apellidos}</div>
-                      <div className="text-xs text-gray-500">{paciente.telefono}</div>
-                    </button>
-                  ))}
+          </div>
+
+          {/* Datos del Paciente Seleccionado */}
+          <div className="space-y-4 pt-4">
+             <div>
+                <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                  <User className="w-3.5 h-3.5" /> Nombre Completo
+                </label>
+                <input
+                  type="text"
+                  value={formData.paciente_nombre}
+                  onChange={(e) => setFormData({...formData, paciente_nombre: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5 font-medium"
+                  placeholder="Nombre del paciente"
+                  required
+                />
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                    <Phone className="w-3.5 h-3.5" /> Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.paciente_telefono}
+                    onChange={(e) => setFormData({...formData, paciente_telefono: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
+                  />
                 </div>
-              )}
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Paciente</label>
-              <input
-                type="text"
-                value={formData.paciente_nombre}
-                onChange={(e) => setFormData({...formData, paciente_nombre: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-              <input
-                type="tel"
-                value={formData.paciente_telefono}
-                onChange={(e) => setFormData({...formData, paciente_telefono: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
-              <input
-                type="text"
-                value={formData.motivo}
-                onChange={(e) => setFormData({...formData, motivo: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="Ej: Limpieza, Consulta, Urgencia"
-              />
-            </div>
-            
-            <div className="flex gap-3 pt-4">
-              <Button 
-                type="submit" 
-                texto={loading ? 'Guardando...' : 'Guardar Cita'} 
-                variant="primary" 
-                disabled={loading}
-                className="flex-1"
-              />
-              <Button 
-                texto="Cancelar" 
-                variant="secondary" 
-                onClick={() => router.back()}
-                className="flex-1"
-              />
-            </div>
-          </form>
-        </div>
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                    <MessageSquare className="w-3.5 h-3.5" /> Motivo / Procedimiento
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.motivo}
+                    onChange={(e) => setFormData({...formData, motivo: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
+                    placeholder="Ej: Limpieza dental"
+                  />
+                </div>
+             </div>
+          </div>
+
+          {/* Botones de Acción */}
+          <div className="flex gap-4 pt-6">
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
+            >
+              {loading ? 'Agendando...' : 'Confirmar Cita'}
+            </button>
+            <button 
+              type="button"
+              onClick={() => router.back()}
+              className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

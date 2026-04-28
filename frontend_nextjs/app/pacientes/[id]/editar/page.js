@@ -17,10 +17,14 @@ export default function EditarPaciente() {
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState(null);
 
+  // Usamos la variable de entorno que configuramos en .env.local
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
   useEffect(() => {
     const fetchPaciente = async () => {
       try {
-        const response = await fetch(`http://192.168.1.7:8001/api/pacientes/${id}`, {
+        // CORRECCIÓN: Usamos el ID de la URL y la variable dinámica
+        const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
           headers: { 'Authorization': 'Bearer test_token_123' }
         });
         
@@ -34,6 +38,7 @@ export default function EditarPaciente() {
           setImagenPreview(data.imagen_perfil_url);
         }
       } catch (err) {
+        console.error("Error fetching:", err);
         alert(err.message);
         router.push('/pacientes');
       } finally {
@@ -44,7 +49,7 @@ export default function EditarPaciente() {
     if (id) {
       fetchPaciente();
     }
-  }, [id, router]);
+  }, [id, router, API_URL]);
 
   const handleChange = (name, value) => {
     setPaciente(prev => ({ ...prev, [name]: value }));
@@ -61,60 +66,34 @@ export default function EditarPaciente() {
     setPaciente(prev => ({ ...prev, eliminar_imagen: 'true' }));
   };
 
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!paciente) return;
     setSaving(true);
     
-    // Exportar dentigrama
-    const dentigramaBase64 = await dentigramaRef.current.exportar();
-    
-    // Crear FormData
-    const formData = new FormData();
-    
-    // Agregar todos los campos de texto
-    if (paciente.nombres) formData.append('nombres', paciente.nombres);
-    if (paciente.apellidos) formData.append('apellidos', paciente.apellidos);
-    if (paciente.tipo_documento) formData.append('tipo_documento', paciente.tipo_documento);
-    if (paciente.documento) formData.append('documento', paciente.documento);
-    if (paciente.fecha_nacimiento) formData.append('fecha_nacimiento', paciente.fecha_nacimiento);
-    if (paciente.edad) formData.append('edad', paciente.edad);
-    if (paciente.sexo) formData.append('sexo', paciente.sexo);
-    if (paciente.email) formData.append('email', paciente.email);
-    if (paciente.telefono) formData.append('telefono', paciente.telefono);
-    if (paciente.direccion) formData.append('direccion', paciente.direccion);
-    if (paciente.barrio) formData.append('barrio', paciente.barrio);
-    if (paciente.motivo_consulta) formData.append('motivo_consulta', paciente.motivo_consulta);
-    if (paciente.enfermedad_actual) formData.append('enfermedad_actual', paciente.enfermedad_actual);
-    if (paciente.alergias) formData.append('alergias', paciente.alergias);
-    if (paciente.observaciones) formData.append('observaciones', paciente.observaciones);
-    if (paciente.ocupacion) formData.append('ocupacion', paciente.ocupacion);
-    if (paciente.cepillado_dental) formData.append('cepillado_dental', paciente.cepillado_dental);
-    if (paciente.habitos) formData.append('habitos', paciente.habitos);
-    
-    // Dentigrama (base64)
-    if (dentigramaBase64) {
-      formData.append('dentigrama_canvas', dentigramaBase64);
-    }
-    
-    // Imagen de perfil (si se seleccionó una nueva)
-    if (imagenFile) {
-      formData.append('imagen_perfil', imagenFile);
-    }
-    
-    // Flag para eliminar imagen (si se eliminó)
-    if (paciente.eliminar_imagen === 'true') {
-      formData.append('eliminar_imagen', 'true');
-    }
-    
     try {
-      const response = await fetch(`http://192.168.1.7:8001/api/pacientes/${id}`, {
+      const dentigramaBase64 = await dentigramaRef.current.exportar();
+      const formData = new FormData();
+      
+      // Lista de campos a enviar
+      const campos = [
+        'nombres', 'apellidos', 'tipo_documento', 'documento', 
+        'fecha_nacimiento', 'edad', 'sexo', 'email', 'telefono', 
+        'direccion', 'barrio', 'motivo_consulta', 'enfermedad_actual', 
+        'alergias', 'observaciones', 'ocupacion', 'cepillado_dental', 'habitos'
+      ];
+
+      campos.forEach(campo => {
+        if (paciente[campo]) formData.append(campo, paciente[campo]);
+      });
+      
+      if (dentigramaBase64) formData.append('dentigrama_canvas', dentigramaBase64);
+      if (imagenFile) formData.append('imagen_perfil', imagenFile);
+      if (paciente.eliminar_imagen === 'true') formData.append('eliminar_imagen', 'true');
+
+      const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': 'Bearer test_token_123'
-          // ❌ NO incluyas 'Content-Type' cuando usas FormData
-        },
+        headers: { 'Authorization': 'Bearer test_token_123' },
         body: formData
       });
       
@@ -131,19 +110,22 @@ export default function EditarPaciente() {
     }
   };
 
-  if (loading) {
+  // PROTECCIÓN 1: Mientras carga o si el paciente es null, no mostramos el formulario
+  if (loading || !paciente) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center">
         <HeaderPaciente loading={true} />
+        <p className="mt-4 text-gray-500">Cargando datos del paciente...</p>
       </div>
     );
   }
 
+  // PROTECCIÓN 2: Uso de "?" (Optional Chaining) en todo el diseño
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 text-center">
         <p className="text-yellow-700 text-sm">
-           Editando a <strong>{paciente?.nombre_completo}</strong>
+           Editando a <strong>{paciente?.nombre_completo || `${paciente?.nombres} ${paciente?.apellidos}`}</strong>
         </p>
       </div>
 
@@ -151,6 +133,7 @@ export default function EditarPaciente() {
         <HeaderPaciente 
           paciente={paciente}
           modo="editar"
+          saving={saving}
         />
         
         <TarjetaInfoPaciente 
@@ -162,11 +145,11 @@ export default function EditarPaciente() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <DentigramaEditor 
             ref={dentigramaRef}
-            fondoUrl={paciente.dentigrama_canvas}
+            fondoUrl={paciente?.dentigrama_canvas}
           />
           <ImagenPerfil 
             imagenUrl={imagenPreview}
-            nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
+            nombrePaciente={`${paciente?.nombres} ${paciente?.apellidos}`}
             modo="editar"
             onImageChange={handleImageChange}
             onImageDelete={handleImageDelete}

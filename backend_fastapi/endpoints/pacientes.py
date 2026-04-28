@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from database import get_db
 from dependencies.auth import get_current_user
 from dependencies.limites import verificar_limite_pacientes
-from models_fastapi import Usuario, Paciente, LimiteDiario, Evolucion
+from models import Usuario, Paciente, LimiteDiario, Evolucion
 from sqlalchemy import or_, delete
 
 

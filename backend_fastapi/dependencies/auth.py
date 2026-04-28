@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
-from models_fastapi import Usuario
+from models import Usuario
 
 security = HTTPBearer(auto_error=False)
 

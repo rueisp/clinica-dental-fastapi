@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_db
-from models_fastapi import Usuario
+from models import Usuario
 from schemas import LoginRequest, TokenResponse, UsuarioCreate
 from utils.auth_utils import verificar_password, hash_password, crear_token_acceso
 

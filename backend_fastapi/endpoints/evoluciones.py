@@ -5,7 +5,7 @@ from datetime import datetime
 import pytz
 from database import get_db
 from dependencies.auth import get_current_user
-from models_fastapi import Usuario, Paciente, Evolucion
+from models import Usuario, Paciente, Evolucion
 from pydantic import BaseModel
 from typing import Optional
 

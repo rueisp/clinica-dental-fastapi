@@ -1,6 +1,8 @@
 'use client';
 
-import { User, Heart, Trash2} from 'lucide-react';
+import { User, Heart, Trash2 } from 'lucide-react';
+// Importamos las herramientas de configuración central
+import { authFetch, API_ENDPOINTS } from '@/config/api';
 
 export default function TarjetaInfoPaciente({ 
   paciente,     
@@ -38,15 +40,16 @@ export default function TarjetaInfoPaciente({
     }
   };
 
-    // ✅ AGREGAR AQUÍ - Función para eliminar paciente
+  // Función para eliminar paciente corregida (sin IPs fijas)
   const handleEliminar = async () => {
+    if (!paciente?.id) return;
+
     const confirmar = confirm('¿Estás seguro de mover este paciente a la papelera?');
     if (!confirmar) return;
     
     try {
-      const response = await fetch(`http://192.168.1.7:8001/api/pacientes/${paciente.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'Bearer test_token_123' }
+      const response = await authFetch(API_ENDPOINTS.PACIENTE_BY_ID(paciente.id), {
+        method: 'DELETE'
       });
       
       if (response.ok) {
@@ -57,20 +60,22 @@ export default function TarjetaInfoPaciente({
         alert(error.detail || 'Error al eliminar');
       }
     } catch (error) {
-      alert('Error de conexión');
+      console.error("Error al eliminar:", error);
+      alert('Error de conexión con el servidor');
     }
   };
 
-  // Modo solo lectura (mostrar)
+  // --- MODO SOLO LECTURA (MOSTRAR) ---
   if (modo === 'mostrar') {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
-          <User className="w-6 h-6 text-gray-600" />
-          Información del Paciente
-        </h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+            <User className="w-6 h-6 text-gray-600" />
+            Información del Paciente
+          </h2>
+        </div>
         
-        {/* Fila 1: Nombres, Apellidos, Tipo Documento, Documento */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500">Nombres</p>
@@ -90,7 +95,6 @@ export default function TarjetaInfoPaciente({
           </div>
         </div>
 
-        {/* Fila 2: Fecha Nacimiento, Edad, Sexo, Teléfono */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500">Fecha Nacimiento</p>
@@ -112,7 +116,6 @@ export default function TarjetaInfoPaciente({
           </div>
         </div>
 
-        {/* Fila 3: Email, Ocupación, Dirección, Barrio */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500">Email</p>
@@ -132,7 +135,6 @@ export default function TarjetaInfoPaciente({
           </div>
         </div>
 
-        {/* Separador */}
         <div className="border-t border-gray-100 my-4"></div>
 
         <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
@@ -140,7 +142,6 @@ export default function TarjetaInfoPaciente({
           Información Clínica
         </h2>
 
-        {/* Fila 4: Motivo de Consulta, Enfermedad Actual */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Motivo de Consulta</p>
@@ -152,7 +153,6 @@ export default function TarjetaInfoPaciente({
           </div>
         </div>
 
-        {/* Fila 5: Alergias, Observaciones Generales */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Alergias</p>
@@ -164,7 +164,6 @@ export default function TarjetaInfoPaciente({
           </div>
         </div>
 
-        {/* Fila 6: Cepillado Dental y Hábitos */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
             <p className="text-xs text-gray-500 mb-1">Cepillado Dental</p>
@@ -179,7 +178,7 @@ export default function TarjetaInfoPaciente({
     );
   }
 
-  // Modo edición o registro
+  // --- MODO EDICIÓN O REGISTRO ---
   const data = modo === 'editar' ? paciente : formData;
   const esRegistro = modo === 'registrar';
 
@@ -190,7 +189,6 @@ export default function TarjetaInfoPaciente({
         Información del Paciente
       </h2>
       
-      {/* Fila 1: Nombres, Apellidos, Tipo Documento, Documento */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Nombres {esRegistro && '*'}</label>
@@ -244,7 +242,6 @@ export default function TarjetaInfoPaciente({
         </div>
       </div>
 
-      {/* Fila 2: Fecha Nacimiento, Edad, Sexo, Teléfono */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Fecha Nacimiento</label>
@@ -294,7 +291,6 @@ export default function TarjetaInfoPaciente({
         </div>
       </div>
 
-      {/* Fila 3: Email, Ocupación, Dirección, Barrio */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Email</label>
@@ -315,7 +311,7 @@ export default function TarjetaInfoPaciente({
             value={data?.ocupacion || ''}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="Ej: Ingeniero, Estudiante"
+            placeholder="Ej: Ingeniero"
           />
         </div>
         <div>
@@ -342,7 +338,6 @@ export default function TarjetaInfoPaciente({
         </div>
       </div>
 
-      {/* Separador */}
       <div className="border-t border-gray-100 my-4"></div>
 
       <h2 className="text-lg font-semibold text-black mb-4 flex items-center gap-2">
@@ -350,7 +345,6 @@ export default function TarjetaInfoPaciente({
         Información Clínica
       </h2>
 
-      {/* Fila 4: Motivo de Consulta, Enfermedad Actual */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Motivo de Consulta</label>
@@ -360,7 +354,6 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="¿Por qué consulta el paciente?"
           ></textarea>
         </div>
         <div>
@@ -371,12 +364,10 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="Describa la enfermedad actual"
           ></textarea>
         </div>
       </div>
 
-      {/* Fila 5: Alergias, Observaciones Generales */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Alergias</label>
@@ -386,7 +377,6 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="¿Tiene alguna alergia?"
           ></textarea>
         </div>
         <div>
@@ -397,11 +387,10 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="Observaciones adicionales"
           ></textarea>
         </div>
       </div>
-      {/* Fila 6: Cepillado Dental y Hábitos */}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Cepillado Dental</label>
@@ -411,7 +400,6 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="Ej: 3 veces al día, usa hilo dental, etc."
           ></textarea>
         </div>
         <div>
@@ -422,7 +410,6 @@ export default function TarjetaInfoPaciente({
             onChange={handleChange}
             rows="2"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
-            placeholder="Ej: Fuma, toma café, bruxismo, etc."
           ></textarea>
         </div>
       </div>

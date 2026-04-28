@@ -42,12 +42,12 @@ export default function HeaderPaciente({
         <div className="flex flex-wrap gap-3">
           {modo === 'mostrar' && (
             <>
-            <Button 
-              icon="Trash2" 
-              texto="Eliminar" 
-              onClick={onEliminar}
-              variant="danger" 
-            />
+              <Button 
+            icon="Trash2" 
+            texto="Eliminar" 
+            onClick={onEliminar}
+            variant="danger" 
+          />
             <Button 
               icon="Pencil" 
               texto="Editar" 
