@@ -7,9 +7,9 @@ import TarjetaInfoPaciente from '@/app/components/pacientes/TarjetaInfoPaciente'
 import Dentigrama from '@/app/components/pacientes/Dentigrama';
 import Evoluciones from '@/app/components/pacientes/Evoluciones';
 import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
-import { API_BASE_URL, authFetch } from '@/config/api';
+import { API_BASE_URL, authFetch, API_ENDPOINTS } from '@/config/api';
 // Importamos los iconos solicitados
-import { ClipboardList, Activity } from 'lucide-react';
+import { ClipboardList, Activity, FileText } from 'lucide-react';
 
 export default function MostrarPaciente() {
   const { id } = useParams();
@@ -50,6 +50,29 @@ export default function MostrarPaciente() {
       }
     } catch (error) {
       alert('Error de conexión');
+    }
+  };
+
+  const handleExportarWord = async () => {
+    try {
+      const response = await authFetch(API_ENDPOINTS.EXPORTAR_PACIENTE_WORD(id));
+      if (!response.ok) throw new Error('Error al generar el documento');
+
+      // Manejo de archivo binario (Blob)
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Historia_${paciente.apellidos}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpieza
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert('No se pudo descargar la historia clínica');
     }
   };
 
@@ -94,11 +117,21 @@ export default function MostrarPaciente() {
         modo="mostrar"
       />
       
-      {/* 3. Evoluciones con Icono */}
+      {/* 3. Evoluciones con Icono y Botón de Exportar */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4 text-gray-800">
-          <ClipboardList size={20} className="text-blue-500" />
-          <h2 className="font-bold">Evoluciones Clínicas</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-gray-800">
+            <ClipboardList size={20} className="text-blue-500" />
+            <h2 className="font-bold">Evoluciones Clínicas</h2>
+          </div>
+          
+          <button
+            onClick={handleExportarWord}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all border border-blue-100"
+          >
+            <FileText size={16} />
+            EXPORTAR HISTORIA
+          </button>
         </div>
         <Evoluciones pacienteId={parseInt(id)} />
       </div>

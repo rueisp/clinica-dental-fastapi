@@ -15,6 +15,9 @@ from dependencies.auth import get_current_user
 from dependencies.limites import verificar_limite_pacientes
 from models import Usuario, Paciente, LimiteDiario, Evolucion
 from sqlalchemy import or_, delete
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import selectinload
+from services.export_service import generar_historia_clinica_word
 
 
 
@@ -643,3 +646,36 @@ async def buscar_pacientes_autocomplete(
             for p in pacientes
         ]
     }
+
+@router.get("/pacientes/{paciente_id}/exportar-word")
+async def exportar_paciente_word(
+    paciente_id: int,
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. Buscamos el paciente e incluimos sus evoluciones
+    result = await db.execute(
+        select(Paciente)
+        .options(selectinload(Paciente.evoluciones))
+        .where(Paciente.id == paciente_id)
+    )
+    paciente = result.scalar_one_or_none()
+
+    if not paciente:
+        raise HTTPException(status_code=404, detail="Paciente no encontrado")
+
+    # 2. Verificamos permisos
+    if not current_user.is_admin and paciente.odontologo_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para exportar este paciente")
+
+    # 3. Llamamos al servicio para generar el archivo en RAM
+    buffer = generar_historia_clinica_word(paciente, current_user)
+
+    # 4. Retornamos el archivo para descarga inmediata
+    filename = f"Historia_{paciente.apellidos}_{paciente.nombres}.docx".replace(" ", "_")
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

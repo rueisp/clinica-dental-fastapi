@@ -48,9 +48,10 @@ export const API_ENDPOINTS = {
   CITAS_EVENTOS: `${API_BASE_URL}/api/citas/eventos`,
   PACIENTES: `${API_BASE_URL}/api/pacientes`,
   PACIENTE_BY_ID: (id) => `${API_BASE_URL}/api/pacientes/${id}`,
-  EVOLUCIONES_BY_PACIENTE: (id) => `${API_BASE_URL}/api/evoluciones/paciente/${id}`,
+  EVOLUCIONES_BY_PACIENTE: (id) => `${API_BASE_URL}/api/pacientes/${id}/evoluciones`,
   NUEVA_EVOLUCION: `${API_BASE_URL}/api/evoluciones`,
   NUEVO_PAGO: `${API_BASE_URL}/api/pagos/nuevo`,
   OBTENER_PAGO: (id) => `${API_BASE_URL}/api/pagos/${id}`,
   LISTAR_PAGOS: `${API_BASE_URL}/api/pagos`, // Endpoint para el historial
+  EXPORTAR_PACIENTE_WORD: (id) => `${API_BASE_URL}/api/pacientes/${id}/exportar-word`,
 };

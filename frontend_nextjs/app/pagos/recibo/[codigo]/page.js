@@ -2,13 +2,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { authFetch, API_BASE_URL } from '@/config/api';
-import { Printer, ArrowLeft, MessageCircle, CheckCircle } from 'lucide-react';
+import { Printer, ArrowLeft, MessageCircle, CheckCircle, LayoutDashboard } from 'lucide-react';
 
 export default function ReciboDetalle() {
   const { codigo } = useParams();
   const router = useRouter();
   const [pago, setPago] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // ESTADO NUEVO: Controla la visibilidad de la barra
+  const [showControls, setShowControls] = useState(true);
 
   useEffect(() => {
     const fetchPago = async () => {
@@ -27,8 +30,8 @@ export default function ReciboDetalle() {
     fetchPago();
   }, [codigo]);
 
-  if (loading) return <div className="p-10 text-center">Cargando recibo...</div>;
-  if (!pago) return <div className="p-10 text-center text-red-500">Recibo no encontrado</div>;
+  if (loading) return <div className="p-10 text-center font-sans">Cargando recibo...</div>;
+  if (!pago) return <div className="p-10 text-center text-red-500 font-sans">Recibo no encontrado</div>;
 
   const formatearMoneda = (valor) => {
     return new Intl.NumberFormat('es-CO', {
@@ -46,24 +49,17 @@ export default function ReciboDetalle() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-8">
-      {/* Botones de acción (No se imprimen) */}
-      <div className="max-w-md mx-auto mb-6 flex justify-between print:hidden">
-        <button onClick={() => router.push('/')} className="text-gray-600 flex items-center gap-2">
-          <ArrowLeft size={20} /> Dashboard
-        </button>
-        <div className="flex gap-3">
-          <button onClick={() => window.print()} className="p-2 bg-white rounded-full shadow-md text-gray-600">
-            <Printer size={20} />
-          </button>
-          <button onClick={enviarWhatsApp} className="p-2 bg-green-500 rounded-full shadow-md text-white">
-            <MessageCircle size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* El Recibo Fisico - Bordes redondeados aplicados aquí */}
-      <div className="max-w-md mx-auto bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-gray-200 print:shadow-none print:border-none">
+    /* 
+      Contenedor principal con onClick para alternar los controles.
+      Se usa select-none para evitar que se seleccione texto al tocar mucho la pantalla.
+    */
+    <div 
+      onClick={() => setShowControls(!showControls)}
+      className="min-h-screen bg-gray-100 p-4 sm:p-8 flex flex-col items-center justify-center relative cursor-pointer select-none"
+    >
+      
+      {/* EL RECIBO (Mantenemos tu diseño original de tarjeta intacto) */}
+      <div className="w-full max-w-md bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-gray-200 transition-all duration-300 print:shadow-none print:border-none">
         
         {/* Cabecera Negra */}
         <div className="bg-black p-8 text-center text-white">
@@ -71,15 +67,14 @@ export default function ReciboDetalle() {
             <CheckCircle size={40} className="text-green-400" />
           </div>
           
-          <h1 className="text-xl font-bold tracking-tight">PAGO EXITOSO</h1>
+          <h1 className="text-xl font-bold tracking-tight uppercase">Pago Exitoso</h1>
           
-          {/* Código Arriba, Fecha y Hora Debajo (Centrado) */}
           <div className="flex flex-col items-center mt-4 space-y-1">
             <p className="text-gray-400 text-[11px] uppercase tracking-[0.2em] font-medium">
               {pago.codigo}
             </p>
             <p className="text-gray-400 text-[10px] uppercase tracking-widest">
-              {new Date(pago.fecha).toLocaleDateString('es-CO')} 
+              {`${pago.codigo.substring(8, 10)}/${pago.codigo.substring(6, 8)}/${pago.codigo.substring(2, 6)}`}
               <span className="mx-2 text-gray-600">•</span>
               {pago.hora ? pago.hora.substring(0, 5) : ''}
             </p>
@@ -87,9 +82,9 @@ export default function ReciboDetalle() {
         </div>
 
         <div className="p-8 space-y-6">
-          {/* Paciente (Ancho completo) */}
-          <div className="border-b pb-4 border-dashed">
-            <p className="text-xs font-bold text-gray-400 uppercase">Paciente</p>
+          {/* Paciente */}
+          <div className="border-b pb-4 border-dashed border-gray-200">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Paciente</p>
             <p className="text-lg font-bold text-black leading-tight break-words uppercase">
               {pago.paciente_nombre}
             </p>
@@ -97,19 +92,18 @@ export default function ReciboDetalle() {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase">Descripción</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Descripción</span>
               <span className="text-xs font-bold text-black uppercase">{pago.descripcion}</span>
             </div>
             
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase">Método de Pago</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Método de Pago</span>
               <span className="text-xs font-bold text-black uppercase">{pago.metodo_pago}</span>
             </div>
 
-            {/* Observación: Solo si existe */}
             {pago.observacion && pago.observacion.trim() !== "" && (
               <div className="flex justify-between items-start gap-4 border-t border-gray-50 pt-2">
-                <span className="text-xs font-bold text-gray-400 uppercase shrink-0">Observación</span>
+                <span className="text-xs font-bold text-gray-400 uppercase shrink-0 tracking-wider">Observación</span>
                 <span className="text-xs font-bold text-black uppercase text-right leading-tight">
                   {pago.observacion}
                 </span>
@@ -118,19 +112,65 @@ export default function ReciboDetalle() {
           </div>
 
           {/* Caja de Total */}
-          <div className="bg-gray-50 p-6 rounded-3xl text-center">
-            <p className="text-xs font-bold text-gray-400 uppercase mb-1">Total Pagado</p>
+          <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase mb-1 tracking-widest">Total Pagado</p>
             <p className="text-4xl font-black text-black">{formatearMoneda(pago.monto)}</p>
           </div>
 
           <div className="text-center pt-4">
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">
               Odontología Dr. Rueis Pitre - 3233316976
             </p>
           </div>
         </div>
-
       </div>
+
+      {/* --- NUEVA BARRA FLOTANTE DE ACCIONES --- */}
+      <div 
+        onClick={(e) => e.stopPropagation()} // Evita que la barra se cierre al tocar los botones
+        className={`fixed bottom-10 left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out z-50 print:hidden
+          ${showControls ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-95 pointer-events-none'}`}
+      >
+        <div className="bg-white/90 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6">
+          
+          {/* Botón Dashboard */}
+          <button 
+            onClick={() => router.push('/')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
+              <LayoutDashboard size={20} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
+          </button>
+
+          <div className="w-[1px] h-8 bg-gray-200" />
+
+          {/* Botón WhatsApp */}
+          <button 
+            onClick={enviarWhatsApp}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="p-2 bg-green-50 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition-colors">
+              <MessageCircle size={20} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">WhatsApp</span>
+          </button>
+
+          {/* Botón Imprimir */}
+          <button 
+            onClick={() => window.print()}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
+              <Printer size={20} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Imprimir</span>
+          </button>
+
+        </div>
+      </div>
+
     </div>
   );
 }
