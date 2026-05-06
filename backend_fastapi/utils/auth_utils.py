@@ -3,13 +3,22 @@ from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
 from config import Config
+from werkzeug.security import check_password_hash as check_werkzeug # Importamos el viejo
 
-# Configuración de hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verificar_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica si la contraseña plain coincide con el hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verifica contraseñas en formato nuevo (Passlib) y viejo (Werkzeug)"""
+    try:
+        # 1. Si empieza con $, es formato Bcrypt (Nuevos registros)
+        if hashed_password.startswith("$"):
+            return pwd_context.verify(plain_password, hashed_password)
+        
+        # 2. Si no, es el formato de Werkzeug (Usuario admin viejo)
+        return check_werkzeug(hashed_password, plain_password)
+    except Exception:
+        return False
+
 
 def hash_password(password: str) -> str:
     """Genera hash de una contraseña"""

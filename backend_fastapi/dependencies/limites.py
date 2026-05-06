@@ -1,63 +1,51 @@
-# dependencies/limites.py
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from datetime import date
-from typing import Annotated
-from database import get_db
-from models import Usuario, LimiteDiario, UsuarioPlan, Plan
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from datetime import datetime
+from models import LimiteDiario, Usuario, Subscription
 
-async def verificar_limite_pacientes(
-    current_user: Usuario,
-    db: AsyncSession
-):
-    """Verifica límite diario de pacientes"""
+async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
+    hoy = datetime.now().date()
     
-    fecha_hoy = date.today()
-    
-    # Obtener el plan activo del usuario
-    result = await db.execute(
-        select(UsuarioPlan).where(
-            UsuarioPlan.usuario_id == current_user.id,
-            UsuarioPlan.estado == 'activo'
-        )
+    # 1. Cargamos al usuario con su suscripción de forma explícita para evitar el error de greenlet
+    result_user = await db.execute(
+        select(Usuario)
+        .options(selectinload(Usuario.subscription))
+        .where(Usuario.id == current_user.id)
     )
-    usuario_plan = result.scalar_one_or_none()
+    user_con_plan = result_user.scalars().first()
     
-    if usuario_plan:
-        result_plan = await db.execute(select(Plan).where(Plan.id == usuario_plan.plan_id))
-        plan = result_plan.scalar_one_or_none()
-        limite_segun_plan = plan.limite_pacientes_diario if plan else 10
-    else:
-        limite_segun_plan = 10
+    # 2. Determinar el plan y su límite
+    plan = "trial"
+    if user_con_plan and user_con_plan.subscription:
+        plan = user_con_plan.subscription.plan_type
+        
+    LIMITES_POR_PLAN = {
+        "trial": 5,
+        "basico_mensual": 20,
+        "pro_mensual": 999,
+        "basico_anual": 20,
+        "pro_anual": 999
+    }
     
-    # Buscar o crear límite diario
-    result = await db.execute(
+    limite_maximo = LIMITES_POR_PLAN.get(plan, 5)
+    
+    # 3. Buscar el conteo de hoy
+    result_limite = await db.execute(
         select(LimiteDiario).where(
-            LimiteDiario.usuario_id == current_user.id,
-            LimiteDiario.fecha == fecha_hoy
+            LimiteDiario.user_id == current_user.id,
+            LimiteDiario.fecha == hoy
         )
     )
-    limite_diario = result.scalar_one_or_none()
+    registro = result_limite.scalars().first()
     
-    if limite_diario is None:
-        limite_diario = LimiteDiario(
-            usuario_id=current_user.id,
-            fecha=fecha_hoy,
-            contador_pacientes=0,
-            limite_actual=limite_segun_plan
-        )
-        db.add(limite_diario)
-        await db.commit()
-    else:
-        if limite_diario.limite_actual != limite_segun_plan:
-            limite_diario.limite_actual = limite_segun_plan
-            await db.commit()
+    cantidad_actual = registro.contador_pacientes if registro else 0
     
-    if limite_diario.contador_pacientes >= limite_diario.limite_actual:
+    if cantidad_actual >= limite_maximo:
         raise HTTPException(
-            status_code=429,
-            detail=f"Límite diario alcanzado: {limite_diario.contador_pacientes}/{limite_diario.limite_actual} pacientes hoy."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Límite alcanzado: {cantidad_actual}/{limite_maximo} para el plan {plan}."
         )
     
-    return current_user
+    return True

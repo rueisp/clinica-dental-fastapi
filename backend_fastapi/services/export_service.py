@@ -102,7 +102,7 @@ def generar_historia_clinica_word(paciente, odontologo):
     doc.add_paragraph("\n")
     firma_p = doc.add_paragraph()
     firma_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run_firma = firma_p.add_run(f"__________________________\nDr/Dra. {odontologo.nombre_completo or odontologo.username}\nOdontólogo Responsable")
+    run_firma = firma_p.add_run(f"__________________________\nDr/Dra. {odontologo.nombres or odontologo.username}\nOdontólogo Responsable")
     run_firma.font.size = Pt(8)
 
     # Ajustar estilos de los Headings para que sean más pequeños

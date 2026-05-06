@@ -1,14 +1,16 @@
 from pydantic import BaseModel, Field
 from datetime import date, time, datetime
-from typing import Optional
+from typing import Optional, Union # Añadimos Union por seguridad
+from uuid import UUID # IMPORTANTE: Para que reconozca los códigos largos
 
 class CitaCreate(BaseModel):
     """Esquema para CREAR una nueva cita"""
-    fecha: str  # Formato YYYY-MM-DD (como manejas en tu código)
-    hora: str   # Formato HH:MM
+    fecha: str  
+    hora: str   
     motivo: Optional[str] = None
     doctor: Optional[str] = None
-    paciente_id: Optional[int] = None
+    # CAMBIO: De int a str para aceptar el UUID del paciente
+    paciente_id: Optional[str] = None 
     paciente_nombre: Optional[str] = None
     paciente_telefono: Optional[str] = None
 
@@ -18,19 +20,22 @@ class CitaUpdate(BaseModel):
     hora: Optional[str] = None
     motivo: Optional[str] = None
     doctor: Optional[str] = None
-    paciente_id: Optional[int] = None
+    # CAMBIO: También aquí debe aceptar el código largo
+    paciente_id: Optional[str] = None 
     paciente_nombre: Optional[str] = None
     paciente_telefono: Optional[str] = None
 
 class CitaResponse(BaseModel):
     """Esquema para RESPONDER con datos de cita"""
-    id: int
+    # CAMBIO: El ID de la cita propia también suele ser UUID en su base de datos
+    id: Union[str, int] 
     fecha: str
     hora: str
     motivo: Optional[str]
-    doctor: str
+    doctor: Optional[str] # Cambiado a Optional por si acaso
     estado: str
-    paciente_id: Optional[int]
+    # CAMBIO: Para que al leer la cita no explote si el ID es largo
+    paciente_id: Optional[Union[str, int]] 
     paciente_nombre: Optional[str]
     telefono: Optional[str]
     

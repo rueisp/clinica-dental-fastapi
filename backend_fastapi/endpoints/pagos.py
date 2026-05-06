@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete, func
 from datetime import datetime
+import uuid
 import pytz
 import random
 import string
@@ -30,7 +31,9 @@ async def crear_pago(
 ):
     try:
         # 1. Hora actual en Colombia
-        hora_actual = datetime.now(COLOMBIA_TZ).time()
+        ahora_colombia = datetime.now(COLOMBIA_TZ)
+        fecha_actual = ahora_colombia.date()
+        hora_actual = ahora_colombia.time()
         
         # 2. Lógica de rescate de datos del paciente
         paciente_nombre_final = pago_data.paciente_nombre
@@ -50,26 +53,30 @@ async def crear_pago(
                 if not telefono_final and paciente.telefono:
                     telefono_final = paciente.telefono
         
-        # 3. Crear la instancia del nuevo modelo unificado
+                        # 3. Crear el pago asegurando que usamos la hora de Colombia
         nuevo_pago = PagoClinico(
             paciente_id=pago_data.paciente_id,
-            paciente_nombre=paciente_nombre_final,
-            fecha=pago_data.fecha, # Pydantic ya lo convirtió a objeto date
-            hora=hora_actual,
-            descripcion=pago_data.descripcion,
+            odontologo_id=current_user.id,
             monto=pago_data.monto,
             metodo_pago=pago_data.metodo_pago,
+            fecha=ahora_colombia,  # <--- GUARDAMOS EL DATETIME COMPLETO CON TZ
+            hora=ahora_colombia.time(),      # <--- USAMOS LA VARIABLE QUE CALCULAMOS ARRIBA
+            paciente_nombre=pago_data.paciente_nombre,
+            concepto=pago_data.descripcion,
+            codigo=f"R-{uuid.uuid4().hex[:8].upper()}",
             observacion=pago_data.observacion,
-            pagado_por=pago_data.pagado_por,
-            codigo=generar_codigo_unico(),
-            es_rapido=pago_data.es_rapido,
-            usuario_id=current_user.id,
-            telefono=telefono_final
+            telefono=pago_data.telefono,
+            es_rapido=pago_data.es_rapido
         )
-        
+
         db.add(nuevo_pago)
         await db.commit()
         await db.refresh(nuevo_pago)
+
+        # LIMPIEZA: Convertir a Colombia antes de enviar al frontend
+        if isinstance(nuevo_pago.fecha, datetime):
+            # Esto es vital: convertimos a zona horaria local ANTES de sacar la fecha
+            nuevo_pago.fecha = nuevo_pago.fecha.astimezone(COLOMBIA_TZ).date()
         
         return nuevo_pago
         
@@ -89,33 +96,83 @@ async def obtener_pago(id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     return pago
 
+# En endpoints/pagos.py
+
 @router.get("/codigo/{codigo}", response_model=PagoResponse)
-async def obtener_pago_por_codigo(codigo: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PagoClinico).where(PagoClinico.codigo == codigo))
+async def obtener_pago_por_codigo(
+    codigo: str, 
+    db: AsyncSession = Depends(get_db)  # <--- CAMBIADO: Antes decía get_session
+):
+    query = select(PagoClinico).where(PagoClinico.codigo == codigo)
+    result = await db.execute(query)
     pago = result.scalar_one_or_none()
+    
     if not pago:
         raise HTTPException(status_code=404, detail="Recibo no encontrado")
-    return pago
 
-# ... (mantén tus importaciones y código anterior igual) ...
+     # --- INICIO DE LA CORRECCIÓN ---
+    if hasattr(pago, 'fecha') and isinstance(pago.fecha, datetime):
+        # Convertimos de UTC a Colombia ANTES de extraer la fecha (.date())
+        pago.fecha = pago.fecha.astimezone(COLOMBIA_TZ).date()
+    # --- FIN DE LA CORRECCIÓN ---
+    
+    # Mapeo manual para el esquema
+    pago.descripcion = getattr(pago, 'concepto', "Consulta")
+    pago.paciente_nombre = pago.paciente_nombre if pago.paciente_nombre else "Paciente"
+
+    return pago
 
 @router.get("/", response_model=list[PagoResponse])
 async def listar_pagos(
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user) # Protegemos la lista solo para usuarios logueados
+    current_user: Usuario = Depends(get_current_user)
 ):
-    try:
-        # Consultamos todos los pagos ordenados por fecha y hora descendente
-        result = await db.execute(
-            select(PagoClinico).order_by(PagoClinico.fecha.desc(), PagoClinico.hora.desc())
-        )
-        pagos = result.scalars().all()
-        return pagos
-    except Exception as e:
-        print(f"Error al listar pagos: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al obtener el historial de pagos"
-        )
+    # 1. ORDEN: Por fecha y hora descendente para que los nuevos estén arriba
+    query = (
+        select(PagoClinico)
+        .where(PagoClinico.odontologo_id == current_user.id)
+        .order_by(PagoClinico.fecha.desc(), PagoClinico.id.desc()) 
+    )
+    
+    result = await db.execute(query)
+    pagos = result.scalars().all()
 
-# (Al final de tu archivo ya tienes los otros métodos GET, déjalos como están)
+    for pago in pagos:
+        # --- CORRECCIÓN DEFINITIVA DE FECHA ---
+        if hasattr(pago, 'fecha') and isinstance(pago.fecha, datetime):
+            # Si la hora es exactamente 00:00:00, es un registro "viejo" que no debemos mover
+            if pago.fecha.hour == 0 and pago.fecha.minute == 0:
+                pago.fecha = pago.fecha.date() 
+            else:
+                # Si tiene hora real, aplicamos la conversión normal a Colombia
+                pago.fecha = pago.fecha.astimezone(COLOMBIA_TZ).date()
+        
+        # El resto de tu limpieza...
+        pago.descripcion = getattr(pago, 'concepto', "Consulta")
+        if not getattr(pago, 'paciente_nombre', None):
+            pago.paciente_nombre = "Paciente General"
+
+    return pagos
+
+from sqlalchemy import delete # Asegúrate de tener esta importación arriba
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_pago(
+    id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    # Buscamos el pago y verificamos que pertenezca al odontólogo actual
+    query = select(PagoClinico).where(
+        PagoClinico.id == id, 
+        PagoClinico.odontologo_id == current_user.id
+    )
+    result = await db.execute(query)
+    pago = result.scalar_one_or_none()
+
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado o no tienes permiso")
+
+    await db.delete(pago)
+    await db.commit()
+    return None

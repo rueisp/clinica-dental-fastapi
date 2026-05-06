@@ -7,8 +7,9 @@ from typing import Optional
 import pytz
 from database import get_db
 from dependencies.auth import get_current_user
-from models import Usuario, Cita, Paciente
+from models import Usuario, Cita, Paciente, Subscription, Plan
 from schemas import CitaCreate, CitaUpdate
+from uuid import UUID
 
 router = APIRouter()
 
@@ -22,7 +23,7 @@ async def test_auth(
         "success": True,
         "user_id": current_user.id,
         "user_email": current_user.email,
-        "user_name": current_user.nombre_completo
+        "user_name": current_user.nombres
     }
 
 
@@ -64,7 +65,7 @@ async def get_dashboard_stats(
     return {
         "success": True,
         "usuario": {
-            "nombre": current_user.nombre_completo or current_user.username,
+            "nombre": current_user.nombres or current_user.username,
             "email": current_user.email,
             "is_admin": current_user.is_admin
         },
@@ -80,30 +81,18 @@ async def get_citas_por_fecha(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Obtener citas para una fecha específica"""
-    
     try:
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido")
     
+    # 1. Consulta con etiquetas p_nombres, p_apellidos y p_tel
     query = (
         select(
-            Cita.id,
-            Cita.hora,
-            Cita.motivo,
-            Cita.doctor,
-            Cita.estado,
-            Cita.paciente_id,
-            case(
-                (Cita.paciente_id.isnot(None), 
-                 func.concat(Paciente.nombres, ' ', Paciente.apellidos)),
-                else_=func.concat(Cita.pre_nombres, ' ', Cita.pre_apellidos)
-            ).label("paciente_nombre"),
-            case(
-                (Cita.paciente_id.isnot(None), Paciente.telefono),
-                else_=Cita.pre_telefono
-            ).label("telefono")
+            Cita,
+            Paciente.nombres.label("p_nombres"),
+            Paciente.apellidos.label("p_apellidos"),
+            Paciente.telefono.label("p_tel")
         )
         .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
         .where(
@@ -115,23 +104,39 @@ async def get_citas_por_fecha(
     )
     
     result = await db.execute(query)
-    citas = result.all()
+    rows = result.all()
     
     citas_list = []
-    for cita in citas:
-        hora_formateada = ""
-        if cita.hora:
-            hora_formateada = cita.hora.strftime('%H:%M')
+    for row in rows:
+        cita = row.Cita
+        
+        # --- LÓGICA DE NOMBRE CORREGIDA ---
+        nombre_final = ""
+        
+        # ✅ CAMBIO: Usamos row.p_nombres para que coincida con el .label("p_nombres")
+        if row.p_nombres:
+            nombre_final = f"{row.p_nombres} {row.p_apellidos or ''}".strip()
+        
+        # Prioridad 2: Si no hay paciente en la tabla, usamos el nombre guardado en la cita
+        elif cita.nombre_provisional:
+            nombre_final = cita.nombre_provisional
+            
+        # Prioridad 3: Fallback
+        if not nombre_final:
+            nombre_final = "Paciente sin registrar"
+
+        # ✅ CAMBIO: Usamos row.p_tel para que coincida con el .label("p_tel")
+        telefono_final = row.p_tel or cita.telefono_provisional or ""
         
         citas_list.append({
-            "id": cita.id,
-            "paciente_nombre": cita.paciente_nombre or "Paciente sin registrar",
-            "paciente_id": cita.paciente_id,
-            "hora": hora_formateada,
+            "id": str(cita.id),
+            "paciente_nombre": nombre_final,
+            "paciente_id": str(cita.paciente_id) if cita.paciente_id else None,
+            "hora": cita.hora.strftime('%H:%M') if cita.hora else "",
             "motivo": cita.motivo or "Consulta",
             "doctor": cita.doctor,
             "estado": cita.estado,
-            "telefono": cita.telefono or ""
+            "telefono": telefono_final
         })
     
     return {
@@ -182,7 +187,7 @@ async def get_citas_eventos(
 
 @router.delete("/citas/{cita_id}")
 async def eliminar_cita(
-    cita_id: int,
+    cita_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -210,30 +215,16 @@ async def eliminar_cita(
 
 @router.get("/citas/{cita_id}")
 async def get_cita_by_id(
-    cita_id: int,
+    cita_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Obtener una cita por su ID"""
-    
     query = (
         select(
-            Cita.id,
-            Cita.fecha,
-            Cita.hora,
-            Cita.motivo,
-            Cita.doctor,
-            Cita.estado,
-            Cita.paciente_id,
-            case(
-                (Cita.paciente_id.isnot(None), 
-                 func.concat(Paciente.nombres, ' ', Paciente.apellidos)),
-                else_=func.concat(Cita.pre_nombres, ' ', Cita.pre_apellidos)
-            ).label("paciente_nombre"),
-            case(
-                (Cita.paciente_id.isnot(None), Paciente.telefono),
-                else_=Cita.pre_telefono
-            ).label("telefono")
+            Cita,
+            Paciente.nombres,
+            Paciente.apellidos,
+            Paciente.telefono.label("paciente_tel_db")
         )
         .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
         .where(
@@ -244,26 +235,29 @@ async def get_cita_by_id(
     )
     
     result = await db.execute(query)
-    cita = result.first()
+    row = result.first()
     
-    if not cita:
+    if not row:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     
-    hora_formateada = ""
-    if cita.hora:
-        hora_formateada = cita.hora.strftime('%H:%M')
-    
+    cita = row.Cita
+    # Construir nombre
+    if row.nombres:
+        nombre_completo = f"{row.nombres} {row.apellidos or ''}".strip()
+    else:
+        nombre_completo = cita.nombre_provisional
+
     return {
         "success": True,
         "id": cita.id,
         "fecha": cita.fecha.strftime('%Y-%m-%d'),
-        "hora": hora_formateada,
+        "hora": cita.hora.strftime('%H:%M') if cita.hora else "",
         "motivo": cita.motivo,
         "doctor": cita.doctor,
         "estado": cita.estado,
         "paciente_id": cita.paciente_id,
-        "paciente_nombre": cita.paciente_nombre,
-        "telefono": cita.telefono
+        "paciente_nombre": nombre_completo,
+        "telefono": row.paciente_tel_db or cita.telefono_provisional or ""
     }
 
 
@@ -294,14 +288,13 @@ async def create_cita(
     nueva_cita = Cita(
         fecha=fecha_obj,
         hora=hora_obj,
-        motivo=cita_data.motivo,                    # ← Cambiado
-        doctor=cita_data.doctor,                    # ← Cambiado
-        estado='pendiente',
+        motivo=cita_data.motivo,
         odontologo_id=current_user.id,
-        paciente_id=cita_data.paciente_id,          # ← Cambiado
-        pre_nombres=cita_data.paciente_nombre,      # ← Cambiado
-        pre_apellidos='',
-        pre_telefono=cita_data.paciente_telefono    # ← Cambiado
+        paciente_id=cita_data.paciente_id,
+        # Guardamos nombre y teléfono "sueltos" para que aparezcan en negro si no hay historial
+        nombre_provisional=cita_data.paciente_nombre, 
+        telefono_provisional=cita_data.paciente_telefono,
+        estado='pendiente'
     )
     
     db.add(nueva_cita)
@@ -316,7 +309,7 @@ async def create_cita(
 
 @router.put("/citas/{cita_id}")
 async def update_cita(
-    cita_id: int,
+    cita_id: UUID,
     cita_data: CitaUpdate,  # ← Cambiado: dict → CitaUpdate
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -351,13 +344,18 @@ async def update_cita(
         except ValueError:
             pass
     
-    cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo  # ← Cambiado
-    cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor  # ← Cambiado
-    cita.pre_nombres = cita_data.paciente_nombre if cita_data.paciente_nombre is not None else cita.pre_nombres  # ← Cambiado
-    cita.pre_telefono = cita_data.paciente_telefono if cita_data.paciente_telefono is not None else cita.pre_telefono  # ← Cambiado
-    cita.paciente_id = cita_data.paciente_id if cita_data.paciente_id is not None else cita.paciente_id  # ← Cambiado
-    
-    await db.commit()
+    # Actualizar solo los campos que existen en el modelo Cita
+        cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo
+        cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor
+        
+        # IMPORTANTE: Los datos del paciente (nombre/teléfono) NO se guardan en Cita.
+        # Si necesitas actualizarlos, se hace en la tabla Paciente, no aquí.
+        
+        # Actualizar el ID del paciente si se proporciona uno nuevo
+        if cita_data.paciente_id is not None:
+            cita.paciente_id = cita_data.paciente_id
+
+        await db.commit()
     
     return {
         "success": True,
@@ -372,11 +370,27 @@ async def get_home_data(
     db: AsyncSession = Depends(get_db)
 ):
     
+    # 🔥 VALIDACIÓN CRÍTICA: Verificar que el usuario tenga un plan activo
+    plan_result = await db.execute(
+        select(Subscription).where(
+            Subscription.user_id == current_user.id,
+            Subscription.status == "active"
+        )
+    )
+    user_plan = plan_result.scalar_one_or_none()
+    
+    if not user_plan:
+        raise HTTPException(
+            status_code=403,
+            detail="Usuario sin plan activo. Contacta al administrador para activar tu suscripción."
+        )
+    
+    # USA ESTO (Consistente con el resto de tu app):
     colombia_tz = pytz.timezone('America/Bogota')
     ahora = datetime.now(colombia_tz)
     hoy = ahora.date()
     
-    # ========== 1. STATS (igual que /dashboard/stats) ==========
+    # ========== 1. STATS ==========
     query_total_pacientes = (
         select(func.count(Paciente.id))
         .where(
@@ -400,7 +414,7 @@ async def get_home_data(
     
     fecha_actual_formateada = f"{dias_semana_es[hoy.weekday()]}, {hoy.day} de {meses_es[hoy.month]} de {hoy.year}"
     
-    # ========== 2. EVENTOS (versión optimizada que ya implementaste) ==========
+    # ========== 2. EVENTOS ==========
     query_eventos = (
         select(
             cast(Cita.fecha, Date).label("fecha"),
@@ -426,11 +440,11 @@ async def get_home_data(
             "textColor": "#6b7280"
         })
     
-    # ========== 3. RESPUESTA COMBINADA ==========
+    # ========== 3. RESPUESTA ==========
     return {
         "success": True,
         "usuario": {
-            "nombre": current_user.nombre_completo or current_user.username,
+            "nombre": current_user.nombres or current_user.username,
             "email": current_user.email,
             "is_admin": current_user.is_admin
         },

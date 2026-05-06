@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from endpoints import dashboard, pacientes, evoluciones, pagos, auth
+from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios
 
 app = FastAPI(title="Clínica Dental API", version="1.0.0")
 
@@ -15,10 +15,12 @@ app.add_middleware(
 
 # Inclusión de rutas (una sola vez por módulo)
 app.include_router(auth.router, prefix="/api/auth", tags=["Autenticación"])
+app.include_router(planes.router, prefix="/api/planes", tags=["Planes"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
-app.include_router(pacientes.router, prefix="/api", tags=["Pacientes"])
-app.include_router(evoluciones.router, prefix="/api", tags=["Evoluciones"])
+app.include_router(pacientes.router, prefix="/api/pacientes", tags=["Pacientes"])
+app.include_router(evoluciones.router, prefix="/api/evoluciones", tags=["Evoluciones"])
 app.include_router(pagos.router, prefix="/api", tags=["Pagos"])
+app.include_router(usuarios.router, prefix="/api/usuarios", tags=["Usuarios"])
 
 @app.get("/")
 async def root():

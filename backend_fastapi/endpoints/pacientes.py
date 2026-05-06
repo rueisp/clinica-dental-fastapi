@@ -18,6 +18,7 @@ from sqlalchemy import or_, delete
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from services.export_service import generar_historia_clinica_word
+from uuid import UUID
 
 
 
@@ -53,7 +54,7 @@ class PacienteUpdate(BaseModel):
     habitos: Optional[str] = None
 
 
-@router.post("/pacientes")
+@router.post("/") 
 async def crear_paciente(
     nombres: str = Form(...),
     apellidos: str = Form(...),
@@ -163,7 +164,7 @@ async def crear_paciente(
     fecha_hoy = date.today()
     limite_diario = await db.execute(
         select(LimiteDiario).where(
-            LimiteDiario.usuario_id == current_user.id,
+            LimiteDiario.user_id == current_user.id,
             LimiteDiario.fecha == fecha_hoy
         )
     )
@@ -182,8 +183,8 @@ async def crear_paciente(
     }
 
 
-@router.get("/pacientes")
-async def listar_pacientes(
+@router.get("/") # <-- La ruta raíz del prefijo /api/pacientes
+async def get_pacientes(
     page: int = 1,
     search: str = "",
     per_page: int = 6,
@@ -237,7 +238,7 @@ async def listar_pacientes(
     }
 
 # Obtener pacientes en papelera (soft deleted)
-@router.get("/pacientes/papelera")
+@router.get("/papelera")
 async def listar_papelera(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -269,14 +270,15 @@ async def listar_papelera(
     }
 
 
-@router.get("/pacientes/{paciente_id}")
-async def obtener_paciente(
-    paciente_id: int,
+@router.get("/{paciente_id}")
+async def get_paciente(
+    paciente_id: UUID, # FastAPI validará automáticamente que sea un UUID válido
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Obtener datos de un paciente específico"""
+    """Obtener datos de un paciente específico de forma segura"""
     
+    # Ejecutamos la consulta buscando por el ID del paciente
     result = await db.execute(
         select(Paciente).where(
             Paciente.id == paciente_id,
@@ -285,22 +287,30 @@ async def obtener_paciente(
     )
     paciente = result.scalar_one_or_none()
     
+    # 1. Verificación de existencia
     if not paciente:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
     
+    # 2. Verificación de permisos (Seguridad)
+    # Comparamos los IDs directamente para evitar cargar relaciones síncronas
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para ver este paciente")
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permiso para ver este paciente"
+        )
     
+    # 3. Formateo de fecha
     fecha_nacimiento_str = None
     if paciente.fecha_nacimiento:
         fecha_nacimiento_str = paciente.fecha_nacimiento.strftime('%d/%m/%Y')
     
+    # 4. Respuesta estructurada
     return {
         "success": True,
-        "id": paciente.id,
+        "id": str(paciente.id), # Convertimos a string para el frontend
         "nombres": paciente.nombres,
         "apellidos": paciente.apellidos,
-        "nombre_completo": f"{paciente.nombres} {paciente.apellidos}",
+        "nombre_completo": f"{paciente.nombres} {paciente.apellidos or ''}", # Use nombre_completo aquí
         "tipo_documento": paciente.tipo_documento,
         "documento": paciente.documento,
         "fecha_nacimiento": fecha_nacimiento_str,
@@ -322,9 +332,9 @@ async def obtener_paciente(
     }
 
 
-@router.put("/pacientes/{paciente_id}")
+@router.put("/{paciente_id}")
 async def actualizar_paciente(
-    paciente_id: int,
+    paciente_id: UUID,
     nombres: Optional[str] = Form(None),
     apellidos: Optional[str] = Form(None),
     tipo_documento: Optional[str] = Form(None),
@@ -493,9 +503,9 @@ async def actualizar_paciente(
         "paciente_id": paciente.id
     }
 
-@router.delete("/pacientes/{paciente_id}")
+@router.delete("/{paciente_id}")
 async def eliminar_paciente(
-    paciente_id: int,
+    paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -529,9 +539,9 @@ async def eliminar_paciente(
 
 
 # Restaurar paciente (soft delete reverso)
-@router.put("/pacientes/{paciente_id}/restaurar")
+@router.put("/{paciente_id}/restaurar")
 async def restaurar_paciente(
-    paciente_id: int,
+    paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -557,9 +567,9 @@ async def restaurar_paciente(
     return {"success": True, "message": "Paciente restaurado"}
 
 
-@router.delete("/pacientes/{paciente_id}/permanente")
+@router.delete("/{paciente_id}/permanente")
 async def eliminar_permanente(
-    paciente_id: int,
+    paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -607,7 +617,7 @@ async def eliminar_permanente(
 
 # endpoints/pacientes.py (agregar este endpoint)
 
-@router.get("/pacientes/buscar")
+@router.get("/buscar")
 async def buscar_pacientes_autocomplete(
     q: str,
     current_user: Usuario = Depends(get_current_user),
@@ -640,16 +650,16 @@ async def buscar_pacientes_autocomplete(
                 "id": p.id,
                 "nombres": p.nombres,
                 "apellidos": p.apellidos,
-                "nombre_completo": f"{p.nombres} {p.apellidos}",
+                "nombres": f"{p.nombres} {p.apellidos}",
                 "telefono": p.telefono
             }
             for p in pacientes
         ]
     }
 
-@router.get("/pacientes/{paciente_id}/exportar-word")
+@router.get("/{paciente_id}/exportar-word")
 async def exportar_paciente_word(
-    paciente_id: int,
+    paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
