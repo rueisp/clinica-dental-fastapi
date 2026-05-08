@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { 
+  Circle, Stethoscope, X, Check, Eraser, Undo2 // Opcional para el borrador
+} from 'lucide-react';
 import './dentigrama.css';
 
 // Configuración de dientes (igual que Flask)
@@ -432,26 +435,36 @@ const DentigramaEditor = forwardRef(({ fondoUrl, onExportar }, ref) => {
         <button type="button" className={`btn-tool btn-protesis ${herramienta === 'protesis' ? 'active' : ''}`} onClick={() => setHerramienta('protesis')} title="Prótesis">
           <div className="icon-protesis-custom"><span></span><span></span></div>
         </button>
+        {/* Corona */}
         <button type="button" className={`btn-tool btn-corona ${herramienta === 'corona' ? 'active' : ''}`} onClick={() => setHerramienta('corona')} title="Corona">
-          <i className="far fa-circle" style={{ fontWeight: 900, fontSize: 20 }}></i>
+          <Circle size={20} strokeWidth={3} />
         </button>
+
+        {/* Endodoncia */}
         <button type="button" className={`btn-tool btn-endo ${herramienta === 'endodoncia' ? 'active' : ''}`} onClick={() => setHerramienta('endodoncia')} title="Endodoncia">
-          <i className="fas fa-tooth"></i>
+          <Stethoscope size={20} />
         </button>
+
+        {/* Extracción */}
         <button type="button" className={`btn-tool btn-extraccion ${herramienta === 'extraccion' ? 'active' : ''}`} onClick={() => setHerramienta('extraccion')} title="Extracción">
-          <i className="fas fa-times"></i>
+          <X size={20} strokeWidth={3} />
         </button>
+
+        {/* Diente Ausente */}
         <button type="button" className={`btn-tool btn-ausente ${herramienta === 'ausente' ? 'active' : ''}`} onClick={() => setHerramienta('ausente')} title="Diente Ausente">
-          <i className="fas fa-times" style={{ color: '#0dcaf0' }}></i>
+          <X size={20} strokeWidth={3} className="text-cyan-400" />
         </button>
+
+        {/* Tratamiento Realizado */}
         <button type="button" className={`btn-tool btn-check ${herramienta === 'check' ? 'active' : ''}`} onClick={() => setHerramienta('check')} title="Tratamiento Realizado">
-          <i className="fas fa-check" style={{ color: '#0ecb73' }}></i>
+          <Check size={20} strokeWidth={4} className="text-green-500" />
         </button>
-        
+
         <div className="toolbar-divider"></div>
-        
+
+        {/* Borrador */}
         <button type="button" className={`btn-tool ${herramienta === 'borrador' ? 'active' : ''} bg-white border`} onClick={() => setHerramienta('borrador')} title="Borrador">
-          <i className="fas fa-eraser text-secondary"></i>
+          <Eraser size={20} className="text-gray-500" />
         </button>
        
       </div>

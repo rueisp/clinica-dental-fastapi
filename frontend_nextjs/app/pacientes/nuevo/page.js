@@ -91,8 +91,9 @@ export default function NuevoPaciente() {
         const data = await response.json();
         router.push(`/pacientes/${data.paciente_id}`);
       } else {
+        // CAMBIE ESTO:
         const error = await response.json();
-        alert(error.detail || 'Error al crear paciente');
+        alert("Error del servidor: " + JSON.stringify(error.detail));
       }
     } catch (error) {
       alert('Error de conexión');

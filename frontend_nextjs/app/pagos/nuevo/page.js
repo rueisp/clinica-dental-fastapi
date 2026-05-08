@@ -52,10 +52,25 @@ export default function NuevoPago() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Preparamos los datos EXACTOS que espera su nuevo modelo de Python
+    const datosParaEnviar = {
+      paciente_id: form.paciente_id, // UUID o null
+      paciente_nombre: form.paciente_nombre,
+      monto: parseFloat(form.monto), // Forzar número
+      metodo_pago: form.metodo_pago,
+      descripcion: form.descripcion,
+      fecha: form.fecha,
+      telefono: form.telefono,
+      observacion: form.observacion,
+      es_rapido: form.es_rapido
+    };
+
     try {
+      // Verifique que API_ENDPOINTS.NUEVO_PAGO sea la URL correcta (ej: http://localhost:8000/api/pagos/nuevo)
       const res = await authFetch(API_ENDPOINTS.NUEVO_PAGO, {
         method: 'POST',
-        body: JSON.stringify(form)
+        body: JSON.stringify(datosParaEnviar)
       });
 
       if (res.ok) {
@@ -63,11 +78,12 @@ export default function NuevoPago() {
         router.push(`/pagos/recibo/${pagoCreado.codigo}`);
       } else {
         const errorData = await res.json();
-        alert(`Error: ${errorData.detail || "No se pudo registrar el pago"}`);
+        alert(`Error del servidor: ${errorData.detail}`);
       }
     } catch (err) {
       console.error("Error en el envío:", err);
-      alert("Error de conexión al registrar el pago");
+      // Si entra aquí con "Failed to fetch", es que la URL está mal o el Backend está caído
+      alert("No se pudo conectar con el servidor. Verifique la conexión.");
     }
   };
 

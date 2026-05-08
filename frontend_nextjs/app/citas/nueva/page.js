@@ -55,9 +55,14 @@ export default function NuevaCita() {
   };
 
   const seleccionarPaciente = (paciente) => {
+    // Agregamos este log para que usted vea en la consola qué IDs tiene el paciente
+    console.log("Datos del paciente seleccionado:", paciente);
+
     setFormData({
       ...formData,
-      paciente_id: paciente.id,
+      // Si el servidor pide un entero, intente usar paciente.id_db o paciente.pk
+      // si es que existen. Si solo existe el UUID, entonces el problema está en el Backend.
+      paciente_id: paciente.id, 
       paciente_nombre: `${paciente.nombres} ${paciente.apellidos}`,
       paciente_telefono: paciente.telefono
     });
@@ -65,20 +70,37 @@ export default function NuevaCita() {
     setMostrarResultados(false);
   };
 
+  // app/citas/nueva/page.js
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    // ✅ CORRECCIÓN: Incluir nombre y teléfono para que el backend los guarde
+    const datosLimpios = {
+      paciente_id: formData.paciente_id, // El UUID (si seleccionó uno)
+      paciente_nombre: formData.paciente_nombre, // El nombre escrito o seleccionado
+      paciente_telefono: formData.paciente_telefono, // El teléfono
+      fecha: formData.fecha,
+      hora: formData.hora,
+      motivo: formData.motivo || "Consulta",
+      doctor: formData.doctor || "Odontólogo General"
+    };
+
     try {
       const response = await authFetch(`${API_BASE_URL}/api/citas`, {
         method: 'POST',
-        body: JSON.stringify(formData)
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(datosLimpios) 
       });
       
       if (response.ok) {
-        router.push(`/calendario/dia?fecha=${formData.fecha}`);
+        router.push('/'); // O '/dashboard' si esa es tu ruta principal
       } else {
         const error = await response.json();
-        alert('Error: ' + (error.detail || 'No se pudo crear la cita'));
+        alert("Error: " + (error.detail || "No se pudo agendar"));
       }
     } catch (err) {
       alert('Error de conexión');

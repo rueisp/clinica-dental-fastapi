@@ -97,14 +97,6 @@ export default function MostrarPaciente() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
-      {/* 1. Indicador superior pequeño */}
-      <div className="flex items-center gap-1.5 ml-5 mb-[-25px] relative z-10">
-        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-          Paciente Activo
-        </span>
-      </div>
-
       {/* 2. Header: Sin el botón manual afuera para evitar duplicados */}
       <HeaderPaciente 
         paciente={paciente}
@@ -133,7 +125,7 @@ export default function MostrarPaciente() {
             EXPORTAR HISTORIA
           </button>
         </div>
-        <Evoluciones pacienteId={parseInt(id)} />
+        <Evoluciones pacienteId={id} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">

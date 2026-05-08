@@ -1,4 +1,3 @@
-// app/login/page.js
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -26,14 +25,17 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // Guardar token
-        setAuthToken('test_token_123');
+        // 🔥 CORREGIDO: Guardar el token REAL que devuelve el backend
+        setAuthToken(data.access_token);  // <--- CAMBIADO AQUÍ
+        console.log('✅ Token guardado:', data.access_token.substring(0, 20) + '...');
+        
         // Redirigir al dashboard
         router.push('/');
       } else {
         setError(data.detail || 'Error al iniciar sesión');
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('Error de conexión con el servidor');
     } finally {
       setLoading(false);
@@ -84,7 +86,6 @@ export default function LoginPage() {
           </button>
         </form>
         
-        {/* Usuario por defecto para pruebas */}
         <div className="mt-4 text-sm text-gray-500 text-center">
           <p>Usuario: admin</p>
           <p>Contraseña: admin123</p>

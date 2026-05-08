@@ -141,7 +141,7 @@ export default function ListaPacientes() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
-                <th className="px-6 py-4">ID</th>
+                <th className="hidden sm:table-cell px-6 py-4">ID</th>
                 <th className="px-6 py-4">Nombre</th>
                 <th className="px-6 py-4">Documento</th>
                 <th className="px-6 py-4">Teléfono</th>
@@ -167,11 +167,29 @@ export default function ListaPacientes() {
                     onClick={() => router.push(`/pacientes/${p.id}`)}
                     className="hover:bg-gray-50/50 transition-colors cursor-pointer group"
                   >
-                    <td className="px-6 py-4 text-sm text-gray-400 font-bold">#{p.id}</td>
-                    <td className="px-6 py-4 font-bold text-black group-hover:text-black transition-colors">
-                      {p.nombres} {p.apellidos}
+                    {/* SUSTITUYE ESTO (Celda ID): */}
+                    <td className="hidden sm:table-cell px-6 py-4 text-sm text-gray-400 font-bold">
+                      #{p.id.substring(0, 8)}
                     </td>
+
+                    {/* SUSTITUYE ESTO (Celda Nombre): */}
+                    <td className="px-6 py-3 font-bold text-black group-hover:text-black transition-colors">
+                      <div className="flex flex-col leading-tight">
+                        {/* Nombres en línea 1 */}
+                        <span className="truncate max-w-[150px] sm:max-w-none block">
+                          {p.nombres}
+                        </span>
+                        {/* Apellidos en línea 2 */}
+                        <span className="truncate max-w-[180px] sm:max-w-none block text-gray-500">
+                          {p.apellidos}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* ESTO LO DEJAS IGUAL (Documento): */}
                     <td className="px-6 py-4 text-sm text-gray-600">{p.documento || '-'}</td>
+                    
+                    {/* ESTO LO DEJAS IGUAL (Teléfono): */}
                     <td className="px-6 py-4 text-sm text-gray-600 font-medium">{p.telefono}</td>
                   </tr>
                 ))

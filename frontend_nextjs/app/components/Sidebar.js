@@ -102,6 +102,7 @@ export default function Sidebar() {
             <Home className="w-5 h-5" />
             <span>Inicio</span>
           </Link>
+
           <Link
             href="/pacientes"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -110,14 +111,17 @@ export default function Sidebar() {
             <Users className="w-5 h-5" />
             <span>Pacientes</span>
           </Link>
+
+          {/* Ajustado: Ahora apunta al Dashboard principal y tiene el mismo estilo */}
           <Link
-            href={`/calendario/dia?fecha=${new Date().toISOString().split('T')[0]}`}
+            href="/"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
             onClick={closeSidebar}
           >
             <CalendarDays className="w-5 h-5" />
             <span>Agendar</span>
           </Link>
+
           <Link
             href="/pacientes/papelera"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -126,6 +130,7 @@ export default function Sidebar() {
             <Trash2 className="w-5 h-5" />
             <span>Papelera</span>
           </Link>
+
           <Link
             href="/pagos"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -138,27 +143,37 @@ export default function Sidebar() {
 
         <hr className="my-4 border-gray-200" />
 
-        <nav className="p-4 space-y-2">
-          <Link
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-            onClick={closeSidebar}
-          >
-            <UserCog className="w-5 h-5" />
-            <span>Mi Perfil</span>
-          </Link>
-          {/* ← MODIFICAR el botón de Salir para que use handleLogout */}
-          <button
-            onClick={() => {
-              closeSidebar();
-              handleLogout();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Salir</span>
-          </button>
-        </nav>
+          <nav className="p-4 space-y-2">
+            {/* 🔥 NUEVO: Sección Planes */}
+            <Link
+              href="/planes"
+              className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              onClick={closeSidebar}
+            >
+              <CreditCard className="w-5 h-5" />
+              <span>Planes</span>
+            </Link>
+            
+            <Link
+              href="#"
+              className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              onClick={closeSidebar}
+            >
+              <UserCog className="w-5 h-5" />
+              <span>Mi Perfil</span>
+            </Link>
+            
+            <button
+              onClick={() => {
+                closeSidebar();
+                handleLogout();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Salir</span>
+            </button>
+          </nav>
       </aside>
     </>
   );

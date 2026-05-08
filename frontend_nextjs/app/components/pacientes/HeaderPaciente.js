@@ -28,13 +28,36 @@ export default function HeaderPaciente({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         {/* Nombre del paciente */}
         <div>
-          <h1 className="text-2xl font-bold text-black">
-            {modo === 'registrar' 
-              ? 'Nuevo Paciente' 
-              : paciente?.nombre_completo || 'Cargando...'}
-          </h1>
+          {/* NUEVO: Indicador ahora interno para que no se salga del cuadro */}
+          {modo === 'mostrar' && (
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                Paciente Activo
+              </span>
+            </div>
+          )}
+
+          {modo === 'registrar' ? (
+            <h1 className="text-2xl font-bold text-black">Nuevo Paciente</h1>
+          ) : (
+            <div className="flex flex-col leading-none"> {/* Cambié a leading-none para que estén más pegaditos */}
+              <h1 className="text-2xl font-black text-black capitalize tracking-tight">
+                {paciente?.nombres || 'Cargando...'}
+              </h1>
+              {paciente?.apellidos && (
+                <h1 className="text-2xl font-black text-gray-500 capitalize tracking-tight">
+                  {paciente.apellidos}
+                </h1>
+              )}
+            </div>
+          )}
+
+          {/* ID recortado */}
           {modo !== 'registrar' && paciente?.id && (
-            <p className="text-sm text-gray-500">ID: {paciente.id}</p>
+            <p className="text-[11px] text-gray-400 font-medium mt-2">
+              ID: <span className="font-mono">{paciente.id.substring(0, 8)}</span>
+            </p>
           )}
         </div>
         

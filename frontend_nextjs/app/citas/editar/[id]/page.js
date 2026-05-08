@@ -116,7 +116,7 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-        router.push(`/calendario/dia?fecha=${formData.fecha}`);
+        router.push(`/?fecha=${formData.fecha}`);
       } else {
         const error = await response.json();
         alert('Error: ' + (error.detail || 'No se pudo actualizar la cita'));
@@ -137,7 +137,7 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-        router.push(`/calendario/dia?fecha=${formData.fecha}`);
+        router.push(`/?fecha=${formData.fecha}`);
       } else {
         alert('Error al eliminar');
       }

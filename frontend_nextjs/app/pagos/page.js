@@ -1,10 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { authFetch, API_ENDPOINTS } from '@/config/api';
+import { authFetch, API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { 
   Search, ArrowLeft, Eye, EyeOff, Plus, User, 
-  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp
+  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp, Trash2
 } from 'lucide-react';
 
 export default function HistorialPagos() {
@@ -53,9 +53,15 @@ useEffect(() => {
     // 2. Aplicamos el filtro de Fecha (Mes y Año). 
     // Esto siempre se ejecuta para que la tabla no muestre miles de datos de otros años.
     result = result.filter(p => {
-      const fechaPago = new Date(p.fecha);
-      return fechaPago.getMonth() === parseInt(mesSeleccionado) && 
-             fechaPago.getFullYear() === parseInt(anioSeleccionado);
+      // 1. Extraemos los números directamente del texto "2026-05-03"
+      const [anioStr, mesStr] = p.fecha.split('-');
+      const anio = parseInt(anioStr);
+      const mes = parseInt(mesStr); // Este viene 1-12
+
+      // 2. Comparamos directamente los números
+      // (Restamos 1 al mes porque mesSeleccionado es 0-11)
+      return (mes - 1) === parseInt(mesSeleccionado) && 
+             anio === parseInt(anioSeleccionado);
     });
 
     // 3. Aplicamos el filtro de búsqueda SOLO si el usuario escribió 2 o más letras.
@@ -63,7 +69,7 @@ useEffect(() => {
     if (busqueda.length >= 3) {
       const term = busqueda.toLowerCase();
       result = result.filter(p => 
-        p.paciente_nombre.toLowerCase().includes(term) || 
+        p.paciente_nombre?.toLowerCase().includes(term) || 
         p.codigo.toLowerCase().includes(term)
       );
     }
@@ -76,13 +82,41 @@ useEffect(() => {
   // Cálculo para el historial de meses
   const calcularIngresoMensual = (mesIndex) => {
     return pagos
-      .filter(p => new Date(p.fecha).getMonth() === mesIndex && new Date(p.fecha).getFullYear() === anioSeleccionado)
+      .filter(p => {
+        const [anio, mes] = p.fecha.split('-').map(Number);
+        return (mes - 1) === mesIndex && anio === anioSeleccionado;
+      })
       .reduce((acc, p) => acc + p.monto, 0);
   };
+
 
   const totalRecaudado = filtrados.reduce((acc, p) => acc + p.monto, 0);
   const totalPaginas = Math.ceil(filtrados.length / itemsPorPagina);
   const itemsPaginados = filtrados.slice((paginaActual - 1) * itemsPorPagina, paginaActual * itemsPorPagina);
+
+  const eliminarPago = async (id, codigo) => {
+    // 1. Confirmación de seguridad
+    if (!window.confirm(`¿Estás seguro de eliminar el recibo ${codigo}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      const res = await authFetch(`${API_BASE_URL}/api/pagos/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        // 2. Actualizar el estado local para que el pago desaparezca de la tabla sin recargar
+        setPagos(prev => prev.filter(p => p.id !== id));
+        alert("Pago eliminado correctamente");
+      } else {
+        alert("No se pudo eliminar el pago");
+      }
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+      alert("Ocurrió un error al intentar eliminar");
+    }
+  };
 
   const formatearCOP = (valor) => {
     return new Intl.NumberFormat('es-CO', {
@@ -102,14 +136,14 @@ useEffect(() => {
             </button>
             <h1 className="text-3xl font-black tracking-tight">Gestión de Ingresos</h1>
           </div>
-          <button onClick={() => router.push('/pagos/nuevo')} className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-gray-800 transition-all">
+          <button onClick={() => router.push('/pagos/nuevo')} className="w-full md:w-auto bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-gray-800 transition-all">
             <Plus size={20} /> Nuevo Cobro
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Card Total Principal */}
-          <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-6">
               <div className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center shadow-xl">
                 <TrendingUp size={32} />
@@ -126,7 +160,7 @@ useEffect(() => {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-start md:items-end gap-2 border-t md:border-none pt-4 md:pt-0">
                <select 
                 value={mesSeleccionado}
                 onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
@@ -206,33 +240,56 @@ useEffect(() => {
                 <tr className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
                   <th className="px-6 py-4">Fecha</th>
                   <th className="px-6 py-4">Paciente</th>
-                  <th className="px-6 py-4">Método</th>
+                  <th className="hidden sm:table-cell px-6 py-4">Método</th>
                   <th className="px-6 py-4">Monto</th>
                   <th className="px-6 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {!loading && itemsPaginados.map((pago) => (
-                  <tr key={pago.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold">{new Date(pago.fecha).toLocaleDateString()}</span>
-                        <span className="text-[10px] text-gray-400 uppercase">{pago.codigo}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-medium">{pago.paciente_nombre}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-gray-100 text-gray-600">
-                        {pago.metodo_pago}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-black">{formatearCOP(pago.monto)}</td>
-                    <td className="px-6 py-4 text-center">
-                      <button onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)} className="p-2 hover:bg-black hover:text-white rounded-xl transition-all text-gray-400"><Eye size={18} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                  {!loading && itemsPaginados.map((pago) => (
+                    <tr key={pago.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)}>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col leading-none">
+                          <span className="font-bold text-gray-900">{pago.fecha.split('-').reverse().map(n => parseInt(n)).join('/')}</span>
+                          <span className="text-[10px] text-gray-400 font-mono mt-1 uppercase tracking-tighter">#{pago.codigo}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col leading-tight min-w-0">
+                          {(() => {
+                            const partes = pago.paciente_nombre?.split(' ') || [];
+                            const nombres = partes.slice(0, 2).join(' ');
+                            const apellidos = partes.slice(2).join(' ');
+                            return (
+                              <>
+                                <span className="font-bold text-black truncate max-w-[140px] sm:max-w-none">{nombres}</span>
+                                <span className="text-sm font-bold text-gray-500 truncate max-w-[140px] sm:max-w-none ">{apellidos || ' '}</span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 hidden sm:table-cell">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-gray-100 text-gray-600">
+                          {pago.metodo_pago || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-black text-gray-900">{formatearCOP(pago.monto)}</span>
+                      </td>
+                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)} className="p-2 hover:bg-black hover:text-white rounded-xl transition-all text-gray-400">
+                            <Eye size={18} />
+                          </button>
+                          <button onClick={() => eliminarPago(pago.id, pago.codigo)} className="p-2 hover:bg-red-500 hover:text-white rounded-xl transition-all text-gray-400">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
             </table>
           </div>
           {/* Paginación */}

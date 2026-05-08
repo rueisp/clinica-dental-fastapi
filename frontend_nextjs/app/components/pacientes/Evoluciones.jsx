@@ -103,11 +103,15 @@ export default function Evoluciones({ pacienteId }) {
 
   const agregarEvolucion = async () => {
     if (!nuevaEvolucion.trim()) return alert('La evolución no puede estar vacía');
+    if (!pacienteId || pacienteId === 'NaN') return alert('ID de paciente no válido');
 
     setGuardando(true);
     try {
-      const response = await authFetch(API_ENDPOINTS.PACIENTE_BY_ID(pacienteId) + '/evoluciones', {
-        method: 'POST',
+      // ✅ Use el endpoint que ya tiene el prefijo /api/evoluciones
+      const url = API_ENDPOINTS.EVOLUCIONES_BY_PACIENTE(pacienteId);
+      
+      const response = await authFetch(url, {
+        method: 'POST', // Asegúrese de que sea POST para crear
         body: JSON.stringify({ descripcion: nuevaEvolucion })
       });
 
@@ -116,7 +120,7 @@ export default function Evoluciones({ pacienteId }) {
         cargarEvoluciones();
       } else {
         const error = await response.json();
-        alert('Error: ' + (error.detail || 'No se pudo agregar'));
+        alert('Error: ' + (error.detail || 'No se pudo guardar'));
       }
     } catch (err) {
       alert('Error de conexión');
@@ -129,8 +133,11 @@ export default function Evoluciones({ pacienteId }) {
     if (!editandoTexto.trim()) return alert('El texto no puede estar vacío');
 
     try {
-      const response = await authFetch(`${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`, {
-        method: 'PUT',
+      // ✅ La URL debe ser /api/evoluciones/{id}, sin la palabra "/pacientes/"
+      const url = `${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`;
+
+      const response = await authFetch(url, {
+        method: 'PUT', // Este método debe coincidir con @router.put en el backend
         body: JSON.stringify({ descripcion: editandoTexto })
       });
 
@@ -146,7 +153,9 @@ export default function Evoluciones({ pacienteId }) {
   const eliminarEvolucion = async (evolucionId) => {
     if (!confirm('¿Eliminar esta evolución?')) return;
     try {
-      const response = await authFetch(`${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`, { method: 'DELETE' });
+      // ✅ URL: /api/evoluciones/{evolucionId}
+      const url = `${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`;
+      const response = await authFetch(url, { method: 'DELETE' });
       if (response.ok) cargarEvoluciones();
     } catch (err) {
       alert('Error de conexión');

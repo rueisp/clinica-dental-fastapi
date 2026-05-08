@@ -17,15 +17,25 @@ export default function EditarPaciente() {
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState(null);
 
-  // Usamos la variable de entorno que configuramos en .env.local
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   useEffect(() => {
     const fetchPaciente = async () => {
       try {
-        // CORRECCIÓN: Usamos el ID de la URL y la variable dinámica
+        const token = localStorage.getItem('auth_token');
+
+        // 2. Si sigue sin encontrarlo, imprimimos los nombres reales para corregirlo de una vez
+        if (!token) {
+            const llaves = Object.keys(localStorage);
+            console.log("Nombres de llaves encontradas:", llaves);
+            throw new Error('Sesión no encontrada. Por favor inicie sesión.');
+        }
+
         const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
-          headers: { 'Authorization': 'Bearer test_token_123' }
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (!response.ok) {
@@ -33,6 +43,7 @@ export default function EditarPaciente() {
         }
         
         const data = await response.json();
+        // Seteamos los datos (la API ya devuelve nombres y apellidos por separado)
         setPaciente(data);
         if (data.imagen_perfil_url) {
           setImagenPreview(data.imagen_perfil_url);
@@ -46,9 +57,7 @@ export default function EditarPaciente() {
       }
     };
 
-    if (id) {
-      fetchPaciente();
-    }
+    if (id) fetchPaciente();
   }, [id, router, API_URL]);
 
   const handleChange = (name, value) => {
@@ -72,10 +81,16 @@ export default function EditarPaciente() {
     setSaving(true);
     
     try {
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+          alert("La sesión ha expirado. Por favor, vuelva a iniciar sesión.");
+          router.push('/login');
+          return;
+      }
       const dentigramaBase64 = await dentigramaRef.current.exportar();
       const formData = new FormData();
       
-      // Lista de campos a enviar
       const campos = [
         'nombres', 'apellidos', 'tipo_documento', 'documento', 
         'fecha_nacimiento', 'edad', 'sexo', 'email', 'telefono', 
@@ -84,7 +99,9 @@ export default function EditarPaciente() {
       ];
 
       campos.forEach(campo => {
-        if (paciente[campo]) formData.append(campo, paciente[campo]);
+        if (paciente[campo] !== undefined && paciente[campo] !== null) {
+            formData.append(campo, paciente[campo]);
+        }
       });
       
       if (dentigramaBase64) formData.append('dentigrama_canvas', dentigramaBase64);
@@ -93,11 +110,12 @@ export default function EditarPaciente() {
 
       const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
         method: 'PUT',
-        headers: { 'Authorization': 'Bearer test_token_123' },
+        headers: { 'Authorization': `Bearer ${token}` }, // TOKEN REAL EN EL GUARDADO
         body: formData
       });
       
       if (response.ok) {
+        alert('Paciente actualizado correctamente');
         router.push(`/pacientes/${id}`);
       } else {
         const errorData = await response.json();
@@ -110,22 +128,20 @@ export default function EditarPaciente() {
     }
   };
 
-  // PROTECCIÓN 1: Mientras carga o si el paciente es null, no mostramos el formulario
   if (loading || !paciente) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center">
         <HeaderPaciente loading={true} />
-        <p className="mt-4 text-gray-500">Cargando datos del paciente...</p>
+        <p className="mt-4 text-gray-500 font-medium">Cargando historial clínico...</p>
       </div>
     );
   }
 
-  // PROTECCIÓN 2: Uso de "?" (Optional Chaining) en todo el diseño
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4 text-center">
-        <p className="text-yellow-700 text-sm">
-           Editando a <strong>{paciente?.nombre_completo || `${paciente?.nombres} ${paciente?.apellidos}`}</strong>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-6 text-center">
+        <p className="text-blue-700 text-sm">
+           Editando historial de: <strong>{paciente.nombres} {paciente.apellidos}</strong>
         </p>
       </div>
 
@@ -145,11 +161,11 @@ export default function EditarPaciente() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <DentigramaEditor 
             ref={dentigramaRef}
-            fondoUrl={paciente?.dentigrama_canvas}
+            fondoUrl={paciente.dentigrama_canvas}
           />
           <ImagenPerfil 
             imagenUrl={imagenPreview}
-            nombrePaciente={`${paciente?.nombres} ${paciente?.apellidos}`}
+            nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
             modo="editar"
             onImageChange={handleImageChange}
             onImageDelete={handleImageDelete}
