@@ -64,14 +64,17 @@ useEffect(() => {
              anio === parseInt(anioSeleccionado);
     });
 
-    // 3. Aplicamos el filtro de búsqueda SOLO si el usuario escribió 2 o más letras.
-    // Si borra y deja 0 o 1 letra, el sistema ignora este paso y muestra todo el mes.
     if (busqueda.length >= 3) {
-      const term = busqueda.toLowerCase();
-      result = result.filter(p => 
-        p.paciente_nombre?.toLowerCase().includes(term) || 
-        p.codigo.toLowerCase().includes(term)
-      );
+      // Convertimos la búsqueda en una lista de palabras
+      const terminos = busqueda.toLowerCase().split(' ').filter(t => t !== '');
+
+      result = result.filter(p => {
+        const nombre = (p.paciente_nombre || '').toLowerCase();
+        const codigo = (p.codigo || '').toLowerCase();
+
+        // Verificamos que TODAS las palabras estén presentes
+        return terminos.every(t => nombre.includes(t) || codigo.includes(t));
+      });
     }
 
     // 4. Actualizamos el estado con el resultado final y volvemos a la página 1

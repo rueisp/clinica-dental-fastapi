@@ -57,4 +57,8 @@ export const API_ENDPOINTS = {
   OBTENER_PAGO: (id) => `${API_BASE_URL}/api/pagos/${id}`,
   LISTAR_PAGOS: `${API_BASE_URL}/api/pagos`, // Endpoint para el historial
   EXPORTAR_PACIENTE_WORD: (id) => `${API_BASE_URL}/api/pacientes/${id}/exportar-word`,
+  PLANES: `${API_BASE_URL}/api/planes/`,
+  REPORTAR_PAGO: `${API_BASE_URL}/api/pagos/reportar`,
+  ADMIN_PAGOS_PENDIENTES: `${API_BASE_URL}/api/pagos/admin/pendientes`,
+  APROBAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/aprobar/${id}`,
 };

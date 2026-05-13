@@ -1,10 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Blocks } from 'lucide-react';
 import DentigramaEditor from './DentigramaEditor';
 
 export default function Dentigrama({ dentigramaCanvas, modo, onSave }) {
+  const [canUseOdontogram, setCanUseOdontogram] = useState(true);
+
+  useEffect(() => {
+    const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+    const isAdmin = localStorage.getItem('is_admin') === 'true'; // Detectar admin
+
+    if (isAdmin) {
+      setCanUseOdontogram(true); // El admin siempre puede usar el odontograma
+    } else if (perms.can_use_odontogram !== undefined) {
+      setCanUseOdontogram(perms.can_use_odontogram);
+    }
+  }, []);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [canvasData, setCanvasData] = useState(dentigramaCanvas || '');
 
@@ -15,7 +27,7 @@ export default function Dentigrama({ dentigramaCanvas, modo, onSave }) {
     setModalAbierto(false);
   };
 
-  // Modo mostrar (solo vista previa ampliable)
+  // Modo mostrar (vista previa)
   if (modo === 'mostrar') {
     if (!dentigramaCanvas) {
       return (
@@ -31,19 +43,26 @@ export default function Dentigrama({ dentigramaCanvas, modo, onSave }) {
     return (
       <>
         <div 
-          className="bg-gray-50 rounded-2xl border border-gray-100 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
-          onClick={() => setModalAbierto(true)}
+          className={`bg-gray-50 rounded-2xl border border-gray-100 p-4 transition-colors ${
+            !canUseOdontogram ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'
+          }`}
+          onClick={canUseOdontogram ? () => setModalAbierto(true) : () => alert("El Dentigrama Interactivo es solo para usuarios PRO")}
         >
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Dentigrama Interactivo</h3>
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-medium text-gray-700">Dentigrama Interactivo</h3>
+            {!canUseOdontogram && <span className="text-[10px] bg-yellow-400 px-2 py-0.5 rounded-full font-bold text-black">🔒 PRO</span>}
+          </div>
           <img 
             src={dentigramaCanvas} 
             alt="Dentigrama del paciente"
             className="w-full h-auto object-contain max-h-[200px]"
           />
-          <p className="text-xs text-gray-400 text-center mt-2">Haz clic para ampliar</p>
+          <p className="text-xs text-gray-400 text-center mt-2">
+            {canUseOdontogram ? 'Haz clic para ampliar' : 'Bloqueado en Plan Básico'}
+          </p>
         </div>
 
-        {modalAbierto && (
+        {modalAbierto && canUseOdontogram && (
           <div 
             className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
             onClick={() => setModalAbierto(false)}
@@ -71,13 +90,15 @@ export default function Dentigrama({ dentigramaCanvas, modo, onSave }) {
   return (
       <>
         <div 
-          className="bg-gray-50 rounded-2xl border border-gray-100 p-4 cursor-pointer hover:bg-gray-100 transition-colors min-h-[200px] flex items-center justify-center"
-          onClick={() => setModalAbierto(true)}
+          className={`bg-gray-50 rounded-2xl border border-gray-100 p-4 transition-colors min-h-[200px] flex items-center justify-center ${
+            !canUseOdontogram ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:bg-gray-100'
+          }`}
+          onClick={canUseOdontogram ? () => setModalAbierto(true) : () => alert("El Odontograma requiere Plan PRO")}
         >
-          <div className="text-center">
+          <div className="text-center relative">
             <Blocks className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-400 text-sm">
-              {dentigramaCanvas ? 'Haz clic para editar dentigrama' : 'Haz clic para crear dentigrama'}
+            <p className="text-gray-400 text-sm font-bold">
+              {!canUseOdontogram ? 'Función PRO Bloqueada 🔒' : (dentigramaCanvas ? 'Haz clic para editar dentigrama' : 'Haz clic para crear dentigrama')}
             </p>
             {dentigramaCanvas && (
               <img 

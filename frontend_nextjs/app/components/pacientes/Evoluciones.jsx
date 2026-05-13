@@ -7,6 +7,18 @@ import { API_ENDPOINTS, authFetch } from '@/config/api';
 export default function Evoluciones({ pacienteId }) {
   const [evoluciones, setEvoluciones] = useState([]);
   const [cargando, setCargando] = useState(false);
+  const [canUseVoice, setCanUseVoice] = useState(true);
+
+  useEffect(() => {
+    const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+    const isAdmin = localStorage.getItem('is_admin') === 'true'; // Detectamos si es admin
+
+    if (isAdmin) {
+      setCanUseVoice(true); // Si es admin, habilitamos voz siempre
+    } else if (perms.can_use_voice !== undefined) {
+      setCanUseVoice(perms.can_use_voice);
+    }
+  }, []);
   const [nuevaEvolucion, setNuevaEvolucion] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
@@ -38,10 +50,13 @@ export default function Evoluciones({ pacienteId }) {
 
   // --- CONFIGURACIÓN DE SPEECH RECOGNITION ---
   useEffect(() => {
+    // 1. Si no tiene permiso, detenemos el código aquí
+    if (!canUseVoice) return; 
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false; // Se detiene al dejar de hablar
+      recognitionRef.current.continuous = false; 
       recognitionRef.current.lang = 'es-ES';
       recognitionRef.current.interimResults = false;
 
@@ -49,7 +64,6 @@ export default function Evoluciones({ pacienteId }) {
         const transcript = event.results[0][0].transcript;
         const textoLimpio = procesarTextoDictado(transcript);
         
-        // Si estamos editando uno existente o creando uno nuevo
         if (editandoId) {
           setEditandoTexto(prev => prev + (prev ? ' ' : '') + textoLimpio);
         } else {
@@ -65,7 +79,8 @@ export default function Evoluciones({ pacienteId }) {
 
       recognitionRef.current.onend = () => setEstaEscuchando(false);
     }
-  }, [editandoId]);
+    // 2. Agregamos canUseVoice a la lista de dependencias abajo
+  }, [editandoId, canUseVoice]);
 
   const toggleEscuchar = () => {
     if (estaEscuchando) {
@@ -177,15 +192,17 @@ export default function Evoluciones({ pacienteId }) {
           
           {/* BOTÓN DE VOZ */}
           <button
-            onClick={toggleEscuchar}
+            onClick={canUseVoice ? toggleEscuchar : () => alert("El dictado por voz es exclusivo del Plan PRO")}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              estaEscuchando 
-              ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200' 
-              : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
+              !canUseVoice 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200 opacity-70' 
+              : estaEscuchando 
+                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200' 
+                : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
             }`}
           >
             {estaEscuchando ? <MicOff size={14} /> : <Mic size={14} />}
-            {estaEscuchando ? 'ESCUCHANDO...' : 'DICTAR POR VOZ'}
+            {estaEscuchando ? 'ESCUCHANDO...' : canUseVoice ? 'DICTAR POR VOZ' : 'DICTAR (PRO)'}
           </button>
         </div>
 

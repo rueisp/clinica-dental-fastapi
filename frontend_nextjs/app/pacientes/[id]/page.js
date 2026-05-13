@@ -8,7 +8,6 @@ import Dentigrama from '@/app/components/pacientes/Dentigrama';
 import Evoluciones from '@/app/components/pacientes/Evoluciones';
 import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { API_BASE_URL, authFetch, API_ENDPOINTS } from '@/config/api';
-// Importamos los iconos solicitados
 import { ClipboardList, Activity, FileText } from 'lucide-react';
 
 export default function MostrarPaciente() {
@@ -18,8 +17,24 @@ export default function MostrarPaciente() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // --- ESTO ES LO QUE ESTABA AFUERA Y AHORA ESTÁ ADENTRO (CORRECTO) ---
+  const [canExport, setCanExport] = useState(true);
+
+  useEffect(() => {
+    const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+    const isAdmin = localStorage.getItem('is_admin') === 'true'; // Detectar admin
+
+    if (isAdmin) {
+      setCanExport(true); // El admin siempre puede exportar
+    } else if (perms.can_export_history !== undefined) {
+      setCanExport(perms.can_export_history);
+    }
+  }, []);
+  // ------------------------------------------------------------------
+
   useEffect(() => {
     const fetchPaciente = async () => {
+// ... el resto de tu código sigue igual
       try {
         const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`);
         if (!response.ok) throw new Error('Paciente no encontrado');
@@ -54,6 +69,7 @@ export default function MostrarPaciente() {
   };
 
   const handleExportarWord = async () => {
+    if (!canExport) return alert("La descarga de historia clínica en Word es exclusiva del Plan PRO");
     try {
       const response = await authFetch(API_ENDPOINTS.EXPORTAR_PACIENTE_WORD(id));
       if (!response.ok) throw new Error('Error al generar el documento');
@@ -119,10 +135,14 @@ export default function MostrarPaciente() {
           
           <button
             onClick={handleExportarWord}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all border border-blue-100"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              !canExport 
+              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed grayscale' 
+              : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+            }`}
           >
             <FileText size={16} />
-            EXPORTAR HISTORIA
+            {canExport ? 'EXPORTAR HISTORIA' : 'EXPORTAR (PRO) 🔒'}
           </button>
         </div>
         <Evoluciones pacienteId={id} />

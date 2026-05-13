@@ -1,15 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';  // ← Agregar
+import { usePathname, useRouter } from 'next/navigation';  // ← Agregar
 import Link from 'next/link';
 import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut } from 'lucide-react';
 import { setAuthToken } from '@/config/api';  // ← Agregar
 
 export default function Sidebar() {
   const router = useRouter();  // ← Agregar
+  const pathname = usePathname();  // ← Agregar
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const userRole = localStorage.getItem('is_admin');
+    // Esto convierte el texto "true" en un valor booleano real
+    setIsAdmin(userRole === 'true' || userRole === true);
+  }, []);
 
   // Detectar si es móvil basado en el ancho de pantalla
   useEffect(() => {
@@ -162,6 +170,22 @@ export default function Sidebar() {
               <UserCog className="w-5 h-5" />
               <span>Mi Perfil</span>
             </Link>
+
+            {/* Solo se muestra si el usuario es Admin */}
+            {isAdmin && (
+              <Link
+                href="/admin/pagos"
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border ${
+                  pathname === '/admin/pagos' 
+                    ? 'text-purple-700 bg-purple-50 border-purple-100' 
+                    : 'text-gray-700 hover:bg-gray-100 border-transparent'
+                }`}
+                onClick={closeSidebar}
+              >
+                <UserCog className="w-5 h-5" />
+                <span className="font-bold text-sm">Validar Pagos</span>
+              </Link>
+            )}
             
             <button
               onClick={() => {

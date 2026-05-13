@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import pytz
 import random
 import string
-
+from utils.notifications import enviar_alerta_pago_telegram
+from schemas.pago import PagoReporte
 # Importaciones de tu estructura actual
 from database import get_db
 from dependencies.auth import get_current_user # Asegúrate de que esta ruta sea correcta
-from models import Usuario, Paciente, PagoClinico # Usamos el nuevo PagoClinico
+from models import PagoSuscripcion, Plan, Subscription, Usuario, Paciente, PagoClinico # Usamos el nuevo PagoClinico
 from schemas.pago import PagoCreate, PagoResponse
 
 router = APIRouter(prefix="/pagos", tags=["pagos"])
@@ -61,11 +62,11 @@ async def crear_pago(
             metodo_pago=pago_data.metodo_pago,
             fecha=ahora_colombia,  # <--- GUARDAMOS EL DATETIME COMPLETO CON TZ
             hora=ahora_colombia.time(),      # <--- USAMOS LA VARIABLE QUE CALCULAMOS ARRIBA
-            paciente_nombre=pago_data.paciente_nombre,
+            paciente_nombre=paciente_nombre_final, # ✅ USAR LA VARIABLE FINAL
             concepto=pago_data.descripcion,
             codigo=f"R-{uuid.uuid4().hex[:8].upper()}",
             observacion=pago_data.observacion,
-            telefono=pago_data.telefono,
+            telefono=telefono_final,  # ✅ USAR LA VARIABLE FINAL
             es_rapido=pago_data.es_rapido
         )
 
@@ -176,3 +177,217 @@ async def eliminar_pago(
     await db.delete(pago)
     await db.commit()
     return None
+
+
+@router.post("/reportar")
+async def reportar_pago(
+    pago_data: PagoReporte, 
+    current_user: Usuario = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
+    # Asegúrate de que el frontend envíe el UUID del plan, no un número.
+    nuevo_pago = PagoSuscripcion(
+        user_id=current_user.id,
+        plan_id=pago_data.plan_id, # Aquí se guardará el UUID
+        monto=pago_data.monto,
+        comprobante_url=pago_data.comprobante_url,
+        referencia_pago=pago_data.referencia_pago,
+        estado="pendiente"
+    )
+    
+    db.add(nuevo_pago)
+    await db.commit()
+
+    # 2. Enviar la alerta a tu celular
+    # Usamos un try/except para que si falla el internet o Telegram, 
+    # el doctor no vea un error, ya que el pago SÍ se guardó en la DB.
+    try:
+        await enviar_alerta_pago_telegram(
+            doctor_nombre=f"{current_user.nombres} {current_user.apellidos}",
+            plan_nombre=pago_data.plan_nombre,
+            referencia=pago_data.referencia_pago
+        )
+    except Exception as e:
+        print(f"⚠️ Error enviando Telegram: {e}") # Al menos lo verás en la consola del servidor
+
+    return {"status": "success", "message": "Pago reportado exitosamente. Revisaremos en breve."}
+
+
+from datetime import datetime, timedelta
+
+@router.post("/admin/aprobar/{pago_id}")
+async def aprobar_pago_admin(
+    pago_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    # 1. Verificar que seas el admin
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+
+    # 2. Convertir pago_id a UUID y buscar el registro
+    try:
+        pago_uuid = uuid.UUID(pago_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="El ID de pago proporcionado no es válido")
+
+    result_pago = await db.execute(select(PagoSuscripcion).where(PagoSuscripcion.id == pago_uuid))
+    pago = result_pago.scalar_one_or_none()
+    
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    
+    if pago.estado == "aprobado":
+        raise HTTPException(status_code=400, detail="Este pago ya ha sido aprobado previamente")
+
+    # 3. Buscar la suscripción del doctor que realizó el pago
+    result_sub = await db.execute(select(Subscription).where(Subscription.user_id == pago.user_id))
+    suscripcion = result_sub.scalar_one_or_none()
+    
+    if not suscripcion:
+        # Por seguridad, si no existe la creamos (aunque el trigger o el endpoint previo deberían haberla creado)
+        suscripcion = Subscription(user_id=pago.user_id)
+        db.add(suscripcion)
+
+    # 4. Buscar los datos del plan (usando el plan_id guardado en el pago)
+    result_plan = await db.execute(select(Plan).where(Plan.id == pago.plan_id))
+    plan = result_plan.scalar_one_or_none()
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="El plan asociado a este pago ya no existe en el catálogo")
+
+    # --- ACTIVACIÓN ---
+    ahora = datetime.now(COLOMBIA_TZ)
+    
+    # Actualizar el registro del pago
+    pago.estado = "aprobado"
+    pago.fecha_aprobacion = ahora # Campo que tienes en tu modelo PagoSuscripcion
+
+    # Actualizar la suscripción
+    suscripcion.plan_type = plan.nombre
+    suscripcion.status = "active"
+    
+    # Calcular vigencia: 
+    # Si el usuario ya tiene un plan activo, podrías sumarle días a su fecha de fin.
+    # Pero lo estándar en pagos manuales es: Hoy + Duración del plan.
+    dias_vigencia = plan.duracion_dias if plan.duracion_dias else 30
+    suscripcion.current_period_end = ahora + timedelta(days=dias_vigencia)
+
+    # Nota: Solo usa 'updated_at' si lo agregaste a tu clase Subscription en models.py
+    # Si no está en el modelo, comenta la siguiente línea para evitar errores:
+    # suscripcion.updated_at = ahora 
+
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"¡Éxito! El plan {plan.nombre} ha sido activado para el usuario hasta el {suscripcion.current_period_end.strftime('%Y-%m-%d')}."
+    }
+
+
+@router.get("/admin/pendientes")
+async def obtener_pagos_pendientes(
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Verificar que sea admin
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+    
+    # Buscar pagos pendientes
+    query = select(PagoSuscripcion).where(PagoSuscripcion.estado == "pendiente")
+    result = await db.execute(query)
+    pagos = result.scalars().all()
+    
+    print(f"📊 Pagos encontrados: {len(pagos)}")  # DEBUG
+    
+    # Formatear respuesta
+    respuesta = []
+    for pago in pagos:
+        print(f"🔍 Procesando pago: {pago.id}")  # DEBUG
+        
+        # Obtener datos del usuario
+        result_user = await db.execute(select(Usuario).where(Usuario.id == pago.user_id))
+        usuario = result_user.scalar_one_or_none()
+        print(f"   Usuario: {usuario.email if usuario else 'No encontrado'}")  # DEBUG
+        
+        # Obtener datos del plan
+        result_plan = await db.execute(select(Plan).where(Plan.id == pago.plan_id))
+        plan = result_plan.scalar_one_or_none()
+        print(f"   Plan: {plan.nombre if plan else 'No encontrado'}")  # DEBUG
+        
+        respuesta.append({
+            "pago": {
+                "id": str(pago.id),
+                "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}" if usuario else "Desconocido",
+                "usuario_email": usuario.email if usuario else "N/A",
+                "plan_nombre": plan.nombre if plan else "Desconocido",
+                "monto": pago.monto,
+                "referencia_pago": pago.referencia_pago,
+                "comprobante_url": pago.comprobante_url,
+                "fecha_reporte": pago.fecha_reporte.isoformat() if pago.fecha_reporte else None,
+                "estado": pago.estado
+            }
+        })
+    
+    print(f"✅ Respuesta final: {len(respuesta)} items")  # DEBUG
+    return respuesta
+
+
+@router.get("/admin/todos")
+async def obtener_todos_pagos_suscripcion(
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    skip: int = 0,
+    limit: int = 50
+):
+    # 1. Verificar que sea admin
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
+    
+    # 2. Buscar todos los pagos (con paginación)
+    query = select(PagoSuscripcion).order_by(
+        PagoSuscripcion.fecha_reporte.desc()
+    ).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    pagos = result.scalars().all()
+    
+    # 3. Contar total
+    count_query = select(func.count()).select_from(PagoSuscripcion)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # 4. Enriquecer con datos de usuario y plan
+    respuesta = []
+    for pago in pagos:
+        result_user = await db.execute(
+            select(Usuario).where(Usuario.id == pago.user_id)
+        )
+        usuario = result_user.scalar_one_or_none()
+        
+        result_plan = await db.execute(
+            select(Plan).where(Plan.id == pago.plan_id)
+        )
+        plan = result_plan.scalar_one_or_none()
+        
+        respuesta.append({
+            "id": str(pago.id),
+            "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}" if usuario else "Desconocido",
+            "usuario_email": usuario.email if usuario else "N/A",
+            "plan_nombre": plan.nombre if plan else "Desconocido",
+            "monto": pago.monto,
+            "referencia_pago": pago.referencia_pago,
+            "comprobante_url": pago.comprobante_url,
+            "fecha_reporte": pago.fecha_reporte.isoformat() if pago.fecha_reporte else None,
+            "fecha_aprobacion": pago.fecha_aprobacion.isoformat() if pago.fecha_aprobacion else None,
+            "estado": pago.estado,
+            "observacion_admin": pago.observacion_admin
+        })
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "pagos": respuesta
+    }

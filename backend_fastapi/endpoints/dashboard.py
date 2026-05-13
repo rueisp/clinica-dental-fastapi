@@ -86,7 +86,7 @@ async def get_citas_por_fecha(
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de fecha inválido")
     
-    # 1. Consulta con etiquetas p_nombres, p_apellidos y p_tel
+    # 1. Definimos la consulta base
     query = (
         select(
             Cita,
@@ -97,12 +97,16 @@ async def get_citas_por_fecha(
         .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
         .where(
             Cita.fecha == fecha_obj,
-            Cita.is_deleted == False,
-            Cita.odontologo_id == current_user.id
+            Cita.is_deleted == False
         )
-        .order_by(Cita.hora)
     )
+
+    # 2. Filtro condicional: Si NO es admin, solo ve lo suyo
+    if not current_user.is_admin:
+        query = query.where(Cita.odontologo_id == current_user.id)
     
+    # 3. Ordenamos y ejecutamos
+    query = query.order_by(Cita.hora)
     result = await db.execute(query)
     rows = result.all()
     
@@ -110,22 +114,14 @@ async def get_citas_por_fecha(
     for row in rows:
         cita = row.Cita
         
-        # --- LÓGICA DE NOMBRE CORREGIDA ---
-        nombre_final = ""
-        
-        # ✅ CAMBIO: Usamos row.p_nombres para que coincida con el .label("p_nombres")
+        # Lógica de nombre
         if row.p_nombres:
             nombre_final = f"{row.p_nombres} {row.p_apellidos or ''}".strip()
-        
-        # Prioridad 2: Si no hay paciente en la tabla, usamos el nombre guardado en la cita
         elif cita.nombre_provisional:
             nombre_final = cita.nombre_provisional
-            
-        # Prioridad 3: Fallback
-        if not nombre_final:
+        else:
             nombre_final = "Paciente sin registrar"
 
-        # ✅ CAMBIO: Usamos row.p_tel para que coincida con el .label("p_tel")
         telefono_final = row.p_tel or cita.telefono_provisional or ""
         
         citas_list.append({
@@ -414,28 +410,29 @@ async def get_home_data(
     
     fecha_actual_formateada = f"{dias_semana_es[hoy.weekday()]}, {hoy.day} de {meses_es[hoy.month]} de {hoy.year}"
     
-    # ========== 2. EVENTOS ==========
+    # ========== 2. EVENTOS (Asegurar que traiga todo) ==========
     query_eventos = (
         select(
-            cast(Cita.fecha, Date).label("fecha"),
+            Cita.fecha.label("fecha"), # No hace falta cast si ya es Date en el modelo
             func.count(Cita.id).label("total")
         )
         .where(Cita.is_deleted == False)
     )
-    
+
     if not current_user.is_admin:
         query_eventos = query_eventos.where(Cita.odontologo_id == current_user.id)
-    
-    query_eventos = query_eventos.group_by(cast(Cita.fecha, Date))
-    
+
+    query_eventos = query_eventos.group_by(Cita.fecha)
+
     result_eventos = await db.execute(query_eventos)
     eventos_db = result_eventos.all()
-    
+
     eventos_list = []
-    for fecha, count in eventos_db:
+    for row in eventos_db:
+        # row es un objeto que tiene .fecha y .total
         eventos_list.append({
-            "title": f"{count} cita{'s' if count > 1 else ''}",
-            "start": fecha.strftime('%Y-%m-%d'),
+            "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
+            "start": row.fecha.strftime('%Y-%m-%d'),
             "color": "transparent",
             "textColor": "#6b7280"
         })

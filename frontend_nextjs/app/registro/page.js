@@ -48,9 +48,12 @@ function RegistroForm() {
             // 2. Guardar el nombre para el saludo del Dashboard
             localStorage.setItem("nombre_usuario", data.nombre_usuario);
 
-            // 3. ¡IMPORTANTE!: En lugar de router.push, usamos window.location.href
-            // Esto fuerza una carga limpia de la página y asegura que AuthGuard
-            // lea el localStorage desde cero, evitando el error 401 por "race condition".
+            // 🔥 3. NUEVO: Guardar los permisos del plan en localStorage
+            if (data.permissions) {
+                localStorage.setItem("user_permissions", JSON.stringify(data.permissions));
+            }
+
+            // 4. Redirección limpia
             window.location.href = "/dashboard"; 
 
         } catch (err) {

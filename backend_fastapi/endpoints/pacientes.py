@@ -12,9 +12,9 @@ import os
 from pydantic import BaseModel
 from database import get_db
 from dependencies.auth import get_current_user
-from dependencies.limites import verificar_limite_pacientes
-from models import Usuario, Paciente, LimiteDiario, Evolucion
-from sqlalchemy import or_, delete
+from dependencies.limites import verificar_limite_pacientes, verificar_permiso
+from models import Usuario, Paciente, LimiteDiario, Evolucion, Subscription, Plan, Cita
+from sqlalchemy import or_, delete, update
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from services.export_service import generar_historia_clinica_word
@@ -160,26 +160,45 @@ async def crear_paciente(
         except Exception as e:
             raise HTTPException(500, detail=f"Error al subir dentigrama: {str(e)}")
     
-    # 6. Incrementar límite diario
-    fecha_hoy = date.today()
-    limite_diario = await db.execute(
+    # 6. Incrementar o Crear registro de límite diario
+    # ✅ Usamos la misma fecha local de Colombia que en limites.py
+    fecha_hoy = datetime.now(pytz.timezone('America/Bogota')).date()
+    
+    result_limite = await db.execute(
         select(LimiteDiario).where(
             LimiteDiario.user_id == current_user.id,
             LimiteDiario.fecha == fecha_hoy
         )
     )
-    limite = limite_diario.scalar_one_or_none()
+    limite = result_limite.scalar_one_or_none()
+
     if limite:
         limite.contador_pacientes += 1
-    
+    else:
+        # Buscamos el plan para saber qué límite poner
+        res_plan = await db.execute(
+            select(Plan).join(Subscription, Subscription.plan_type == Plan.nombre)
+            .where(Subscription.user_id == current_user.id)
+        )
+        plan_actual = res_plan.scalar_one_or_none()
+        
+        # ✅ CAMBIO: El respaldo ahora es 20 en lugar de 50
+        limite_fijo = plan_actual.limite_pacientes_diario if plan_actual else 20
+
+        nuevo_registro_limite = LimiteDiario(
+            user_id=current_user.id,
+            fecha=fecha_hoy,
+            contador_pacientes=1,
+            limite_actual=limite_fijo
+        )
+        db.add(nuevo_registro_limite)
+
     await db.commit()
-    await db.refresh(nuevo_paciente)
-    
+
     return {
         "success": True,
         "message": "Paciente creado exitosamente",
-        "paciente_id": nuevo_paciente.id,
-        "redirect_url": "/pacientes/lista"
+        "paciente_id": str(nuevo_paciente.id) # El frontend necesita este ID para el router.push
     }
 
 
@@ -199,12 +218,16 @@ async def get_pacientes(
         query = query.where(Paciente.odontologo_id == current_user.id)
     
     if search:
-        search_term = f"%{search}%"
+        # ✅ Esto cambia los espacios por %, convirtiendo "mario bros" en "%mario%bros%"
+        search_term = f"%{search.replace(' ', '%')}%" 
+        
         query = query.where(
             or_(
                 Paciente.nombres.ilike(search_term),
                 Paciente.apellidos.ilike(search_term),
-                Paciente.telefono.ilike(search_term)
+                Paciente.documento.ilike(search_term),
+                Paciente.telefono.ilike(search_term),
+                func.concat(Paciente.nombres, ' ', Paciente.apellidos).ilike(search_term)
             )
         )
     
@@ -528,6 +551,11 @@ async def eliminar_paciente(
     # Soft delete
     paciente.is_deleted = True
     paciente.deleted_at = datetime.utcnow()
+
+    # ✅ OCULTAR CITAS: Para que no aparezcan en la agenda
+    await db.execute(
+        update(Cita).where(Cita.paciente_id == paciente_id).values(is_deleted=True)
+    )
     
     await db.commit()
     
@@ -561,6 +589,11 @@ async def restaurar_paciente(
     
     paciente.is_deleted = False
     paciente.deleted_at = None
+
+    # ✅ RESTAURAR CITAS: Para que vuelvan a aparecer en la agenda
+    await db.execute(
+        update(Cita).where(Cita.paciente_id == paciente_id).values(is_deleted=False)
+    )
     
     await db.commit()
     
@@ -591,6 +624,11 @@ async def eliminar_permanente(
     # 2. ✅ ELIMINAR PRIMERO LAS EVOLUCIONES
     await db.execute(
         delete(Evolucion).where(Evolucion.paciente_id == paciente_id)
+    )
+
+    # ✅ BORRAR CITAS FÍSICAMENTE
+    await db.execute(
+        delete(Cita).where(Cita.paciente_id == paciente_id)
     )
     
     # 3. Luego eliminar imágenes de Cloudinary (opcional)
@@ -625,13 +663,15 @@ async def buscar_pacientes_autocomplete(
 ):
     """Busca pacientes por nombre para autocompletado (máximo 10 resultados)"""
     
-    search_term = f"%{q}%"
+    # ✅ Aplicamos la misma lógica: convertimos espacios en comodines %
+    search_term = f"%{q.replace(' ', '%')}%"
     
     query = select(Paciente).where(
         Paciente.is_deleted == False,
         or_(
             Paciente.nombres.ilike(search_term),
             Paciente.apellidos.ilike(search_term),
+            Paciente.documento.ilike(search_term), # ✅ Agregamos búsqueda por documento aquí también
             func.concat(Paciente.nombres, ' ', Paciente.apellidos).ilike(search_term)
         )
     )
@@ -647,11 +687,12 @@ async def buscar_pacientes_autocomplete(
     return {
         "pacientes": [
             {
-                "id": p.id,
+                "id": str(p.id),
                 "nombres": p.nombres,
                 "apellidos": p.apellidos,
-                "nombres": f"{p.nombres} {p.apellidos}",
-                "telefono": p.telefono
+                "nombre_completo": f"{p.nombres} {p.apellidos}",
+                "telefono": p.telefono,
+                "documento": p.documento
             }
             for p in pacientes
         ]
@@ -663,6 +704,8 @@ async def exportar_paciente_word(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_permiso("can_export_history", current_user, db)
+    
     # 1. Buscamos el paciente e incluimos sus evoluciones
     result = await db.execute(
         select(Paciente)

@@ -99,7 +99,7 @@ class Cita(Base):
     paciente_id = Column(UUID(as_uuid=True), ForeignKey('pacientes.id', ondelete="CASCADE"), nullable=True)
     
     # Usamos DateTime o Date/Time según prefieras, pero mantengamos la consistencia
-    fecha = Column(Date, nullable=False)
+    fecha = Column(Date, nullable=False, index=True)
     hora = Column(Time, nullable=False)
     motivo = Column(String(255), nullable=True)
     doctor = Column(String(100), nullable=False)
@@ -108,7 +108,7 @@ class Cita(Base):
     telefono_provisional = Column(String(50), nullable=True)
     
     # Conector con el Odontólogo (ya es UUID)
-    odontologo_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id', ondelete="CASCADE"), nullable=False)
+    odontologo_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id', ondelete="CASCADE"), nullable=False, index=True)
     
     # Nombre de columna: 'estado' para que coincida con el SQL de Supabase
     estado = Column(String(20), default='pendiente')
@@ -198,6 +198,29 @@ class Plan(Base):
     limite_pacientes_diario = Column(Integer, default=10)
     activo = Column(Boolean, default=True)
     orden = Column(Integer, default=1)
+     ## --- AGREGA ESTAS 4 LÍNEAS NUEVAS ---
+    can_use_odontogram = Column(Boolean, default=False)
+    can_use_multimedia = Column(Boolean, default=False)
+    can_use_voice = Column(Boolean, default=False)
+    can_export_history = Column(Boolean, default=False)
+    ## ------------------------------------
     
     # Esta relación conecta el nombre del plan con la suscripción
-    usuarios_suscritos = relationship("Subscription", primaryjoin="Plan.nombre == Subscription.plan_type", foreign_keys="Subscription.plan_type", viewonly=True)    
+    usuarios_suscritos = relationship("Subscription", primaryjoin="Plan.nombre == Subscription.plan_type", foreign_keys="Subscription.plan_type", viewonly=True)  
+
+
+class PagoSuscripcion(Base):
+    __tablename__ = 'pagos_suscripcion'
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id'), nullable=False)
+    # CAMBIO: plan_id debe ser UUID para coincidir con Plan.id
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('planes.id', ondelete="CASCADE"), nullable=False) 
+    monto = Column(Integer, nullable=False)
+    referencia_pago = Column(String(50), nullable=False)
+    comprobante_url = Column(String(500), nullable=False)
+    estado = Column(String(20), default='pendiente')
+    fecha_reporte = Column(DateTime, default=func.now())
+    fecha_aprobacion = Column(DateTime, nullable=True)
+    # Agregado para que no falle el endpoint de listar todos
+    observacion_admin = Column(Text, nullable=True)   

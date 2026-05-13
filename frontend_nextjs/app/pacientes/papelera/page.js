@@ -102,37 +102,60 @@ export default function Papelera() {
       ) : (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
               <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ID</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Nombre</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Documento</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Eliminado</th>
-                <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">Acciones</th>
+                <th className="hidden sm:table-cell px-6 py-4">ID</th>
+                <th className="px-6 py-4">Nombre</th>
+                <th className="hidden sm:table-cell px-6 py-4">Documento</th>
+                <th className="px-6 py-4">Eliminado</th>
+                <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-50">
               {pacientes.map((p) => (
-                <tr key={p.id} className="border-b border-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-700">{p.id}</td>
-                  <td className="px-6 py-4 font-medium text-gray-900">{p.nombres} {p.apellidos}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{p.documento || '-'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{p.deleted_at || '-'}</td>
+                <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                  {/* ID Recortado y oculto en móvil */}
+                  <td className="hidden sm:table-cell px-6 py-4 text-sm text-gray-400 font-bold">
+                    #{p.id.substring(0, 8)}
+                  </td>
+
+                  {/* Nombre en dos líneas (Igual que en Pacientes) */}
+                  <td className="px-6 py-3 font-bold text-black">
+                    <div className="flex flex-col leading-tight">
+                      <span className="truncate max-w-[120px] sm:max-w-none block">
+                        {p.nombres}
+                      </span>
+                      <span className="truncate max-w-[120px] sm:max-w-none block text-gray-500">
+                        {p.apellidos}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Documento oculto en móvil para dar espacio a botones */}
+                  <td className="hidden sm:table-cell px-6 py-4 text-sm text-gray-600">
+                    {p.documento || '-'}
+                  </td>
+
+                  <td className="px-6 py-4 text-xs text-gray-500">
+                    {p.deleted_at ? p.deleted_at.split(' ')[0] : '-'}
+                  </td>
+
+                  {/* Botones de acción */}
                   <td className="px-6 py-4 text-center">
                     <div className="flex justify-center gap-2">
                       <button
                         onClick={() => handleRestaurar(p.id)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                        className="p-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all"
                         title="Restaurar"
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw size={18} />
                       </button>
                       <button
                         onClick={() => handleEliminarDefinitivo(p.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"
                         title="Eliminar definitivamente"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle size={18} />
                       </button>
                     </div>
                   </td>

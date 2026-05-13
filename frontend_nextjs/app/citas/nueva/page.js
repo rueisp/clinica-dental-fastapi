@@ -97,7 +97,7 @@ export default function NuevaCita() {
       });
       
       if (response.ok) {
-        router.push('/'); // O '/dashboard' si esa es tu ruta principal
+        router.replace(`/dashboard?fecha=${formData.fecha}`);
       } else {
         const error = await response.json();
         alert("Error: " + (error.detail || "No se pudo agendar"));
@@ -117,7 +117,7 @@ export default function NuevaCita() {
           <h1 className="text-3xl font-black tracking-tight">Nueva Cita</h1>
           <p className="text-gray-400 font-medium">Agendar cita médica</p>
         </div>
-        <Link href="/">
+        <Link href="/dashboard">
           <button className="bg-gray-100 text-gray-600 p-3 rounded-2xl hover:bg-gray-200 transition-all">
             <Home className="w-6 h-6" />
           </button>
@@ -241,7 +241,7 @@ export default function NuevaCita() {
               disabled={loading}
               className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
             >
-              {loading ? 'Agendando...' : 'Confirmar Cita'}
+              {loading ? 'Agendando...' : 'Crear Cita'}
             </button>
             <button 
               type="button"

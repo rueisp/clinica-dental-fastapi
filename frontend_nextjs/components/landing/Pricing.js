@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getAuthToken, API_BASE_URL } from '@/config/api';
+import { getAuthToken, API_ENDPOINTS } from '@/config/api';
 
 export default function Pricing() {
     const [planes, setPlanes] = useState([]);
@@ -15,7 +15,7 @@ export default function Pricing() {
         const token = getAuthToken();
         setIsLoggedIn(!!token && token !== 'test_token_123');
 
-        fetch(`${API_BASE_URL}/api/planes`)
+        fetch(API_ENDPOINTS.PLANES)
             .then(res => res.json())
             .then(data => {
                 setPlanes(Array.isArray(data) ? data : []);
@@ -37,8 +37,10 @@ export default function Pricing() {
 
     const handlePlanClick = (plan) => {
         if (isLoggedIn) {
-            router.push(`/planes`);
+            // Si ya está logueado, lo mandamos a reportar el pago directamente
+            router.push(`/planes/reportar?plan_id=${plan.id}`);
         } else {
+            // Si no, lo mandamos a registrarse primero
             router.push(`/registro?plan_id=${plan.id}`);
         }
     };
@@ -95,11 +97,38 @@ export default function Pricing() {
                                 )}
                             </div>
                             
-                            <ul className="space-y-3 mb-8 flex-grow">
-                                <li className="flex items-center gap-2">✅ {plan.limite_pacientes_diario} pacientes por día</li>
-                                <li className="flex items-center gap-2">✅ Odontograma digital</li>
-                                <li className="flex items-center gap-2">✅ Evolución por voz</li>
-                                <li className="flex items-center gap-2">✅ Agenda de citas</li>
+                            <ul className="space-y-3 mb-8 flex-grow text-sm">
+                                {/* Estas funciones las tienen todos */}
+                                <li className="flex items-center gap-2 text-gray-700">
+                                    <span className="text-green-500">✅</span> Pacientes Ilimitados
+                                </li>
+                                <li className="flex items-center gap-2 text-gray-700">
+                                    <span className="text-green-500">✅</span> Agenda de Citas
+                                </li>
+
+                                {/* Evolución por Voz */}
+                                <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_use_voice ? '✅' : '❌'}</span> 
+                                    Evolución por voz {!plan.can_use_voice && "(PRO)"}
+                                </li>
+
+                                {/* Odontograma */}
+                                <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_use_odontogram ? '✅' : '❌'}</span> 
+                                    Odontograma Interactivo {!plan.can_use_odontogram && "(PRO)"}
+                                </li>
+
+                                {/* Multimedia (Fotos y RX) */}
+                                <li className={`flex items-center gap-2 ${plan.can_use_multimedia ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_use_multimedia ? '✅' : '❌'}</span> 
+                                    Multimedia (Fotos y RX) {!plan.can_use_multimedia && "(PRO)"}
+                                </li>
+
+                                {/* Exportar Historia */}
+                                <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_export_history ? '✅' : '❌'}</span> 
+                                    Exportar Historia (Word) {!plan.can_export_history && "(PRO)"}
+                                </li>
                             </ul>
 
                             <button 

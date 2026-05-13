@@ -25,11 +25,19 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        // 🔥 CORREGIDO: Guardar el token REAL que devuelve el backend
-        setAuthToken(data.access_token);  // <--- CAMBIADO AQUÍ
-        console.log('✅ Token guardado:', data.access_token.substring(0, 20) + '...');
+        // 1. Guardar el token para las peticiones API
+        setAuthToken(data.access_token);
         
-        // Redirigir al dashboard
+        // 2. 🔥 NUEVO: Guardar los permisos del plan en localStorage
+        // Los convertimos a texto (JSON.stringify) para poder guardarlos
+        if (data.permissions) {
+          localStorage.setItem('user_permissions', JSON.stringify(data.permissions));
+        }
+        localStorage.setItem('is_admin', data.is_admin);
+
+        console.log('✅ Token y permisos guardados correctamente');
+        
+        // 3. Redirigir al dashboard
         router.push('/');
       } else {
         setError(data.detail || 'Error al iniciar sesión');

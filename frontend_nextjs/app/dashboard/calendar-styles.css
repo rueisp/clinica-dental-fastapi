@@ -84,3 +84,24 @@ body {
   background-color: transparent !important;
 }
 
+/* Hace que el clic pase a través de la cápsula hacia el día */
+.fc-event {
+  pointer-events: none !important;
+  cursor: pointer;
+}
+
+/* Mejora el área de clic de la celda */
+.fc-daygrid-day-frame {
+  cursor: pointer;
+}
+
+/* Efecto visual de "presionado" para dar feedback al usuario */
+.fc-daygrid-day:active {
+  background-color: #f0f7ff !important;
+}
+
+/* Asegura que toda la celda sea clickable */
+.fc-daygrid-day-number {
+  z-index: 1;
+  pointer-events: none;
+}

@@ -1,3 +1,5 @@
+import pytz
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -32,36 +34,52 @@ async def cambiar_plan(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Actualiza el plan del usuario en la tabla subscriptions"""
-    # 1. Verificar que el plan existe en el catálogo maestro (tabla planes)
+    # 1. Buscar el plan en el catálogo
     result = await db.execute(select(Plan).where(Plan.nombre == request.plan_nombre))
     plan = result.scalar_one_or_none()
     
     if not plan:
-        raise HTTPException(status_code=404, detail="Plan no encontrado en el catálogo")
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
     
-    # 2. Buscar la suscripción actual vinculada al UUID
-    result = await db.execute(
+    # 2. Buscar suscripción actual
+    result_sub = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
-    suscripcion = result.scalar_one_or_none()
-    
-    # 3. Actualizar (o crear si no existe por algún error del trigger)
+    suscripcion = result_sub.scalar_one_or_none()
+
+    # --- REGLA 1: No repetir Trial ---
+    if plan.nombre.lower() == "trial":
+        # Verificamos si alguna vez ha tenido un plan que NO sea nulo y que sea diferente a "expirado"
+        # O si tienes una columna 'trial_usado' en Usuario (recomendado)
+        if suscripcion and suscripcion.plan_type == "trial":
+            raise HTTPException(
+                status_code=400, 
+                detail="Ya utilizaste tu periodo de prueba. Por favor elige un plan profesional."
+            )
+
+    # --- REGLA 2: Determinar estado (Activo para Trial, Pendiente para otros) ---
+    es_trial = plan.nombre.lower() == "trial"
+    nuevo_estado = "active" if es_trial else "pending_payment"
+
     if suscripcion:
         suscripcion.plan_type = plan.nombre
-        suscripcion.status = "active"
-        suscripcion.current_period_end = datetime.now() + timedelta(days=plan.duracion_dias)
+        suscripcion.status = nuevo_estado
+        # Solo asignamos fecha si es trial; si es pago, la asignaremos cuando tú lo apruebes
+        if es_trial:
+            suscripcion.current_period_end = datetime.now() + timedelta(days=plan.duracion_dias)
     else:
-        nueva_suscripcion = Subscription(
+        nueva_sub = Subscription(
             user_id=current_user.id,
             plan_type=plan.nombre,
-            status="active",
-            current_period_end=datetime.now() + timedelta(days=plan.duracion_dias)
+            status=nuevo_estado,
+            current_period_end=datetime.now() + timedelta(days=plan.duracion_dias) if es_trial else None
         )
-        db.add(nueva_suscripcion)
+        db.add(nueva_sub)
     
     await db.commit()
-    return {"success": True, "message": f"Plan actualizado a {plan.nombre}"}
+
+    mensaje = "Plan Trial activado" if es_trial else "Solicitud recibida. Por favor adjunta tu comprobante de pago."
+    return {"success": True, "message": mensaje, "status": nuevo_estado}
 
 @router.get("/mi-plan-detalle")
 async def get_mi_plan_detalle(
@@ -86,12 +104,22 @@ async def get_mi_plan_detalle(
     
     sub, plan = row
     
-    # Lógica de tiempos
-    hoy = datetime.now(timezone.utc)
-    fecha_fin = sub.current_period_end or (hoy + timedelta(days=7))
-    dias_restantes = max(0, (fecha_fin - hoy).days)
+    # ✅ CORRECCIÓN: Usar zona horaria de Colombia
+    colombia_tz = pytz.timezone('America/Bogota')
+    hoy = datetime.now(colombia_tz)
     
-    # Cálculo de progreso para la barra visual del frontend
+    # Aseguramos que fecha_fin tenga zona horaria para poder comparar
+    if sub.current_period_end:
+        # Si la fecha en DB no tiene zona horaria, se la asignamos
+        fecha_fin = sub.current_period_end.replace(tzinfo=pytz.UTC).astimezone(colombia_tz)
+    else:
+        fecha_fin = hoy + timedelta(days=7)
+    
+    # Cálculo de días (usando total_seconds para mayor precisión)
+    segundos_restantes = (fecha_fin - hoy).total_seconds()
+    dias_restantes = max(0, int(segundos_restantes / 86400))
+    
+    # Cálculo de progreso (0% al inicio, 100% al vencer)
     total_dias = plan.duracion_dias if plan.duracion_dias > 0 else 30
     dias_transcurridos = total_dias - dias_restantes
     porcentaje = int((dias_transcurridos / total_dias) * 100)

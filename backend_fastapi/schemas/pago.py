@@ -6,7 +6,7 @@ from uuid import UUID
 # Usamos PagoCreate para que coincida con lo que busca tu __init__.py
 class PagoCreate(BaseModel):
     # CAMBIO: De int a Union[str, int] para aceptar el UUID largo
-    paciente_id: Optional[Union[str, int]] = None
+    paciente_id: Optional[UUID] = None # Mucho más seguro que Union
     paciente_nombre: str = Field(..., min_length=1)
     fecha: date 
     descripcion: str
@@ -35,3 +35,10 @@ class PagoResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PagoReporte(BaseModel):
+    plan_id: UUID
+    plan_nombre: str
+    monto: float
+    comprobante_url: str # La URL que te dará Cloudinary en el frontend
+    referencia_pago: str # El número que el doctor anote de Nequi/Bancolombia        

@@ -54,11 +54,13 @@ export default function AgendaDiaria({ fecha }) {
     const mensaje = `Hola ${nombre}, te recordamos tu cita a las ${hora}.`;
     window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
-
+  
   return (
 
     <div className="bg-white -mx-4 sm:mx-0 border-t border-gray-200 sm:border sm:rounded-2xl sm:shadow-sm overflow-hidden">
       {/* CÁPSULA DE RESUMEN DIARIO */}
+
+
       <div className="flex justify-center py-4 border-b border-gray-100 bg-gray-50/30">
         <div className="flex items-center gap-2 bg-gray-100 border border-gray-200 px-4 py-1 rounded-full shadow-sm">
           {/* El punto sólido azul */}

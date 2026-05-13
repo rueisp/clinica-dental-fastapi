@@ -6,6 +6,7 @@ import pytz
 from uuid import UUID  # <--- IMPORTANTE
 from database import get_db
 from dependencies.auth import get_current_user
+from dependencies.limites import verificar_suscripcion_activa
 from models import Usuario, Paciente, Evolucion
 from pydantic import BaseModel
 from typing import Optional, List
@@ -69,6 +70,8 @@ async def create_evolucion(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
+
     result = await db.execute(
         select(Paciente).where(
             Paciente.id == paciente_id,
@@ -117,6 +120,8 @@ async def update_evolucion(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
+
     result = await db.execute(select(Evolucion).where(Evolucion.id == evolucion_id))
     evolucion = result.scalar_one_or_none()
     if not evolucion:
@@ -137,6 +142,8 @@ async def delete_evolucion(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
+    
     # 1. Buscar la evolución
     result = await db.execute(
         select(Evolucion).where(Evolucion.id == evolucion_id)
