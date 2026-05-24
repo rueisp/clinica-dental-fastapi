@@ -3,36 +3,42 @@ from dotenv import load_dotenv
 import httpx
 import logging
 
-load_dotenv() # Esto carga las variables del archivo .env
-
-# Configura estos valores con lo que obtuviste de BotFather y userinfobot
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# Forzamos la carga del .env
+load_dotenv()
 
 async def enviar_alerta_pago_telegram(doctor_nombre: str, plan_nombre: str, referencia: str):
-    """Envía una notificación al administrador cuando se reporta un pago"""
+    """Envía una notificación al administrador cuando se reporta un pago usando HTML"""
     
-    if not TELEGRAM_TOKEN or "AQUI" in TELEGRAM_TOKEN:
-        logging.warning("⚠️ Telegram Token no configurado. No se envió la alerta.")
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    
+    if not token or not chat_id:
+        logging.error("⚠️ Telegram Token o CHAT_ID no configurados en el .env")
         return
 
+    # Usamos etiquetas HTML <b> en lugar de asteriscos para evitar errores con guiones bajos
     mensaje = (
-        f"🔔 *NUEVO PAGO REPORTADO*\n\n"
-        f"👤 *Doctor:* {doctor_nombre}\n"
-        f"📦 *Plan solicitado:* {plan_nombre}\n"
-        f"🔢 *Referencia:* {referencia}\n\n"
-        f"👉 Ingresa al panel de administración para validar el comprobante."
+        f"🔔 <b>NUEVO PAGO REPORTADO</b>\n\n"
+        f"👤 <b>Doctor:</b> {doctor_nombre}\n"
+        f"📦 <b>Plan:</b> {plan_nombre}\n"
+        f"🔢 <b>Ref:</b> {referencia}\n\n"
+        f"👉 Revisa el Panel de Control para activar."
     )
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, json={
-                "chat_id": CHAT_ID,
+                "chat_id": chat_id,
                 "text": mensaje,
-                "parse_mode": "Markdown"
+                "parse_mode": "HTML"  # <--- CAMBIADO A HTML PARA EVITAR ERRORES
             })
-            response.raise_for_status()
+            
+            if response.status_code == 200:
+                print(f"🚀 Telegram enviado con éxito a las {chat_id}")
+            else:
+                print(f"❌ Telegram rechazó el mensaje: {response.text}")
+                
     except Exception as e:
-        logging.error(f"❌ Error enviando notificación a Telegram: {e}")
+        logging.error(f"❌ Error crítico de red en Telegram: {e}")

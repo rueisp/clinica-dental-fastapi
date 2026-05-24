@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, delete, update
 from datetime import datetime, date
 from typing import Optional
 import cloudinary.uploader
@@ -12,23 +12,14 @@ import os
 from pydantic import BaseModel
 from database import get_db
 from dependencies.auth import get_current_user
-from dependencies.limites import verificar_limite_pacientes, verificar_permiso
+from dependencies.limites import verificar_limite_pacientes, verificar_permiso, verificar_suscripcion_activa
 from models import Usuario, Paciente, LimiteDiario, Evolucion, Subscription, Plan, Cita
-from sqlalchemy import or_, delete, update
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from services.export_service import generar_historia_clinica_word
 from uuid import UUID
 
-
-
 router = APIRouter()
-
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME", "dlueb7c6r"),
-    api_key=os.getenv("CLOUDINARY_API_KEY", "769636716889216"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET", "Z2YYOqLAi0ql4jFGjhHiDjslApo")
-)
 
 
 
@@ -79,7 +70,7 @@ async def crear_paciente(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    await verificar_limite_pacientes(current_user, db)
+    await verificar_suscripcion_activa(current_user, db)  # Verificar que el usuario tenga una suscripción activa antes de permitir crear pacientes
     
     # 1. Verificar documento duplicado
     if documento:
@@ -202,7 +193,7 @@ async def crear_paciente(
     }
 
 
-@router.get("/") # <-- La ruta raíz del prefijo /api/pacientes
+@router.get("/")
 async def get_pacientes(
     page: int = 1,
     search: str = "",
@@ -210,41 +201,55 @@ async def get_pacientes(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Listar pacientes con paginación y búsqueda"""
+    """
+    Listar pacientes optimizado: Solo trae de la DB las columnas 
+    necesarias para la tabla, ignorando campos pesados como el historial o odontograma.
+    """
     
-    query = select(Paciente).where(Paciente.is_deleted == False)
+    # 1. OPTIMIZACIÓN SQL: Seleccionamos solo columnas específicas en lugar de todo el objeto Paciente
+    query = select(
+        Paciente.id,
+        Paciente.nombres,
+        Paciente.apellidos,
+        Paciente.documento,
+        Paciente.telefono
+    ).where(Paciente.is_deleted == False)
     
+    # 2. SEGURIDAD: Filtrar por el odontólogo dueño
     if not current_user.is_admin:
         query = query.where(Paciente.odontologo_id == current_user.id)
     
+    # 3. BÚSQUEDA: (Se mantiene igual, SQL sabe buscar aunque no traigamos todas las columnas)
     if search:
-        # ✅ Esto cambia los espacios por %, convirtiendo "mario bros" en "%mario%bros%"
-        search_term = f"%{search.replace(' ', '%')}%" 
-        
+        search_term = f"%{search}%"
         query = query.where(
             or_(
                 Paciente.nombres.ilike(search_term),
                 Paciente.apellidos.ilike(search_term),
-                Paciente.documento.ilike(search_term),
                 Paciente.telefono.ilike(search_term),
-                func.concat(Paciente.nombres, ' ', Paciente.apellidos).ilike(search_term)
+                Paciente.documento.ilike(search_term)
             )
         )
     
+    # 4. CONTADOR TOTAL PARA PAGINACIÓN
     count_query = select(func.count()).select_from(query.subquery())
-    total = await db.execute(count_query)
-    total_count = total.scalar() or 0
+    total_result = await db.execute(count_query)
+    total_count = total_result.scalar() or 0
     
+    # 5. ORDEN Y PAGINACIÓN
     offset = (page - 1) * per_page
-    query = query.order_by(Paciente.id.desc()).offset(offset).limit(per_page)
+    query = query.order_by(Paciente.nombres.asc()).offset(offset).limit(per_page)
     
+    # 6. EJECUCIÓN
     result = await db.execute(query)
-    pacientes = result.scalars().all()
+    # Al seleccionar columnas específicas, SQL Alchemy devuelve filas (tuples)
+    pacientes_rows = result.all()
     
+    # 7. MAPEO DE RESPUESTA
     pacientes_list = []
-    for p in pacientes:
+    for p in pacientes_rows:
         pacientes_list.append({
-            "id": p.id,
+            "id": str(p.id), # Convertimos UUID a string para el frontend
             "nombres": p.nombres,
             "apellidos": p.apellidos,
             "documento": p.documento or "-",
@@ -704,7 +709,10 @@ async def exportar_paciente_word(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    await verificar_permiso("can_export_history", current_user, db)
+    # --- BLOQUEO POR VENCIMIENTO ---
+    # Esta línea revisa si el plan está 'active'. Si venció o es trial de > 7 días,
+    # lanzará un error 403 automáticamente y detendrá la descarga.
+    await verificar_suscripcion_activa(current_user, db)
     
     # 1. Buscamos el paciente e incluimos sus evoluciones
     result = await db.execute(
@@ -717,14 +725,23 @@ async def exportar_paciente_word(
     if not paciente:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    # 2. Verificamos permisos
+    # 2. Verificamos permisos de pertenencia
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para exportar este paciente")
 
-    # 3. Llamamos al servicio para generar el archivo en RAM
-    buffer = generar_historia_clinica_word(paciente, current_user)
+    # 3. Validar si el plan tiene el permiso de exportar (Word es para todos los activos)
+    # Buscamos el permiso específico en la tabla planes
+    res_sub = await db.execute(
+        select(Plan).join(Subscription, Subscription.plan_type == Plan.nombre)
+        .where(Subscription.user_id == current_user.id)
+    )
+    plan_info = res_sub.scalar_one_or_none()
+    
+    if not plan_info or not plan_info.can_export_history:
+        raise HTTPException(status_code=403, detail="Tu plan no permite exportar historias clínicas")
 
-    # 4. Retornamos el archivo para descarga inmediata
+    # 4. Generación y retorno del archivo (Tu código actual...)
+    buffer = generar_historia_clinica_word(paciente, current_user)
     filename = f"Historia_{paciente.apellidos}_{paciente.nombres}.docx".replace(" ", "_")
     
     return StreamingResponse(

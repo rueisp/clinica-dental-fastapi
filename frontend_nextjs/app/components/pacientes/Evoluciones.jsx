@@ -195,14 +195,14 @@ export default function Evoluciones({ pacienteId }) {
             onClick={canUseVoice ? toggleEscuchar : () => alert("El dictado por voz es exclusivo del Plan PRO")}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
               !canUseVoice 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200 opacity-70' 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
               : estaEscuchando 
-                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200' 
+                ? 'bg-red-500 text-white animate-pulse shadow-lg' 
                 : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
             }`}
           >
             {estaEscuchando ? <MicOff size={14} /> : <Mic size={14} />}
-            {estaEscuchando ? 'ESCUCHANDO...' : canUseVoice ? 'DICTAR POR VOZ' : 'DICTAR (PRO)'}
+            {estaEscuchando ? 'ESCUCHANDO...' : canUseVoice ? 'DICTAR POR VOZ' : 'DICTAR (PRO) 🔒'}
           </button>
         </div>
 

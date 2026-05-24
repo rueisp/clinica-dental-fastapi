@@ -14,7 +14,7 @@ function RegistroForm() {
         username: '',
         email: '',
         password: '',
-        plan_id: planIdFromUrl ? parseInt(planIdFromUrl) : 5
+        plan_id: planIdFromUrl || null
     });
 
     const [error, setError] = useState("");
@@ -57,7 +57,12 @@ function RegistroForm() {
             window.location.href = "/dashboard"; 
 
         } catch (err) {
-            setError(err.message);
+            // Si el error es un objeto de FastAPI (422), extraemos el mensaje
+            if (typeof err.message === 'object') {
+                setError(JSON.stringify(err.message));
+            } else {
+                setError(err.message);
+            }
         } finally {
             setLoading(false);
         }

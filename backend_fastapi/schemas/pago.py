@@ -8,8 +8,8 @@ class PagoCreate(BaseModel):
     # CAMBIO: De int a Union[str, int] para aceptar el UUID largo
     paciente_id: Optional[UUID] = None # Mucho más seguro que Union
     paciente_nombre: str = Field(..., min_length=1)
-    fecha: date 
-    descripcion: str
+    fecha: Optional[date] = None
+    concepto: str
     # CAMBIO: Usar float o Decimal es mejor para dinero, pero si prefiere int, asegúrese de que el frontend envíe números
     monto: float = Field(..., gt=0) 
     metodo_pago: str
@@ -27,7 +27,7 @@ class PagoResponse(BaseModel):
     hora: Optional[time] = None
     monto: float
     metodo_pago: Optional[str] = "Efectivo"
-    descripcion: Optional[str] = "Consulta"
+    concepto: Optional[str] = "Consulta"
     observacion: Optional[str] = None
     telefono: Optional[str] = None
     es_rapido: bool = False

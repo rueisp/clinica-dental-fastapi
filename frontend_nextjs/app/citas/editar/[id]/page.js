@@ -116,6 +116,7 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
+      
         router.push(`/?fecha=${formData.fecha}`);
       } else {
         const error = await response.json();
@@ -137,7 +138,8 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-        router.push(`/?fecha=${formData.fecha}`);
+      
+        router.push(`/dashboard?fecha=${formData.fecha}`);
       } else {
         alert('Error al eliminar');
       }

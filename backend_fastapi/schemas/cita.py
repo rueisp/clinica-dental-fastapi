@@ -9,8 +9,7 @@ class CitaCreate(BaseModel):
     hora: str   
     motivo: Optional[str] = None
     doctor: Optional[str] = None
-    # CAMBIO: De int a str para aceptar el UUID del paciente
-    paciente_id: Optional[str] = None 
+    paciente_id: Optional[UUID] = None # Pydantic validará que sea un UUID válido
     paciente_nombre: Optional[str] = None
     paciente_telefono: Optional[str] = None
 

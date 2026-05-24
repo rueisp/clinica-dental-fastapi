@@ -98,36 +98,39 @@ export default function Pricing() {
                             </div>
                             
                             <ul className="space-y-3 mb-8 flex-grow text-sm">
-                                {/* Estas funciones las tienen todos */}
-                                <li className="flex items-center gap-2 text-gray-700">
+                                {/* 1. Funciones Administrativas (Para todos los planes) */}
+                                <li className="flex items-center gap-2 text-gray-700 font-bold">
                                     <span className="text-green-500">✅</span> Pacientes Ilimitados
                                 </li>
                                 <li className="flex items-center gap-2 text-gray-700">
                                     <span className="text-green-500">✅</span> Agenda de Citas
                                 </li>
+                                
+                                {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Para todos los planes) */}
+                                <li className="flex items-center gap-2 text-blue-700 font-semibold bg-blue-50/50 p-1 rounded">
+                                    <span className="text-blue-500">🧾</span> Generar recibos de cobro rápido
+                                </li>
 
-                                {/* Evolución por Voz */}
-                                <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_voice ? '✅' : '❌'}</span> 
+                                {/* 3. FUNCIÓN RESALTADA: Exportar Word (Básico, Pro y Trial) */}
+                                <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_export_history ? '📝' : '❌'}</span> 
+                                    Exportar historia a Word {!plan.can_export_history && "(PRO)"}
+                                </li>
+
+                                {/* 4. Funciones Clínicas Avanzadas (Solo Pro y Trial) */}
+                                <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
+                                    Odontograma Digital {!plan.can_use_odontogram && "(PRO)"}
+                                </li>
+
+                                <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
+                                    <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
                                     Evolución por voz {!plan.can_use_voice && "(PRO)"}
                                 </li>
 
-                                {/* Odontograma */}
-                                <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_odontogram ? '✅' : '❌'}</span> 
-                                    Odontograma Interactivo {!plan.can_use_odontogram && "(PRO)"}
-                                </li>
-
-                                {/* Multimedia (Fotos y RX) */}
                                 <li className={`flex items-center gap-2 ${plan.can_use_multimedia ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_multimedia ? '✅' : '❌'}</span> 
+                                    <span>{plan.can_use_multimedia ? '📸' : '🔒'}</span> 
                                     Multimedia (Fotos y RX) {!plan.can_use_multimedia && "(PRO)"}
-                                </li>
-
-                                {/* Exportar Historia */}
-                                <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_export_history ? '✅' : '❌'}</span> 
-                                    Exportar Historia (Word) {!plan.can_export_history && "(PRO)"}
                                 </li>
                             </ul>
 

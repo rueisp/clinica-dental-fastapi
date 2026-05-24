@@ -1,5 +1,17 @@
+# app.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from dotenv import load_dotenv
+
+# 1. Cargar el entorno al puro inicio
+load_dotenv()
+
+# 2. IMPORTANTE: Inicializar servicios externos
+from config import init_cloudinary
+init_cloudinary() # <--- Al llamar a la función, el linter ya no marcará error
+
+# 3. Luego importar los endpoints
 from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios
 
 app = FastAPI(title="Clínica Dental API", version="1.0.0")

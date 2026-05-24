@@ -41,7 +41,10 @@ export default function ReciboDetalle() {
 
   const enviarWhatsApp = () => {
     const urlRecibo = window.location.href;
-    const mensaje = `🧾 *RECIBO DE PAGO - DR. RUEIS PITRE*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.descripcion}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
+    // Extraemos el nombre de la clínica/doctor dinámicamente y lo convertimos a mayúsculas para el encabezado
+    const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
+    
+    const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
     const tel = pago.telefono?.replace(/\D/g, '') || '';
     // Usamos el código de país 57 para Colombia
     window.open(`https://wa.me/57${tel}?text=${mensaje}`, '_blank');
@@ -87,8 +90,8 @@ export default function ReciboDetalle() {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Descripción</span>
-              <span className="text-xs font-bold text-black uppercase">{pago.descripcion}</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Concepto</span>
+              <span className="text-xs font-bold text-black uppercase">{pago.concepto}</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -111,10 +114,15 @@ export default function ReciboDetalle() {
             <p className="text-4xl font-black text-black">{formatearMoneda(pago.monto)}</p>
           </div>
 
-          <div className="text-center pt-4">
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-[0.2em]">
-              Odontología Dr. Rueis Pitre - 3233316976
+          <div className="text-center pt-4 border-t border-gray-100 mt-4">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.1em] leading-tight">
+              {pago.clinica_nombre}
             </p>
+            {pago.clinica_telefono && (
+                <p className="text-[9px] text-gray-400 font-medium mt-1">
+                    Contacto: {pago.clinica_telefono}
+                </p>
+            )}
           </div>
         </div>
       </div>
@@ -126,16 +134,22 @@ export default function ReciboDetalle() {
           ${showControls ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-95 pointer-events-none'}`}
       >
         <div className="bg-white/90 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6">
-          
-          <button onClick={() => router.push('/')} className="flex flex-col items-center gap-1 group">
-            <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
-              <LayoutDashboard size={20} />
-            </div>
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
-          </button>
+                  
+          {/* 1. Botón Dashboard (Solo para el Doctor) */}
+          {typeof window !== 'undefined' && localStorage.getItem('auth_token') && (
+            <>
+              <button onClick={() => router.push('/')} className="flex flex-col items-center gap-1 group">
+                <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
+                  <LayoutDashboard size={20} />
+                </div>
+                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
+              </button>
+              {/* Este separador solo existe si existe el botón anterior */}
+              <div className="w-[1px] h-8 bg-gray-200" />
+            </>
+          )}
 
-          <div className="w-[1px] h-8 bg-gray-200" />
-
+          {/* 2. Botón WhatsApp (Para ambos) */}
           <button onClick={enviarWhatsApp} className="flex flex-col items-center gap-1 group">
             <div className="p-2 bg-green-50 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition-colors">
               <MessageCircle size={20} />
@@ -143,6 +157,7 @@ export default function ReciboDetalle() {
             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">WhatsApp</span>
           </button>
 
+          {/* 3. Botón Imprimir (Para ambos) */}
           <button onClick={() => window.print()} className="flex flex-col items-center gap-1 group">
             <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
               <Printer size={20} />

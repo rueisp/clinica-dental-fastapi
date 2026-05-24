@@ -21,6 +21,8 @@ class Usuario(Base):
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
+    nombre_consultorio = Column(String(150), nullable=True)
+    telefono = Column(String(50), nullable=True)
     
     # Relaciones actualizadas
     pacientes = relationship('Paciente', back_populates='odontologo', cascade="all, delete-orphan")
@@ -43,11 +45,18 @@ class Subscription(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id', ondelete="CASCADE"), unique=True)
-    plan_type = Column(String, default='trial') # trial, basic, pro
+    # Cambiamos la lógica: el ID es la verdad absoluta, plan_type queda como respaldo visual
+    plan_id = Column(UUID(as_uuid=True), ForeignKey('planes.id'), nullable=True)
+    plan_type = Column(String, default='trial') 
     status = Column(String, default='active')
-    current_period_end = Column(DateTime)
     
+    current_period_start = Column(DateTime, default=func.now())
+    current_period_end = Column(DateTime)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+     
     usuario = relationship('Usuario', back_populates='subscription')
+    # Nueva relación directa por ID
+    plan = relationship('Plan')
 
 # ============================================================
 # MODELO: PACIENTE (Mantiene todos tus campos clínicos)

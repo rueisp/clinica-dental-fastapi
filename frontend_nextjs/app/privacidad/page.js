@@ -1,39 +1,70 @@
+'use client';
 import Navbar from '@/components/landing/Navbar';
-import Footer from '@/components/landing/Footer';
+import Link from 'next/link';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
-export default function Privacidad() {
+export default function PrivacidadPage() {
   return (
-    <>
+    <div className="bg-white min-h-screen text-zinc-900">
       <Navbar />
-      <div className="bg-gray-50 min-h-screen py-20">
-        <div className="max-w-3xl mx-auto bg-white p-8 md:p-12 shadow-sm rounded-xl border border-gray-100">
-          <a href="/" className="text-green-600 font-bold mb-6 inline-block">← Volver al inicio</a>
-          <h1 className="text-3xl font-bold text-gray-800 border-b-2 border-green-500 pb-4 mb-8">Aviso de Privacidad</h1>
-          <p className="text-sm text-gray-400 mb-6 font-medium uppercase">Última actualización: 26 de febrero de 2026</p>
-          
-          <article className="prose prose-green max-w-none text-gray-600 space-y-6">
-            <section>
-              <h4 className="text-xl font-bold text-gray-800 mb-2">1. Responsable del Tratamiento</h4>
-              <p><strong>CloudentApp</strong> es una aplicación operada por [Tu Nombre], dentista emprendedor, actuando como proveedor tecnológico. Contacto: [tucorreo@ejemplo.com]</p>
-            </section>
-            
-            <section>
-              <h4 className="text-xl font-bold text-gray-800 mb-2">2. Información que Recolectamos</h4>
-              <p><strong>De los odontólogos usuarios:</strong> nombre, correo electrónico, número de contacto, especialidad.</p>
-              <p><strong>De los pacientes:</strong> nombres, datos de contacto, historia clínica, imágenes, odontograma. Esta información es almacenada bajo la total responsabilidad del odontólogo usuario.</p>
-            </section>
+      
+      <main className="max-w-4xl mx-auto px-6 py-16">
+        <Link href="/" className="inline-flex items-center gap-2 text-blue-600 font-bold mb-8 hover:text-blue-700 transition-colors">
+          <ArrowLeft size={20} /> Volver al inicio
+        </Link>
 
-            <section>
-              <h4 className="text-xl font-bold text-gray-800 mb-2">4. Responsabilidad del Usuario (Odontólogo)</h4>
-              <p className="bg-yellow-50 p-4 border-l-4 border-yellow-400 italic">
-                El odontólogo usuario es el único responsable del tratamiento de los datos personales de sus pacientes, conforme a la Ley 1581 de 2012. CloudentApp actúa únicamente como encargado del tratamiento.
-              </p>
-            </section>
-            {/* ... Agrega las demás secciones siguiendo este formato ... */}
-          </article>
-        </div>
-      </div>
-      <Footer />
-    </>
+        <header className="border-b border-zinc-100 pb-8 mb-12">
+          <div className="flex items-center gap-3 mb-4">
+            <ShieldCheck className="text-blue-600" size={32} />
+            <h1 className="text-4xl font-black tracking-tighter uppercase">Aviso de Privacidad</h1>
+          </div>
+          <p className="text-zinc-500 font-medium">Última actualización: 26 de febrero de 2026</p>
+        </header>
+
+        <article className="prose prose-zinc max-w-none space-y-10">
+          <section>
+            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">1. Responsable del Tratamiento</h2>
+            <p className="text-zinc-600 leading-relaxed">
+              <strong>CloudentApp</strong> es una aplicación operada por <b>Luis Pitre</b>, dentista emprendedor, actuando como proveedor tecnológico. Contacto: <span className="text-blue-600">tucorreo@ejemplo.com</span>
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">2. Información que Recolectamos</h2>
+            <div className="bg-zinc-50 p-6 rounded-2xl border border-zinc-100">
+              <p className="mb-4"><strong>De los odontólogos usuarios:</strong> nombre, correo electrónico, número de contacto, especialidad.</p>
+              <p><strong>De los pacientes:</strong> nombres, datos de contacto, historia clínica, imágenes, odontograma. Esta información es almacenada por CloudentApp por cuenta y bajo la total responsabilidad del odontólogo usuario.</p>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">3. Finalidades del Tratamiento</h2>
+            <ul className="list-disc pl-6 text-zinc-600 space-y-2">
+              <li>Permitir la gestión de pacientes y citas por parte del odontólogo.</li>
+              <li>Almacenar la información que el odontólogo sube a la plataforma.</li>
+              <li>Mejorar nuestros servicios y soporte técnico.</li>
+              <li>Enviar comunicaciones sobre el servicio.</li>
+            </ul>
+          </section>
+
+          <section className="bg-blue-50 p-8 rounded-3xl border border-blue-100">
+            <h2 className="text-xl font-black uppercase tracking-tight text-blue-900 mb-4 text-center">4. Responsabilidad del Usuario (Odontólogo)</h2>
+            <p className="text-blue-800 leading-relaxed italic text-center">
+              El odontólogo usuario <strong>es el único responsable</strong> del tratamiento de los datos personales de sus pacientes, incluyendo datos sensibles de salud, conforme a la <b>Ley 1581 de 2012</b>. CloudentApp actúa únicamente como <strong>encargado del tratamiento</strong>.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">5. Derechos, Seguridad y Vigencia</h2>
+            <p className="text-zinc-600 mb-4">Los usuarios pueden conocer, actualizar o rectificar sus datos escribiendo al correo de contacto.</p>
+            <p className="text-zinc-600">Implementamos encriptación y acceso restringido para proteger la información. Los datos se conservan mientras la cuenta esté activa y 60 días adicionales tras la cancelación.</p>
+          </section>
+        </article>
+      </main>
+
+      <footer className="bg-zinc-950 text-zinc-500 py-12 px-6 text-center text-sm border-t border-zinc-900">
+        <p>© 2026 CloudentApp. Herramienta de apoyo administrativo.</p>
+      </footer>
+    </div>
   );
 }

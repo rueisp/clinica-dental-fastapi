@@ -1,3 +1,4 @@
+# backend_fastapi/endpoints/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -6,14 +7,12 @@ from models import Usuario, Plan, Subscription
 from schemas.auth import LoginRequest, TokenResponse, UsuarioCreate
 from utils.auth_utils import verificar_password, hash_password, crear_token_acceso
 from datetime import datetime, timedelta
-from models import Usuario, Plan, Subscription
-
 
 router = APIRouter()
 
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    # 1. Buscamos el usuario siempre en minúsculas (.lower())
+    # 1. Buscamos el usuario siempre en minúsculas
     username_lower = login_data.username.lower()
     result = await db.execute(
         select(Usuario).where(Usuario.username == username_lower)
@@ -23,11 +22,23 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not user or not verificar_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
-    # 2. Buscamos el plan
-    plan_result = await db.execute(
-        select(Plan).join(Subscription, Subscription.plan_type == Plan.nombre).where(Subscription.user_id == user.id)
+    # 2. Buscamos la suscripción del usuario
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.user_id == user.id)
     )
-    plan = plan_result.scalar_one_or_none()
+    subscription = sub_result.scalar_one_or_none()
+
+    plan = None
+    if subscription:
+        # Intentamos buscar primero por plan_id (relación moderna)
+        if subscription.plan_id:
+            plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
+            plan = plan_result.scalar_one_or_none()
+        
+        # Fallback: Si no tiene plan_id, buscamos por el string plan_type (compatibilidad)
+        if not plan and subscription.plan_type:
+            plan_result = await db.execute(select(Plan).where(Plan.nombre == subscription.plan_type))
+            plan = plan_result.scalar_one_or_none()
 
     token_data = {"sub": user.username}
     access_token = crear_token_acceso(token_data)
@@ -38,6 +49,7 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
         nombre_usuario=user.nombres or user.username,
         nombres=user.nombres,
         apellidos=user.apellidos,
+        email=user.email,
         is_admin=user.is_admin,
         permissions={
             "can_use_odontogram": True if user.is_admin else (plan.can_use_odontogram if plan else False),
@@ -67,7 +79,7 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
             email=user_data.email,
             password_hash=hash_password(user_data.password),
             nombres=user_data.nombres,
-            apellidos=user_data.apellidos,
+            apellidos=user_data.apellidos or "",
             is_admin=False
         )
         db.add(nuevo_usuario)
@@ -75,6 +87,7 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
 
         nuevo_usuario_plan = Subscription(
             user_id=nuevo_usuario.id,
+            plan_id=plan.id if plan else None,
             plan_type=plan.nombre if plan else 'trial',
             status="active",
             current_period_end=datetime.now() + timedelta(days=7)
@@ -92,6 +105,7 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
             nombre_usuario=nuevo_usuario.nombres or nuevo_usuario.username,
             nombres=nuevo_usuario.nombres,
             apellidos=nuevo_usuario.apellidos,
+            email=nuevo_usuario.email,
             is_admin=nuevo_usuario.is_admin,
             permissions={
                 "can_use_odontogram": True if nuevo_usuario.is_admin else (plan.can_use_odontogram if plan else False),

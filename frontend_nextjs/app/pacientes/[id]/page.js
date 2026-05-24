@@ -16,25 +16,55 @@ export default function MostrarPaciente() {
   const [paciente, setPaciente] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [planActivo, setPlanActivo] = useState(true);
 
   // --- ESTO ES LO QUE ESTABA AFUERA Y AHORA ESTÁ ADENTRO (CORRECTO) ---
   const [canExport, setCanExport] = useState(true);
 
   useEffect(() => {
-    const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
-    const isAdmin = localStorage.getItem('is_admin') === 'true'; // Detectar admin
+    const validarAcceso = async () => {
+      // 1. Detectar si es Admin (El admin tiene "superpoderes" y no vence)
+      const isAdmin = localStorage.getItem('is_admin') === 'true';
+      
+      if (isAdmin) {
+        setCanExport(true);
+        setPlanActivo(true);
+        return; // Si es admin, no necesitamos validar nada más
+      }
 
-    if (isAdmin) {
-      setCanExport(true); // El admin siempre puede exportar
-    } else if (perms.can_export_history !== undefined) {
-      setCanExport(perms.can_export_history);
-    }
+      // 2. Cargar permisos del plan (Lo que compramos: Básico o Pro)
+      const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+      if (perms.can_export_history !== undefined) {
+        setCanExport(perms.can_export_history);
+      }
+
+      // 3. Verificar estado de la suscripción (¿Ya pagó el mes/año actual?)
+      try {
+        const res = await authFetch(`${API_BASE_URL}/api/usuarios/mi-plan-detalle`);
+        if (res.ok) {
+          const data = await res.json();
+          // Solo puede exportar si el estado es exactamente 'active'
+          setPlanActivo(data.status === 'active');
+        }
+      } catch (err) {
+        console.error("Error al validar suscripción:", err);
+        // En caso de error de red, por seguridad lo dejamos activo para no bloquear al doctor
+        setPlanActivo(true); 
+      }
+    };
+
+    validarAcceso();
   }, []);
   // ------------------------------------------------------------------
 
   useEffect(() => {
     const fetchPaciente = async () => {
-// ... el resto de tu código sigue igual
+      // 1. Verificación preventiva: Si el ID es nulo o inválido, no disparamos la petición
+      if (!id || id === 'null' || id === 'undefined') {
+          setLoading(false);
+          return;
+      }
+
       try {
         const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`);
         if (!response.ok) throw new Error('Paciente no encontrado');
@@ -46,7 +76,8 @@ export default function MostrarPaciente() {
         setLoading(false);
       }
     };
-    if (id) fetchPaciente();
+
+    fetchPaciente();
   }, [id]);
 
   const handleEliminar = async () => {

@@ -28,17 +28,20 @@ export default function LoginPage() {
         // 1. Guardar el token para las peticiones API
         setAuthToken(data.access_token);
         
-        // 2. 🔥 NUEVO: Guardar los permisos del plan en localStorage
-        // Los convertimos a texto (JSON.stringify) para poder guardarlos
+        // 2. Guardar información básica para persistencia
+        localStorage.setItem('user_nombres', data.nombres);
+        localStorage.setItem('is_admin', data.is_admin);
+
         if (data.permissions) {
           localStorage.setItem('user_permissions', JSON.stringify(data.permissions));
         }
-        localStorage.setItem('is_admin', data.is_admin);
 
-        console.log('✅ Token y permisos guardados correctamente');
+        console.log('✅ Login exitoso, redirigiendo...');
         
-        // 3. Redirigir al dashboard
-        router.push('/');
+        // CAMBIO CRÍTICO: Usamos window.location en lugar de router.push
+        // Esto obliga a la app a recargar el UserContext con los nuevos datos.
+        window.location.href = '/dashboard'; 
+        
       } else {
         setError(data.detail || 'Error al iniciar sesión');
       }

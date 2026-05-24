@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from database import AsyncSessionLocal
-from models import Usuario, Subscription
+from models import Usuario, Subscription, Plan
 from sqlalchemy import select
 from datetime import datetime
 

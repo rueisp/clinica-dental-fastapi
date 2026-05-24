@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case, cast, Date
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
 import pytz
 from database import get_db
@@ -144,34 +144,55 @@ async def get_citas_por_fecha(
 
 @router.get("/citas/eventos")
 async def get_citas_eventos(
+    start: Optional[str] = None,  # Nuevo: Fecha inicio (YYYY-MM-DD)
+    end: Optional[str] = None,    # Nuevo: Fecha fin (YYYY-MM-DD)
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Optimizado: Obtiene el conteo de citas por día filtrando por un rango 
+    específico en SQL para no saturar la memoria.
+    """
     
-    # Construir query base
+    # 1. Construir query base solo con las columnas necesarias (ID y Fecha)
     query = (
         select(
-            cast(Cita.fecha, Date).label("fecha"),
+            Cita.fecha.label("fecha"),
             func.count(Cita.id).label("total")
         )
         .where(Cita.is_deleted == False)
     )
     
+    # 2. Filtrar por el dueño de la agenda
     if not current_user.is_admin:
         query = query.where(Cita.odontologo_id == current_user.id)
     
-    # Agrupar por fecha directamente en SQL
-    query = query.group_by(cast(Cita.fecha, Date))
+    # 3. FILTRO CRÍTICO: Rango de fechas en SQL
+    # Si el frontend no envía fechas, por defecto traemos el mes actual (opcional)
+    if start:
+        try:
+            fecha_inicio = datetime.strptime(start, '%Y-%m-%d').date()
+            query = query.where(Cita.fecha >= fecha_inicio)
+        except ValueError: pass
+        
+    if end:
+        try:
+            fecha_fin = datetime.strptime(end, '%Y-%m-%d').date()
+            query = query.where(Cita.fecha <= fecha_fin)
+        except ValueError: pass
+    
+    # 4. Agrupar
+    query = query.group_by(Cita.fecha)
     
     result = await db.execute(query)
     eventos_db = result.all()
     
-    # Formatear para FullCalendar (mismo formato que antes)
+    # 5. Formatear para FullCalendar
     eventos_list = []
-    for fecha, count in eventos_db:
+    for row in eventos_db:
         eventos_list.append({
-            "title": f"{count} cita{'s' if count > 1 else ''}",
-            "start": fecha.strftime('%Y-%m-%d'),
+            "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
+            "start": row.fecha.strftime('%Y-%m-%d'),
             "color": "transparent",
             "textColor": "#6b7280"
         })
@@ -225,10 +246,13 @@ async def get_cita_by_id(
         .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
         .where(
             Cita.id == cita_id,
-            Cita.is_deleted == False,
-            Cita.odontologo_id == current_user.id
+            Cita.is_deleted == False
         )
     )
+    
+    # Si NO es administrador, restringimos la búsqueda únicamente a sus propias citas
+    if not current_user.is_admin:
+        query = query.where(Cita.odontologo_id == current_user.id)
     
     result = await db.execute(query)
     row = result.first()
@@ -286,7 +310,7 @@ async def create_cita(
         hora=hora_obj,
         motivo=cita_data.motivo,
         odontologo_id=current_user.id,
-        paciente_id=cita_data.paciente_id,
+        paciente_id=cita_data.paciente_id if cita_data.paciente_id else None,
         # Guardamos nombre y teléfono "sueltos" para que aparezcan en negro si no hay historial
         nombre_provisional=cita_data.paciente_nombre, 
         telefono_provisional=cita_data.paciente_telefono,
@@ -362,11 +386,14 @@ async def update_cita(
 
 @router.get("/dashboard/home-data")
 async def get_home_data(
+    selected_date: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    doctor_id: Optional[UUID] = None,  # <-- AGREGADO: Parámetro opcional para el admin
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    
-    # 🔥 VALIDACIÓN CRÍTICA: Verificar que el usuario tenga un plan activo
+    # 1. VALIDACIÓN DE SUSCRIPCIÓN (Se mantiene igual...)
     plan_result = await db.execute(
         select(Subscription).where(
             Subscription.user_id == current_user.id,
@@ -381,23 +408,74 @@ async def get_home_data(
             detail="Usuario sin plan activo. Contacta al administrador para activar tu suscripción."
         )
     
-    # USA ESTO (Consistente con el resto de tu app):
+    # 2. CONFIGURACIÓN DE FECHA LOCAL (Colombia)
     colombia_tz = pytz.timezone('America/Bogota')
     ahora = datetime.now(colombia_tz)
     hoy = ahora.date()
     
-    # ========== 1. STATS ==========
-    query_total_pacientes = (
-        select(func.count(Paciente.id))
-        .where(
-            Paciente.odontologo_id == current_user.id,
-            Paciente.is_deleted == False
-        )
-    )
-    result_total_pacientes = await db.execute(query_total_pacientes)
-    total_pacientes = result_total_pacientes.scalar() or 0
+    try:
+        fecha_agenda = datetime.strptime(selected_date, '%Y-%m-%d').date() if selected_date else hoy
+    except ValueError:
+        fecha_agenda = hoy
+
+    # 3. OPTIMIZACIÓN CRÍTICA: Solo contar pacientes si estamos en vista mensual/calendario (start y end presentes)
+    total_pacientes = 0
+    eventos_list = []
     
-    # Formatear fecha
+    if start and end:
+        # Solo ejecutamos esta consulta pesada si el usuario está navegando el calendario mensual
+        query_total_pacientes = (
+            select(func.count(Paciente.id))
+            .where(
+                Paciente.odontologo_id == current_user.id,
+                Paciente.is_deleted == False
+            )
+        )
+        result_total_pacientes = await db.execute(query_total_pacientes)
+        total_pacientes = result_total_pacientes.scalar() or 0
+
+        # 5. EVENTOS DEL CALENDARIO (Se mantiene igual, solo se ejecuta si start y end existen...)
+        query_eventos = (
+            select(
+                Cita.fecha.label("fecha"),
+                func.count(Cita.id).label("total")
+            )
+            .where(Cita.is_deleted == False)
+        )
+
+        # Lógica de filtrado inteligente para los eventos del calendario
+        if current_user.is_admin:
+            # Si el admin seleccionó un doctor, el calendario mensual muestra solo sus eventos.
+            # Si no seleccionó ninguno, por defecto muestra sus propios eventos.
+            id_a_filtrar = doctor_id if doctor_id else current_user.id
+            query_eventos = query_eventos.where(Cita.odontologo_id == id_a_filtrar)
+        else:
+            # Si es un doctor normal, solo ve sus propios eventos
+            query_eventos = query_eventos.where(Cita.odontologo_id == current_user.id)
+
+        try:
+            fecha_inicio = datetime.strptime(start, '%Y-%m-%d').date()
+            query_eventos = query_eventos.where(Cita.fecha >= fecha_inicio)
+        except ValueError: pass
+            
+        try:
+            fecha_fin = datetime.strptime(end, '%Y-%m-%d').date()
+            query_eventos = query_eventos.where(Cita.fecha <= fecha_fin)
+        except ValueError: pass
+
+        query_eventos = query_eventos.group_by(Cita.fecha)
+        result_eventos = await db.execute(query_eventos)
+        eventos_db = result_eventos.all()
+
+        for row in eventos_db:
+            eventos_list.append({
+                "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
+                "start": row.fecha.strftime('%Y-%m-%d'),
+                "color": "transparent",
+                "textColor": "#6b7280"
+            })
+
+    # 4. FORMATEO DE FECHA PARA EL SALUDO (Se mantiene igual...)
     dias_semana_es = {
         0: 'lunes', 1: 'martes', 2: 'miércoles', 3: 'jueves',
         4: 'viernes', 5: 'sábado', 6: 'domingo'
@@ -407,37 +485,54 @@ async def get_home_data(
         5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
         9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
     }
-    
     fecha_actual_formateada = f"{dias_semana_es[hoy.weekday()]}, {hoy.day} de {meses_es[hoy.month]} de {hoy.year}"
     
-    # ========== 2. EVENTOS (Asegurar que traiga todo) ==========
-    query_eventos = (
+    # 6. CITAS DETALLADAS DEL DÍA (Optimizado para traer solo lo necesario de forma asíncrona)
+    query_citas_dia = (
         select(
-            Cita.fecha.label("fecha"), # No hace falta cast si ya es Date en el modelo
-            func.count(Cita.id).label("total")
+            Cita,
+            Paciente.nombres.label("p_nombres"),
+            Paciente.apellidos.label("p_apellidos"),
+            Paciente.telefono.label("p_tel")
         )
-        .where(Cita.is_deleted == False)
+        .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
+        .where(
+            Cita.fecha == fecha_agenda,
+            Cita.is_deleted == False
+        )
     )
 
-    if not current_user.is_admin:
-        query_eventos = query_eventos.where(Cita.odontologo_id == current_user.id)
-
-    query_eventos = query_eventos.group_by(Cita.fecha)
-
-    result_eventos = await db.execute(query_eventos)
-    eventos_db = result_eventos.all()
-
-    eventos_list = []
-    for row in eventos_db:
-        # row es un objeto que tiene .fecha y .total
-        eventos_list.append({
-            "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
-            "start": row.fecha.strftime('%Y-%m-%d'),
-            "color": "transparent",
-            "textColor": "#6b7280"
+    # LÓGICA DE FILTRADO INTELIGENTE PARA EL ADMIN
+    if current_user.is_admin:
+        # Si eres admin y seleccionaste un doctor, filtramos por su ID.
+        # Si no seleccionaste ninguno, por defecto te mostramos tus propias citas.
+        id_a_filtrar = doctor_id if doctor_id else current_user.id
+        query_citas_dia = query_citas_dia.where(Cita.odontologo_id == id_a_filtrar)
+    else:
+        # Si es un doctor normal, solo puede ver sus propias citas
+        query_citas_dia = query_citas_dia.where(Cita.odontologo_id == current_user.id)
+    
+    query_citas_dia = query_citas_dia.order_by(Cita.hora)
+    result_citas = await db.execute(query_citas_dia)
+    rows_citas = result_citas.all()
+    
+    citas_detalladas = []
+    for row in rows_citas:
+        cita = row.Cita
+        nombre_final = f"{row.p_nombres} {row.p_apellidos or ''}".strip() if row.p_nombres else (cita.nombre_provisional or "Paciente sin registrar")
+        
+        citas_detalladas.append({
+            "id": str(cita.id),
+            "paciente_nombre": nombre_final,
+            "paciente_id": str(cita.paciente_id) if cita.paciente_id else None,
+            "hora": cita.hora.strftime('%H:%M') if cita.hora else "",
+            "motivo": cita.motivo or "Consulta",
+            "doctor": cita.doctor,
+            "estado": cita.estado,
+            "telefono": row.p_tel or cita.telefono_provisional or ""
         })
     
-    # ========== 3. RESPUESTA ==========
+    # 7. RESPUESTA FINAL COMPLETA
     return {
         "success": True,
         "usuario": {
@@ -447,5 +542,7 @@ async def get_home_data(
         },
         "fecha_actual_formateada": fecha_actual_formateada,
         "total_pacientes": total_pacientes,
-        "eventos": eventos_list
+        "eventos": eventos_list,
+        "citas_dia": citas_detalladas,
+        "fecha_consultada": fecha_agenda.strftime('%Y-%m-%d')
     }

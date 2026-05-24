@@ -21,6 +21,9 @@ export default function PlanesPage() {
       if (resPlan.ok) {
         const data = await resPlan.json();
         setPlanActual(data);
+        if (data.permissions) {
+          localStorage.setItem('user_permissions', JSON.stringify(data.permissions));
+        }
       }
 
       // Cargar todos los planes
@@ -35,9 +38,14 @@ export default function PlanesPage() {
   };
 
   const handleCambiarPlan = async (plan) => {
+    // Alerta de confirmación detallada para evitar errores
     const mensajeConfirmar = plan.precio_cop > 0 
-      ? `Para activar el plan ${plan.nombre} deberás subir un comprobante de pago. ¿Deseas continuar?`
-      : `¿Confirmas activar el plan ${plan.nombre}?`;
+      ? `⚠️ ATENCIÓN: Estás a punto de solicitar el plan "${plan.nombre.replace('_', ' ').toUpperCase()}".\n\n` +
+        `• Valor: $${plan.precio_cop.toLocaleString('es-CO')}\n` +
+        `• Duración: ${plan.duracion_dias === 365 ? '1 Año' : '1 Mes'}\n\n` +
+        `Para activar este plan, el sistema te redirigirá para que adjuntes tu comprobante de pago (Nequi/Bancolombia).\n\n` +
+        `¿Estás seguro de que deseas continuar con esta solicitud?`
+      : `¿Confirmas que deseas activar el plan gratuito "${plan.nombre.toUpperCase()}"?`;
 
     if (!confirm(mensajeConfirmar)) return;
 
@@ -83,7 +91,10 @@ export default function PlanesPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="border-l-4 border-blue-500 pl-4 mb-4">
             <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Tu plan actual</p>
-            <h3 className="text-2xl font-bold text-gray-900">{planActual.plan_nombre}</h3>
+            {/* CAMBIO 1: Nombre limpio y con formato elegante */}
+            <h3 className="text-2xl font-black text-gray-900 capitalize">
+              {planActual.plan_nombre?.replace('_', ' ')}
+            </h3>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -98,7 +109,11 @@ export default function PlanesPage() {
               <TrendingUp size={18} className="text-blue-500" />
               <div>
                 <p className="text-xs text-gray-400">Valor</p>
-                <p className="font-bold">${planActual.plan_precio.toLocaleString('es-CO')}/mes</p>
+                {/* CAMBIO 2: Sufijo dinámico basado en si el plan es anual */}
+                <p className="font-bold">
+                  ${planActual.plan_precio.toLocaleString('es-CO')}
+                  {planActual.es_anual ? '/año' : '/mes'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -136,6 +151,7 @@ export default function PlanesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {planes.map((plan) => {
           const esPlanActual = planActual?.plan_nombre === plan.nombre;
+          const estaPendiente = planActual?.status === 'pending_payment' && esPlanActual;
           
           return (
             <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -143,27 +159,74 @@ export default function PlanesPage() {
               <p className="text-3xl font-bold text-blue-600 mb-4">
                 {plan.precio_cop === 0 ? 'Gratis' : `$${plan.precio_cop.toLocaleString('es-CO')}`}
                 <span className="text-sm text-gray-500 font-normal">
-                  {plan.duracion_dias === 365 ? '/año' : '/mes'}
+                  {plan.duracion_dias === 365 ? '/año' : plan.duracion_dias === 7 ? '/7 días' : '/mes'}
                 </span>
               </p>
-              <ul className="space-y-2 mb-6 text-sm text-gray-600">
-                <li>✅ {plan.limite_pacientes_diario} pacientes/día</li>
-                <li>✅ Odontograma digital</li>
-                <li>✅ Evolución por voz</li>
-                <li>✅ Agenda de citas</li>
-              </ul>
-              {esPlanActual ? (
-                <button disabled className="w-full bg-gray-100 text-gray-500 py-2 rounded-lg font-bold cursor-not-allowed">
+              {/* Reemplaza la lista <ul> dentro del map de planes */}
+                <ul className="space-y-3 mb-8 flex-grow text-sm">
+                  {/* 1. Límite de pacientes (Dinámico) */}
+                  <li className="flex items-center gap-2 text-gray-700">
+                    <span className="text-green-500 text-xs">✅</span> 
+                    <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
+                  </li>
+
+                  {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Incluido en todos) */}
+                  <li className="flex items-center gap-2 text-blue-700 font-bold bg-blue-50 px-2 py-1 rounded-lg">
+                    <span>🧾</span> Generar recibos rápidos
+                  </li>
+
+                  {/* 3. FUNCIÓN RESALTADA: Exportar Word */}
+                  <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                    <span>{plan.can_export_history ? '📝' : '❌'}</span> 
+                    Exportar historia a Word
+                  </li>
+
+                  {/* 4. Odontograma (Solo Pro/Trial) */}
+                  <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                    <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
+                    Odontograma digital {plan.can_use_odontogram ? '' : '(PRO)'}
+                  </li>
+
+                  {/* 5. Evolución por voz (Solo Pro/Trial) */}
+                  <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                    <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
+                    Evolución por voz {plan.can_use_voice ? '' : '(PRO)'}
+                  </li>
+
+                  {/* 6. Agenda (Incluido en todos) */}
+                  <li className="flex items-center gap-2 text-gray-700">
+                    <span className="text-green-500 text-xs">✅</span> Agenda de citas
+                  </li>
+                </ul>
+              {/* REEMPLAZA DESDE AQUÍ EL BLOQUE DE BOTONES: */}
+              {estaPendiente ? (
+                <button disabled className="w-full bg-yellow-100 text-yellow-700 py-2 rounded-lg font-bold cursor-default flex items-center justify-center gap-2">
+                  ⏳ Pago en verificación
+                </button>
+              ) : esPlanActual ? (
+                <button disabled className="w-full bg-green-100 text-green-600 py-2 rounded-lg font-bold cursor-not-allowed">
                   ✅ Plan actual
                 </button>
               ) : (
-                <button
-                  onClick={() => handleCambiarPlan(plan)}
-                  className="w-full bg-black text-white py-2 rounded-lg font-bold hover:bg-gray-800 transition"
-                >
-                  {plan.precio_cop === 0 ? 'Activar plan' : 'Cambiar a este plan'}
-                </button>
+                // Si el usuario tiene un plan de pago activo (no trial) y este no es su plan actual, bloqueamos el botón
+                planActual?.tiene_plan && planActual?.plan_nombre?.toLowerCase() !== 'trial' ? (
+                  <button 
+                    disabled 
+                    className="w-full bg-gray-100 text-gray-400 py-2 rounded-lg font-bold cursor-not-allowed text-xs"
+                    title="Para cambiar tu plan de pago activo, contacta a soporte."
+                  >
+                    🔒 Suscripción Activa
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleCambiarPlan(plan)}
+                    className="w-full bg-black text-white py-2 rounded-lg font-bold hover:bg-gray-800 transition"
+                  >
+                    {plan.precio_cop === 0 ? 'Activar plan' : 'Cambiar a este plan'}
+                  </button>
+                )
               )}
+              {/* HASTA AQUÍ */}
             </div>
           );
         })}

@@ -83,8 +83,9 @@ def generar_historia_clinica_word(paciente, odontologo):
     evoluciones_ordenadas = sorted(paciente.evoluciones, key=lambda x: x.fecha, reverse=True)
 
     if not evoluciones_ordenadas:
-        p = doc.add_paragraph("No se registran evoluciones.")
-        p.font.size = Pt(8.5)
+        p = doc.add_paragraph()
+        run = p.add_run("No se registran evoluciones.")
+        run.font.size = Pt(8.5)
     else:
         for ev in evoluciones_ordenadas:
             p = doc.add_paragraph()
@@ -102,8 +103,26 @@ def generar_historia_clinica_word(paciente, odontologo):
     doc.add_paragraph("\n")
     firma_p = doc.add_paragraph()
     firma_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run_firma = firma_p.add_run(f"__________________________\nDr/Dra. {odontologo.nombres or odontologo.username}\nOdontólogo Responsable")
-    run_firma.font.size = Pt(8)
+    
+    # Limpiamos y validamos los campos del perfil del odontólogo
+    consultorio = (odontologo.nombre_consultorio or "").strip()
+    nombre_doctor = f"Dr(a). {odontologo.nombres} {odontologo.apellidos}".strip()
+    telefono = (odontologo.telefono or "").strip()
+
+    # Si tiene consultorio, mostramos "Consultorio - Dr. Nombre" para que salgan ambos
+    if consultorio:
+        linea_nombre = f"{consultorio}\n{nombre_doctor}"
+    else:
+        linea_nombre = nombre_doctor
+
+    linea_contacto = f"Tel: {telefono}" if telefono else ""
+    
+    # Construimos la firma final evitando saltos de línea vacíos
+    texto_firma = f"__________________________\n{linea_nombre}"
+    if linea_contacto:
+        texto_firma += f"\n{linea_contacto}"
+
+    run_firma = firma_p.add_run(texto_firma)
 
     # Ajustar estilos de los Headings para que sean más pequeños
     for paragraph in doc.paragraphs:

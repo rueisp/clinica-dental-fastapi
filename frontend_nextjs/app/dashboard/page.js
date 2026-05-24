@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { LayoutList, CalendarDays, Grid3X3, Zap, ChevronLeft, ChevronRight, DollarSign, Users } from 'lucide-react';
+import { LayoutList, Grid3X3, Zap, ChevronLeft, ChevronRight, DollarSign, Users, User } from 'lucide-react';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
 import AuthGuard from '@/components/AuthGuard';
 import PlanAlerta from '@/components/dashboard/PlanAlerta';
 import AgendaDiaria from '@/app/components/dashboard/AgendaDiaria';
-import AgendaSemanal from '@/app/components/dashboard/AgendaSemanal';
 import { getFechaHoyLocal } from '@/app/utils/fechas';
 import './calendar-styles.css';
 
@@ -18,48 +17,96 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  const fechaSeleccionada = searchParams.get('fecha') || getFechaHoyLocal();
+
   const [vista, setVista] = useState('dia');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(getFechaHoyLocal());
   const [eventos, setEventos] = useState([]);
   const [usuario, setUsuario] = useState(null);
+  const [citasDia, setCitasDia] = useState([]);
+  const [loadingCitas, setLoadingCitas] = useState(true);
+  const cacheCitas = useRef({});
 
-  // 1. SINCRONIZACIÓN PRIORITARIA (Se ejecuta antes que cualquier fetch)
+  // ESTADOS PARA EL FILTRADO DE DOCTORES (EXCLUSIVO ADMIN)
+  const [doctores, setDoctores] = useState([]);
+  const [doctorSeleccionado, setDoctorSeleccionado] = useState('');
+
+  // 1. CARGAR LISTA DE DOCTORES SI EL USUARIO ES ADMIN
   useEffect(() => {
-    const fechaUrl = searchParams.get('fecha');
-    if (fechaUrl && /^\d{4}-\d{2}-\d{2}$/.test(fechaUrl)) {
-      // Usamos un pequeño delay o forzamos el estado si es diferente
-      if (fechaUrl !== fechaSeleccionada) {
-        setFechaSeleccionada(fechaUrl);
+    const cargarDoctoresAdmin = async () => {
+      const isAdmin = localStorage.getItem('is_admin') === 'true';
+      if (isAdmin) {
+        try {
+          const res = await authFetch(API_ENDPOINTS.ADMIN_RESUMEN_USUARIOS);
+          if (res.ok) {
+            const data = await res.json();
+            setDoctores(data || []);
+          }
+        } catch (err) {
+          console.error("Error cargando doctores para admin:", err);
+        }
       }
-    }
-  }, [searchParams]);
+    };
+    cargarDoctoresAdmin();
+  }, []);
 
-  // 2. CARGA DE DATOS (IMPORTANTE: Que dependa de la fechaSeleccionada si es necesario)
+  // 2. RE-CARGAR DATOS CUANDO CAMBIE LA FECHA, LA VISTA O EL DOCTOR SELECCIONADO
   useEffect(() => {
+    if (cacheCitas.current[fechaSeleccionada + doctorSeleccionado]) {
+      delete cacheCitas.current[fechaSeleccionada + doctorSeleccionado];
+    }
     fetchDashboardData();
-  }, [fechaSeleccionada]); // Ahora refresca si la fecha cambia significativamente
+  }, [fechaSeleccionada, vista, doctorSeleccionado]);
 
-  // 3. REFRESCO AL CAMBIAR A VISTA MES
-  useEffect(() => {
-    if (vista === 'mes') {
-      fetchDashboardData();
+  const fetchDashboardData = async (startDate = null, endDate = null) => {
+    const esConsultaDia = !startDate && !endDate;
+    const cacheKey = fechaSeleccionada + doctorSeleccionado;
+
+    if (esConsultaDia && cacheCitas.current[cacheKey]) {
+      setCitasDia(cacheCitas.current[cacheKey]);
+    } else if (esConsultaDia) {
+      setCitasDia([]);
     }
-  }, [vista]);
 
-  const fetchDashboardData = async () => {
+    if (!citasDia.length) {
+      setLoadingCitas(true);
+    }
+
     try {
-      const response = await authFetch(API_ENDPOINTS.DASHBOARD_HOME_DATA);
+      let queryParams = `?selected_date=${fechaSeleccionada}`;
+      
+      if (startDate && endDate) {
+        queryParams += `&start=${startDate}&end=${endDate}`;
+      }
+      
+      // Si el admin seleccionó un doctor, lo enviamos en la consulta
+      if (doctorSeleccionado) {
+        queryParams += `&doctor_id=${doctorSeleccionado}`;
+      }
+
+      const response = await authFetch(API_ENDPOINTS.DASHBOARD_HOME_DATA(queryParams));
       const data = await response.json();
+      
       if (data.success) {
         setUsuario(data.usuario);
-        const evs = data.eventos.map(e => ({
-          ...e,
-          title: `${e.title?.match(/\d+/)?.[0] || '0'}`
-        }));
-        setEventos(evs);
+        
+        if (data.eventos) {
+          setEventos(data.eventos.map(e => ({
+            ...e,
+            title: `${e.title?.match(/\d+/)?.[0] || '0'}`
+          })));
+        }
+        
+        const nuevasCitas = data.citas_dia || [];
+        setCitasDia(nuevasCitas);
+        
+        if (esConsultaDia) {
+          cacheCitas.current[cacheKey] = nuevasCitas;
+        }
       }
     } catch (err) {
       console.error('Error cargando Dashboard:', err);
+    } finally {
+      setLoadingCitas(false);
     }
   };
 
@@ -67,13 +114,10 @@ function DashboardContent() {
     const [year, month, day] = fechaSeleccionada.split('-').map(Number);
     const fechaActual = new Date(year, month - 1, day);
     
-    // Si la vista es semana, saltamos 7 días, si no, 1 día
-    const diasASaltar = vista === 'semana' ? offset * 7 : offset;
-    fechaActual.setDate(fechaActual.getDate() + diasASaltar);
+    fechaActual.setDate(fechaActual.getDate() + offset);
     
     const nuevaFecha = `${fechaActual.getFullYear()}-${String(fechaActual.getMonth() + 1).padStart(2, '0')}-${String(fechaActual.getDate()).padStart(2, '0')}`;
     
-    setFechaSeleccionada(nuevaFecha);
     router.replace(`/dashboard?fecha=${nuevaFecha}`, { scroll: false });
   };
 
@@ -86,9 +130,9 @@ function DashboardContent() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gray-50 pb-20">
-        {/* Cabecera con Padding a la derecha para no chocar con el botón flotante */}
+        {/* Cabecera */}
         <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto sm:pr-40">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-black leading-tight">
                 Hola, {usuario?.nombre || 'Odontólogo'}!
@@ -96,40 +140,67 @@ function DashboardContent() {
               <p className="text-gray-500 text-sm font-medium">Panel Clínico</p>
             </div>
             
-            <div className="flex bg-gray-200/60 p-1 rounded-xl backdrop-blur-sm">
-              <button 
-                onClick={() => { setVista('dia'); router.replace(`/dashboard?fecha=${fechaSeleccionada}`, { scroll: false }); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${vista === 'dia' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-              >
-                <LayoutList size={16} />
-                <span className="text-[11px] font-bold uppercase tracking-tight">Día</span>
-              </button>
-              <button 
-                onClick={() => { setVista('semana'); router.replace(`/dashboard?fecha=${fechaSeleccionada}`, { scroll: false }); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${vista === 'semana' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-              >
-                <CalendarDays size={16} />
-                <span className="text-[11px] font-bold uppercase tracking-tight">Sem</span>
-              </button>
-              <button 
-                onClick={() => { setVista('mes'); router.replace(`/dashboard?fecha=${fechaSeleccionada}`, { scroll: false }); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${vista === 'mes' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-              >
-                <Grid3X3 size={16} />
-                <span className="text-[11px] font-bold uppercase tracking-tight">Mes</span>
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* SELECTOR DE DOCTOR (SOLO VISIBLE PARA EL ADMINISTRADOR) */}
+              {usuario?.is_admin && doctores.length > 0 && (
+                <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
+                  <User size={16} className="text-purple-600" />
+                  <select
+                    value={doctorSeleccionado}
+                    onChange={(e) => setDoctorSeleccionado(e.target.value)}
+                    className="bg-transparent border-none text-xs font-bold text-gray-700 outline-none cursor-pointer"
+                  >
+                    <option value="">Mi Agenda (Admin)</option>
+                    {doctores.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.nombre} ({doc.total_pacientes} pac)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selector de Vistas */}
+              <div className="flex bg-gray-200/60 p-1 rounded-xl backdrop-blur-sm">
+                <button 
+                  onClick={() => setVista('dia')}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'dia' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
+                >
+                  <LayoutList size={16} />
+                  <span className="text-[11px] font-bold uppercase tracking-tight">Día</span>
+                </button>
+                <button 
+                  onClick={() => setVista('mes')}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'mes' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
+                >
+                  <Grid3X3 size={16} />
+                  <span className="text-[11px] font-bold uppercase tracking-tight">Mes</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {vista !== 'mes' && (
+          {vista === 'dia' && (
             <div className="flex items-center justify-between mb-6 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-              <button onClick={() => cambiarFecha(-1)} className="p-2 hover:bg-gray-100 rounded-full">
+              <button onClick={() => cambiarFecha(-1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
                 <ChevronLeft size={20} />
               </button>
-              <h2 className="text-sm font-bold capitalize text-gray-800">
-                {formatearFechaMostrar(fechaSeleccionada)}
-              </h2>
-              <button onClick={() => cambiarFecha(1)} className="p-2 hover:bg-gray-100 rounded-full">
+              
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-bold capitalize text-gray-800">
+                  {formatearFechaMostrar(fechaSeleccionada)}
+                </h2>
+                {fechaSeleccionada !== getFechaHoyLocal() && (
+                  <button 
+                    onClick={() => router.replace(`/dashboard?fecha=${getFechaHoyLocal()}`, { scroll: false })}
+                    className="px-4 py-2 bg-black text-white hover:bg-gray-800 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-md active:scale-95"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
+
+              <button onClick={() => cambiarFecha(1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
                 <ChevronRight size={20} />
               </button>
             </div>
@@ -139,35 +210,37 @@ function DashboardContent() {
         <div className="max-w-5xl mx-auto px-4">
           <PlanAlerta />
 
-          {vista === 'dia' && <AgendaDiaria fecha={fechaSeleccionada} />}
-
-          {vista === 'semana' && (
-            <div className="-mx-4 sm:mx-0">
-              <AgendaSemanal 
-                fechaInicio={fechaSeleccionada} 
-                onSeleccionarDia={(f) => { setFechaSeleccionada(f); setVista('dia'); router.push(`/dashboard?fecha=${f}`); }} 
-              />
-            </div>
+          {vista === 'dia' && (
+            <AgendaDiaria 
+              fecha={fechaSeleccionada} 
+              citasExternas={citasDia} 
+              loading={loadingCitas} 
+            />
           )}
 
           {vista === 'mes' && (
-            <div className="bg-white min-h-[500px]">
+            <div className="bg-white min-h-[500px] rounded-3xl p-4 border border-gray-100 shadow-sm">
               <FullCalendar
                 plugins={[dayGridPlugin, interactionPlugin]}
                 initialView="dayGridMonth"
-                datesSet={() => fetchDashboardData()}
                 locale="es"
                 headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                 events={eventos}
                 height="auto"
-                dateClick={(info) => {
-                  setFechaSeleccionada(info.dateStr);
-                  setVista('dia');
-                  router.push(`/dashboard?fecha=${info.dateStr}`);
+                initialDate={fechaSeleccionada}
+                
+                datesSet={(dateInfo) => {
+                  fetchDashboardData(dateInfo.startStr.split('T')[0], dateInfo.endStr.split('T')[0]);
                 }}
+
+                dateClick={(info) => {
+                  router.push(`/dashboard?fecha=${info.dateStr}`);
+                  setVista('dia');
+                }}
+                
                 eventContent={(info) => (
                   <div className="w-full flex justify-center items-center pt-1 pointer-events-none">
-                    <div className="flex items-center gap-1 bg-gray-100 border-2 border-gray-200 px-3 py-0.3 rounded-full transition-transform hover:scale-110">
+                    <div className="flex items-center gap-1 bg-gray-100 border-2 border-gray-200 px-3 py-0.3 rounded-full">
                       <div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
                       <span className="text-sm font-black text-[#3b82f6] leading-none">
                         {info.event.title}
@@ -180,7 +253,7 @@ function DashboardContent() {
           )}
         </div>
 
-        {/* BOTONES FLOTANTES */}
+        {/* Botones Flotantes */}
         <div className="fixed top-6 right-6 z-50">
           <button
             onClick={() => router.push('/pacientes')}
@@ -206,7 +279,6 @@ function DashboardContent() {
   );
 }
 
-// Exportamos envuelto en Suspense porque usamos useSearchParams
 export default function DashboardPage() {
   return (
     <Suspense fallback={<div className="p-8 text-center">Cargando Dashboard...</div>}>

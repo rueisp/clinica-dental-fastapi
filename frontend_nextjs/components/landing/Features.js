@@ -3,12 +3,12 @@ import { Users, Calendar, FileText, Activity, Shield, Zap } from 'lucide-react';
 
 export default function Features() {
   const features = [
-    { icon: <Users className="w-8 h-8 text-purple-600" />, title: "Gestión de Pacientes", description: "Administra toda la información clínica de tus pacientes de forma centralizada." },
-    { icon: <Calendar className="w-8 h-8 text-purple-600" />, title: "Agenda Inteligente", description: "Organiza tus citas y evita ausencias con recordatorios automáticos." },
-    { icon: <FileText className="w-8 h-8 text-purple-600" />, title: "Odontograma Digital", description: "Registra el estado dental con nuestro odontograma interactivo." },
-    { icon: <Activity className="w-8 h-8 text-purple-600" />, title: "Evolución por Voz", description: "Dicta las evoluciones y el sistema las transcribe automáticamente." },
-    { icon: <Shield className="w-8 h-8 text-purple-600" />, title: "Datos Seguros", description: "Información protegida y respaldada en la nube." },
-    { icon: <Zap className="w-8 h-8 text-purple-600" />, title: "Cobros Rápidos", description: "Registra pagos en segundos y envía recibos por WhatsApp." }
+    { icon: <Users className="w-8 h-8 text-blue-600" />, title: "Gestión de Pacientes", description: "Administra toda la información clínica de tus pacientes de forma centralizada." },
+    { icon: <Calendar className="w-8 h-8 text-blue-600" />, title: "Agenda Inteligente", description: "Organiza tus citas y evita ausencias con recordatorios automáticos." },
+    { icon: <FileText className="w-8 h-8 text-blue-600" />, title: "Odontograma Digital", description: "Registra el estado dental con nuestro odontograma interactivo." },
+    { icon: <Activity className="w-8 h-8 text-blue-600" />, title: "Evolución por Voz", description: "Dicta las evoluciones y el sistema las transcribe automáticamente." },
+    { icon: <Shield className="w-8 h-8 text-blue-600" />, title: "Datos Seguros", description: "Información protegida y respaldada en la nube." },
+    { icon: <Zap className="w-8 h-8 text-blue-600" />, title: "Cobros Rápidos", description: "Registra pagos en segundos y envía recibos por WhatsApp." }
   ];
 
   return (

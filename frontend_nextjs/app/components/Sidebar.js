@@ -1,34 +1,39 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';  // ← Agregar
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut } from 'lucide-react';
-import { setAuthToken } from '@/config/api';  // ← Agregar
+import { setAuthToken } from '@/config/api';
+import { useUser } from '@/context/UserContext'; // <--- 1. Importación del hook
 
 export default function Sidebar() {
-  const router = useRouter();  // ← Agregar
-  const pathname = usePathname();  // ← Agregar
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // 2. CAMBIO: Extraemos user y loading del contexto global
+  const { user, loading } = useUser(); 
+  
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    const userRole = localStorage.getItem('is_admin');
-    // Esto convierte el texto "true" en un valor booleano real
-    setIsAdmin(userRole === 'true' || userRole === true);
-  }, []);
+  // 3. CAMBIO: Lógica de etiquetas simplificada (se calcula en cada renderizado)
+  const planLabel = (() => {
+    if (loading || !user) return { nombre: 'Cargando...', color: 'text-gray-400' };
+    if (user.is_admin) return { nombre: 'Administrador', color: 'text-purple-600' };
+    
+    const p = user.permissions;
+    if (p?.can_use_odontogram && p?.can_use_voice) return { nombre: 'Plan Pro', color: 'text-purple-600' };
+    if (p?.can_export_history) return { nombre: 'Plan Básico', color: 'text-blue-600' };
+    return { nombre: 'Plan Trial', color: 'text-green-600' };
+  })();
 
-  // Detectar si es móvil basado en el ancho de pantalla
+  // 4. CAMBIO: Solo mantenemos el efecto para el tamaño de pantalla
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 768);
-      // Si es PC, forzar sidebar abierto
-      if (window.innerWidth >= 768) {
-        setIsOpen(true);
-      } else {
-        setIsOpen(false);
-      }
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      setIsOpen(!mobile); // Abierto en PC, cerrado en móvil
     };
 
     checkScreenSize();
@@ -36,25 +41,22 @@ export default function Sidebar() {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  const toggleSidebar = () => {
-    setIsOpen(!isOpen);
-  };
+  const toggleSidebar = () => setIsOpen(!isOpen);
+  const closeSidebar = () => { if (isMobile) setIsOpen(false); };
 
-  const closeSidebar = () => {
-    if (isMobile) {
-      setIsOpen(false);
-    }
-  };
-
-  // ← AGREGAR función de logout
   const handleLogout = () => {
-    // Eliminar el token del localStorage
     setAuthToken(null);
-    // Redirigir al login
-    router.push('/login');
+    // Usamos window.location para limpiar completamente el estado de React al salir
+    window.location.href = '/login'; 
   };
+
+  // 5. CAMBIO: Si está cargando el contexto, mostramos un esqueleto o nada para evitar parpadeos
+  if (loading) return <div className="fixed inset-y-0 left-0 w-80 bg-white border-r border-gray-200 animate-pulse" />;
 
   return (
+    // ... Aquí sigue tu JSX
+    // IMPORTANTE: En el JSX, donde antes usabas 'userData.nombres', ahora usa 'user?.nombres'
+    // Donde antes usabas 'isAdmin', ahora usa 'user?.is_admin'
     <>
       {/* Botón Hamburguesa - solo visible en móvil */}
       {isMobile && (
@@ -88,14 +90,18 @@ export default function Sidebar() {
       >
         <div className="p-6 border-b border-gray-200 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold text-black">Historia Clínica</h2>
-            <p className="text-sm text-gray-600 mt-1">Usuario Demo</p>
+            <h2 className="text-xl font-black text-black tracking-tighter">CloudentApp</h2>
+            <div className="mt-1">
+              <p className="text-sm font-bold text-gray-700 capitalize leading-none">
+                Dr. {(user?.nombres || 'Doctor').toLowerCase()}
+              </p>
+              <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${planLabel.color}`}>
+                {planLabel.nombre}
+              </p>
+            </div>
           </div>
           {isMobile && (
-            <button
-              onClick={closeSidebar}
-              className="p-1 rounded-lg hover:bg-gray-100"
-            >
+            <button onClick={closeSidebar} className="p-1 rounded-lg hover:bg-gray-100">
               <X className="w-5 h-5 text-gray-700" />
             </button>
           )}
@@ -163,7 +169,7 @@ export default function Sidebar() {
             </Link>
             
             <Link
-              href="#"
+              href="/perfil" // <-- Cambia esto
               className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
               onClick={closeSidebar}
             >
@@ -172,7 +178,7 @@ export default function Sidebar() {
             </Link>
 
             {/* Solo se muestra si el usuario es Admin */}
-            {isAdmin && (
+            {user?.is_admin && (
               <Link
                 href="/admin/pagos"
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border ${

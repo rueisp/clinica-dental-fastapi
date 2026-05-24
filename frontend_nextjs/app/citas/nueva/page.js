@@ -55,14 +55,9 @@ export default function NuevaCita() {
   };
 
   const seleccionarPaciente = (paciente) => {
-    // Agregamos este log para que usted vea en la consola qué IDs tiene el paciente
-    console.log("Datos del paciente seleccionado:", paciente);
-
     setFormData({
       ...formData,
-      // Si el servidor pide un entero, intente usar paciente.id_db o paciente.pk
-      // si es que existen. Si solo existe el UUID, entonces el problema está en el Backend.
-      paciente_id: paciente.id, 
+      paciente_id: paciente.id, // El ID siempre es el UUID (String) proveniente de la base de datos
       paciente_nombre: `${paciente.nombres} ${paciente.apellidos}`,
       paciente_telefono: paciente.telefono
     });

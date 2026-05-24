@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
-import { ArrowLeft, Save, User, Phone } from 'lucide-react';
+import { ArrowLeft, Save, User, Phone, X } from 'lucide-react';
 
 export default function NuevoPago() {
   const router = useRouter();
@@ -13,7 +13,7 @@ export default function NuevoPago() {
     paciente_id: null,
     paciente_nombre: '',
     fecha: new Date().toISOString().split('T')[0],
-    descripcion: '',
+    concepto: '',
     monto: '',
     metodo_pago: 'Efectivo',
     observacion: '', // Campo vinculado a Supabase
@@ -59,7 +59,7 @@ export default function NuevoPago() {
       paciente_nombre: form.paciente_nombre,
       monto: parseFloat(form.monto), // Forzar número
       metodo_pago: form.metodo_pago,
-      descripcion: form.descripcion,
+      concepto: form.concepto,
       fecha: form.fecha,
       telefono: form.telefono,
       observacion: form.observacion,
@@ -112,10 +112,30 @@ export default function NuevoPago() {
                   setForm({...form, paciente_nombre: e.target.value, paciente_id: null, es_rapido: true});
                   setMostrarSugerencias(true);
                 }}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border-none text-black"
+                // Si ya hay un paciente seleccionado, reducimos el padding derecho para que no tape la X
+                className={`w-full pl-10 ${form.paciente_id ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 rounded-xl border-none text-black`}
                 placeholder="Nombre del paciente..."
                 required
               />
+              {/* Botón de X para limpiar la selección si ya hay un paciente vinculado */}
+              {(busqueda || form.paciente_nombre) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBusqueda('');
+                    setForm({
+                      ...form,
+                      paciente_id: null,
+                      paciente_nombre: '',
+                      telefono: '',
+                      es_rapido: true
+                    });
+                  }}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-black transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
             {mostrarSugerencias && pacientes.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded-xl shadow-lg mt-1">
@@ -160,11 +180,11 @@ export default function NuevoPago() {
           </div>
 
           <div>
-            <label className="text-xs font-bold text-gray-500 uppercase">Descripción</label>
+            <label className="text-xs font-bold text-gray-500 uppercase">Concepto</label>
             <input
               type="text"
-              value={form.descripcion}
-              onChange={(e) => setForm({...form, descripcion: e.target.value})}
+              value={form.concepto}
+              onChange={(e) => setForm({...form, concepto: e.target.value})}
               className="w-full p-3 bg-gray-50 rounded-xl text-black"
               placeholder="Ej. Limpieza, Resina..."
               required
