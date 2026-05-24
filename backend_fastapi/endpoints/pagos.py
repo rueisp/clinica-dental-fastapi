@@ -133,6 +133,7 @@ async def obtener_pago_por_codigo(
         "metodo_pago": pago.metodo_pago,
         "concepto": pago.concepto or "Consulta",
         "observacion": pago.observacion,
+        "telefono": pago.telefono,
         # ✅ AQUÍ ENVIAMOS LOS DATOS DE MARCA
         "clinica_nombre": doctor.nombre_consultorio or f"Dr. {doctor.nombres} {doctor.apellidos}",
         "clinica_telefono": doctor.telefono or ""

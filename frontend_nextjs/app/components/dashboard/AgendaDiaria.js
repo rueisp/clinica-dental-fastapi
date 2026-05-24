@@ -65,9 +65,12 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
     // 5. Construir el mensaje personalizado
     const mensaje = `Hola ${nombreFormateado}, te recordamos tu cita odontológica ${conectorTemporal} a las ${hora}. Me confirmas por favor si puedes asistir.`;
     
-    // 6. Limpiar el teléfono (solo números) y abrir WhatsApp
-    const telLimpio = telefono.replace(/\D/g, '');
-    window.open(`https://wa.me/57${telLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    // 6. Lógica inteligente de teléfono (Soporta locales de 10 dígitos e internacionales con "+")
+    const telLimpio = telefono?.replace(/\D/g, '') || '';
+    const telFinal = (telefono?.startsWith('+') || telLimpio.startsWith('57')) ? telLimpio : `57${telLimpio}`;
+
+    // Mantenemos exactamente tu wa.me original
+    window.open(`https://wa.me/${telFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
   return (

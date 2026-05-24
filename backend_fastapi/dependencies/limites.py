@@ -3,7 +3,7 @@ import pytz
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func  # <-- Importamos func para el fallback insensible a mayúsculas
 from models import LimiteDiario, Usuario, Plan, Subscription
 
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
@@ -21,7 +21,6 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
     return sub
 
 async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSession):
-
     if current_user.is_admin:
         return True
     """
@@ -32,11 +31,17 @@ async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSessio
     sub = await verificar_suscripcion_activa(current_user, db)
     
     # 2. REGLA DE ORO: Si es trial, tiene permiso para todo
-    if sub.plan_type.lower() == "trial":
+    if sub.plan_type and sub.plan_type.lower() == "trial":
         return True
     
     # 3. Si no es trial, buscamos los permisos específicos del plan en la tabla 'planes'
-    result = await db.execute(select(Plan).where(Plan.nombre == sub.plan_type))
+    # Priorizamos la búsqueda por plan_id (UUID). Si no existe, usamos plan_type de forma segura.
+    if sub.plan_id:
+        result = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+    else:
+        result = await db.execute(
+            select(Plan).where(func.lower(Plan.nombre) == func.lower(sub.plan_type))
+        )
     plan = result.scalar_one_or_none()
     
     if not plan or not getattr(plan, feature, False):
@@ -53,7 +58,13 @@ async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
     hoy = datetime.now(COLOMBIA_TZ).date()
     
     # Buscamos el plan para obtener el límite (o usamos 20 por defecto)
-    result = await db.execute(select(Plan).where(Plan.nombre == sub.plan_type.lower()))
+    # Priorizamos la búsqueda por plan_id (UUID). Si no existe, usamos plan_type de forma segura.
+    if sub.plan_id:
+        result = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+    else:
+        result = await db.execute(
+            select(Plan).where(func.lower(Plan.nombre) == func.lower(sub.plan_type))
+        )
     plan_info = result.scalar_one_or_none()
     
     # ✅ LÍMITE: Si no hay plan_info, el estándar es 20

@@ -44,10 +44,21 @@ export default function ReciboDetalle() {
     // Extraemos el nombre de la clínica/doctor dinámicamente y lo convertimos a mayúsculas para el encabezado
     const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
     
+    // Mantenemos exactamente tu mensaje original con %0A y la URL limpia
     const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
-    const tel = pago.telefono?.replace(/\D/g, '') || '';
-    // Usamos el código de país 57 para Colombia
-    window.open(`https://wa.me/57${tel}?text=${mensaje}`, '_blank');
+    
+    // Lógica inteligente de teléfono (Soporta locales de 10 dígitos e internacionales con "+")
+    const telefonoOriginal = pago.telefono || '';
+    const telLimpio = telefonoOriginal.replace(/\D/g, '');
+    
+    if (!telLimpio) {
+      window.open(`https://wa.me/?text=${mensaje}`, '_blank');
+    } else {
+      const telFinal = (telefonoOriginal.trim().startsWith('+') || telLimpio.startsWith('57')) 
+        ? telLimpio 
+        : `57${telLimpio}`;
+      window.open(`https://wa.me/${telFinal}?text=${mensaje}`, '_blank');
+    }
   };
 
   return (

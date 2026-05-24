@@ -175,6 +175,7 @@ export default function NuevoPago() {
                 <option value="Transferencia">Transferencia</option>
                 <option value="Nequi">Nequi</option>
                 <option value="Bancolombia">Bancolombia</option>
+                <option value="Bre-B">Bre-B</option>
               </select>
             </div>
           </div>

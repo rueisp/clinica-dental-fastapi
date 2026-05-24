@@ -219,7 +219,7 @@ function DashboardContent() {
           )}
 
           {vista === 'mes' && (
-            <div className="bg-white min-h-[500px] rounded-3xl p-4 border border-gray-100 shadow-sm">
+            <div className="bg-white min-h-[500px] w-screen sm:w-auto ml-[calc(-50vw+50%)] sm:ml-0 rounded-none sm:rounded-3xl p-4 border-y border-x-0 sm:border border-gray-100 shadow-sm">
               <FullCalendar
                 plugins={[dayGridPlugin, interactionPlugin]}
                 initialView="dayGridMonth"

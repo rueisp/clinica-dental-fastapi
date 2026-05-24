@@ -1,8 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { API_ENDPOINTS, authFetch } from '@/config/api';
-import { Upload, CheckCircle, CreditCard, ArrowLeft } from 'lucide-react';
+import { Upload, CheckCircle, CreditCard, ArrowLeft, Copy, Check, Zap } from 'lucide-react';
 
 export default function ReportarPago() {
     const router = useRouter();
@@ -16,9 +16,19 @@ export default function ReportarPago() {
     const [imageUrl, setImageUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [enviado, setEnviado] = useState(false);
+    const [copiado, setCopiado] = useState(false);
+
+    // Llave Bre-B (Tu número celular de Bancolombia)
+    const llaveBreB = "3147953756";
+
+    // Lógica para copiar la llave al portapapeles
+    const handleCopiarLlave = () => {
+        navigator.clipboard.writeText(llaveBreB);
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 2000);
+    };
 
     // 2. Lógica para subir imagen a Cloudinary
-    // Usaremos el mismo método que ya usas en el resto de tu app
     const handleUploadImage = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -26,10 +36,10 @@ export default function ReportarPago() {
         setLoading(true);
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('upload_preset', 'ml_default2'); // CAMBIA ESTO por tu preset
+        formData.append('upload_preset', 'ml_default2');
 
         try {
-            const res = await fetch('https://api.cloudinary.com/v1_1/dlueb7c6r/image/upload', {// CAMBIA tu_cloud_name
+            const res = await fetch('https://api.cloudinary.com/v1_1/dlueb7c6r/image/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -52,8 +62,8 @@ export default function ReportarPago() {
             const response = await authFetch(API_ENDPOINTS.REPORTAR_PAGO, {
                 method: 'POST',
                 body: JSON.stringify({
-                    plan_id: planId,           // Se envía el UUID (string)
-                    plan_nombre: planNombre,   // Se envía el nombre real (ej: "Básico", "Pro Mensual")
+                    plan_id: planId,
+                    plan_nombre: planNombre,
                     monto: parseFloat(monto),
                     comprobante_url: imageUrl,
                     referencia_pago: referencia
@@ -91,25 +101,49 @@ export default function ReportarPago() {
                 </button>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="bg-purple-600 p-6 text-white">
+                    <div className="bg-black p-6 text-white">
                         <h1 className="text-2xl font-bold">Reportar Pago: {planNombre}</h1>
                         <p className="opacity-90">Completa los datos para activar tu suscripción.</p>
                     </div>
 
                     <div className="p-8">
-                        {/* SECCIÓN DE DATOS BANCARIOS */}
-                        <div className="mb-8 p-4 bg-purple-50 rounded-xl border border-purple-100">
-                            <h2 className="font-bold text-purple-800 mb-3 flex items-center gap-2">
-                                <CreditCard size={18} /> Datos de Transferencia
+                        {/* SECCIÓN DE DATOS BANCARIOS Y BRE-B */}
+                        <div className="mb-8 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-6">
+                            <h2 className="font-bold text-blue-800 flex items-center gap-2 text-lg">
+                                <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
                             </h2>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-gray-500">Nequi</p>
-                                    <p className="font-bold text-lg">314-7953756</p>
+                            
+                            {/* Tarjeta Destacada de Bre-B */}
+                            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                    <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado</span>
+                                    <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
+                                        ⚡ Pago Instantáneo Bre-B
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Transfiere gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando esta llave:
+                                    </p>
+                                    <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
                                 </div>
-                                <div>
-                                    <p className="text-gray-500">Bancolombia (Ahorros)</p>
-                                    <p className="font-bold text-lg">912-113608-82</p>
+                                <button
+                                    type="button"
+                                    onClick={handleCopiarLlave}
+                                    className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
+                                >
+                                    {copiado ? <Check size={14} /> : <Copy size={14} />}
+                                    {copiado ? '¡COPIADO!' : 'COPIAR LLAVE'}
+                                </button>
+                            </div>
+
+                            {/* Métodos Tradicionales */}
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-100/50 text-sm">
+                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
+                                    <p className="font-bold text-gray-700 text-base mt-0.5">314-7953756</p>
+                                </div>
+                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
+                                    <p className="font-bold text-gray-700 text-base mt-0.5">912-113608-82</p>
                                 </div>
                             </div>
                         </div>
@@ -121,7 +155,7 @@ export default function ReportarPago() {
                                     <input 
                                         type="number" placeholder="Ej: 30000" required
                                         value={monto} onChange={(e) => setMonto(e.target.value)}
-                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
@@ -129,7 +163,7 @@ export default function ReportarPago() {
                                     <input 
                                         type="text" placeholder="Número de comprobante" required
                                         value={referencia} onChange={(e) => setReferencia(e.target.value)}
-                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
