@@ -1,10 +1,10 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
 import { ArrowLeft, Save, User, Phone, X } from 'lucide-react';
 
-export default function NuevoPago() {
+function NuevoPagoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const esRapidoParam = searchParams.get('rapido') === '1';
@@ -53,7 +53,6 @@ export default function NuevoPago() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Preparamos los datos EXACTOS que espera su nuevo modelo de Python
     const datosParaEnviar = {
       paciente_id: form.paciente_id, // UUID o null
       paciente_nombre: form.paciente_nombre,
@@ -67,7 +66,6 @@ export default function NuevoPago() {
     };
 
     try {
-      // Verifique que API_ENDPOINTS.NUEVO_PAGO sea la URL correcta (ej: http://localhost:8000/api/pagos/nuevo)
       const res = await authFetch(API_ENDPOINTS.NUEVO_PAGO, {
         method: 'POST',
         body: JSON.stringify(datosParaEnviar)
@@ -82,7 +80,6 @@ export default function NuevoPago() {
       }
     } catch (err) {
       console.error("Error en el envío:", err);
-      // Si entra aquí con "Failed to fetch", es que la URL está mal o el Backend está caído
       alert("No se pudo conectar con el servidor. Verifique la conexión.");
     }
   };
@@ -112,12 +109,10 @@ export default function NuevoPago() {
                   setForm({...form, paciente_nombre: e.target.value, paciente_id: null, es_rapido: true});
                   setMostrarSugerencias(true);
                 }}
-                // Si ya hay un paciente seleccionado, reducimos el padding derecho para que no tape la X
                 className={`w-full pl-10 ${form.paciente_id ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 rounded-xl border-none text-black`}
                 placeholder="Nombre del paciente..."
                 required
               />
-              {/* Botón de X para limpiar la selección si ya hay un paciente vinculado */}
               {(busqueda || form.paciente_nombre) && (
                 <button
                   type="button"
@@ -206,7 +201,6 @@ export default function NuevoPago() {
             </div>
           </div>
 
-          {/* Campo de Observación Agregado */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase">Observación (Opcional)</label>
             <textarea
@@ -229,3 +223,14 @@ export default function NuevoPago() {
     </div>
   );
 }
+
+// Reemplaza el bloque final por este:
+const NuevoPago = () => {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de pago...</div>}>
+      <NuevoPagoForm />
+    </Suspense>
+  );
+};
+
+export default NuevoPago;

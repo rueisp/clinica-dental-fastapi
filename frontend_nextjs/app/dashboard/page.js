@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -19,6 +20,7 @@ function DashboardContent() {
   
   const fechaSeleccionada = searchParams.get('fecha') || getFechaHoyLocal();
 
+  // 1. Forzamos que la vista inicial sea siempre 'dia'
   const [vista, setVista] = useState('dia');
   const [eventos, setEventos] = useState([]);
   const [usuario, setUsuario] = useState(null);
@@ -279,10 +281,22 @@ function DashboardContent() {
   );
 }
 
-export default function DashboardPage() {
+const DashboardPage = () => {
+  const [isClient, setIsClient] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) return <div className="p-8 text-center">Cargando Dashboard...</div>;
+
   return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando Dashboard...</div>}>
-      <DashboardContent />
-    </Suspense>
+    <AuthGuard>
+      <Suspense fallback={<div className="p-8 text-center">Cargando Dashboard...</div>}>
+        <DashboardContent />
+      </Suspense>
+    </AuthGuard>
   );
-}
+};
+
+export default DashboardPage;

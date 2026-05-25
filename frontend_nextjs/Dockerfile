@@ -1,35 +1,36 @@
-# 1. Usar una imagen de Node
+# Etapa 1: Instalar dependencias
+FROM node:18-slim AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Etapa 2: Construir la aplicación
 FROM node:18-slim AS builder
 WORKDIR /app
-
-# 2. Instalar dependencias
-COPY package*.json ./
-RUN npm install
-
-# 3. Copiar código y construir la app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# IMPORTANTE: Esta URL se "graba" en el código durante el build
-ENV NEXT_PUBLIC_API_URL=https://dental-api-884479138687.us-east1.run.app
-# Desactivamos telemetría para que el build sea más rápido
+# Variable de entorno requerida en tiempo de compilación (Build-time)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN npm run build
 
-# 4. Imagen de producción
-FROM node:18-slim
+# Etapa 3: Servidor de producción ultra-ligero
+FROM node:18-slim AS runner
 WORKDIR /app
 
-# Copiamos lo necesario de la etapa anterior
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
-# CONFIGURACIÓN PARA CLOUD RUN
-# Usamos la variable $PORT que Google nos da obligatoriamente
+ENV NODE_ENV production
 ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+
+# Copiar únicamente lo necesario para ejecutar el modo standalone
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
 EXPOSE 3000
 
-# Ejecutamos con el host 0.0.0.0 para que sea visible fuera del contenedor
-CMD ["sh", "-c", "npm start -- -p ${PORT:-3000}"]
+# Ejecutar el servidor standalone nativo de Next.js
+CMD ["node", "server.js"]

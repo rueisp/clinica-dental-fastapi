@@ -1,14 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { API_ENDPOINTS, authFetch } from '@/config/api';
 import { Upload, CheckCircle, CreditCard, ArrowLeft, Copy, Check, Zap } from 'lucide-react';
 
-export default function ReportarPago() {
+function ReportarPagoForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     
-    // 1. Estados del formulario
     const [planId, setPlanId] = useState(searchParams.get('plan_id') || '');
     const [planNombre, setPlanNombre] = useState(searchParams.get('plan_nombre') || 'Plan Profesional');
     const [monto, setMonto] = useState('');
@@ -18,17 +17,14 @@ export default function ReportarPago() {
     const [enviado, setEnviado] = useState(false);
     const [copiado, setCopiado] = useState(false);
 
-    // Llave Bre-B (Tu número celular de Bancolombia)
     const llaveBreB = "3147953756";
 
-    // Lógica para copiar la llave al portapapeles
     const handleCopiarLlave = () => {
         navigator.clipboard.writeText(llaveBreB);
         setCopiado(true);
         setTimeout(() => setCopiado(false), 2000);
     };
 
-    // 2. Lógica para subir imagen a Cloudinary
     const handleUploadImage = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -52,7 +48,6 @@ export default function ReportarPago() {
         }
     };
 
-    // 3. Enviar reporte al Backend
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!imageUrl) return alert("Por favor sube la captura del pago");
@@ -107,13 +102,11 @@ export default function ReportarPago() {
                     </div>
 
                     <div className="p-8">
-                        {/* SECCIÓN DE DATOS BANCARIOS Y BRE-B */}
                         <div className="mb-8 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-6">
                             <h2 className="font-bold text-blue-800 flex items-center gap-2 text-lg">
                                 <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
                             </h2>
                             
-                            {/* Tarjeta Destacada de Bre-B */}
                             <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex-1">
                                     <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado</span>
@@ -135,7 +128,6 @@ export default function ReportarPago() {
                                 </button>
                             </div>
 
-                            {/* Métodos Tradicionales */}
                             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-100/50 text-sm">
                                 <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
                                     <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
@@ -168,7 +160,6 @@ export default function ReportarPago() {
                                 </div>
                             </div>
 
-                            {/* SUBIDA DE IMAGEN */}
                             <div>
                                 <label className="block text-sm font-bold mb-2">Captura de Pantalla (Comprobante)</label>
                                 <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:bg-gray-50 transition-colors">
@@ -198,5 +189,13 @@ export default function ReportarPago() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ReportarPago() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Cargando formulario de reporte...</div>}>
+            <ReportarPagoForm />
+        </Suspense>
     );
 }

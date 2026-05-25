@@ -2,8 +2,8 @@
 const nextConfig = {
   allowedDevOrigins: ['192.168.1.8', 'localhost', '*.localhost', '*.192.168.1.8'],
   output: 'standalone',
-  
-  // DESACTIVAR EL INDICADOR DE DESARROLLO QUE CONGELA EL CELULAR
+
+  // Desactivar el indicador de desarrollo que congela el celular
   devIndicators: {
     appIsrStatus: false,
   },

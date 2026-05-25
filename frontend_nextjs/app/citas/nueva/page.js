@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react'; // Importamos iconos para el diseño
+import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react';
 import Link from 'next/link';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
 
-export default function NuevaCita() {
+function NuevaCitaForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -29,7 +29,6 @@ export default function NuevaCita() {
   const [pacientes, setPacientes] = useState([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
 
-  // 1. LÓGICA DE BÚSQUEDA AUTOMÁTICA (DEBOUNCE)
   useEffect(() => {
     if (buscarPaciente.length >= 3) {
       const delayDebounceFn = setTimeout(() => {
@@ -57,7 +56,7 @@ export default function NuevaCita() {
   const seleccionarPaciente = (paciente) => {
     setFormData({
       ...formData,
-      paciente_id: paciente.id, // El ID siempre es el UUID (String) proveniente de la base de datos
+      paciente_id: paciente.id,
       paciente_nombre: `${paciente.nombres} ${paciente.apellidos}`,
       paciente_telefono: paciente.telefono
     });
@@ -65,17 +64,14 @@ export default function NuevaCita() {
     setMostrarResultados(false);
   };
 
-  // app/citas/nueva/page.js
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // ✅ CORRECCIÓN: Incluir nombre y teléfono para que el backend los guarde
     const datosLimpios = {
-      paciente_id: formData.paciente_id, // El UUID (si seleccionó uno)
-      paciente_nombre: formData.paciente_nombre, // El nombre escrito o seleccionado
-      paciente_telefono: formData.paciente_telefono, // El teléfono
+      paciente_id: formData.paciente_id,
+      paciente_nombre: formData.paciente_nombre,
+      paciente_telefono: formData.paciente_telefono,
       fecha: formData.fecha,
       hora: formData.hora,
       motivo: formData.motivo || "Consulta",
@@ -106,7 +102,6 @@ export default function NuevaCita() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 text-black">
-      {/* Cabecera Estilo Pagos */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Nueva Cita</h1>
@@ -121,8 +116,6 @@ export default function NuevaCita() {
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* BUSCADOR DE PACIENTES - DISEÑO MEJORADO */}
           <div className="relative">
             <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
               Buscar Paciente Existente
@@ -138,7 +131,6 @@ export default function NuevaCita() {
               />
             </div>
             
-            {/* Resultados flotantes estilo profesional */}
             {mostrarResultados && pacientes.length > 0 && (
               <div className="absolute z-10 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                 {pacientes.map(p => (
@@ -157,7 +149,6 @@ export default function NuevaCita() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
-            {/* Fecha */}
             <div>
               <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
                 <Calendar className="w-3.5 h-3.5" /> Fecha
@@ -171,7 +162,6 @@ export default function NuevaCita() {
               />
             </div>
 
-            {/* Hora */}
             <div>
               <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
                 <span className="text-[10px]">⏰</span> Hora
@@ -186,7 +176,6 @@ export default function NuevaCita() {
             </div>
           </div>
 
-          {/* Datos del Paciente Seleccionado */}
           <div className="space-y-4 pt-4">
              <div>
                 <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
@@ -229,7 +218,6 @@ export default function NuevaCita() {
              </div>
           </div>
 
-          {/* Botones de Acción */}
           <div className="flex gap-4 pt-6">
             <button 
               type="submit" 
@@ -249,5 +237,13 @@ export default function NuevaCita() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function NuevaCita() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de cita...</div>}>
+      <NuevaCitaForm />
+    </Suspense>
   );
 }
