@@ -1,0 +1,7 @@
+.gcloudignore
+.git
+.gitignore
+venv_fastapi/
+__pycache__/
+*.pyc
+.env
