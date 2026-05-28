@@ -1,3 +1,12 @@
+'use client';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { authFetch, API_ENDPOINTS, API_BASE_URL } from '@/config/api';
+import { 
+  Search, ArrowLeft, Eye, EyeOff, Plus, 
+  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp, Trash2
+} from 'lucide-react';
+
 export default function HistorialPagos() {
   const router = useRouter();
   
@@ -71,7 +80,7 @@ export default function HistorialPagos() {
     setFiltrados(result);
   }, [busqueda, pagos]);
 
-  // FUNCIÓN AGREGADA: Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  // Formatea la fecha de forma segura sin usar zonas horarias del navegador
   const formatearFechaTabla = (fechaStr) => {
     if (!fechaStr) return '-';
     const partes = fechaStr.split('T')[0].split('-');

@@ -1,3 +1,9 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { authFetch, API_BASE_URL } from '@/config/api';
+import { Printer, MessageCircle, CheckCircle, LayoutDashboard } from 'lucide-react';
+
 export default function ReciboDetalle() {
   const { codigo } = useParams();
   const router = useRouter();
@@ -33,7 +39,7 @@ export default function ReciboDetalle() {
     }).format(valor);
   };
 
-  // FUNCIÓN AGREGADA: Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  // Formatea la fecha de forma segura sin usar zonas horarias del navegador
   const formatearFechaSegura = (fechaStr) => {
     if (!fechaStr) return '';
     const partes = fechaStr.split('T')[0].split('-');
