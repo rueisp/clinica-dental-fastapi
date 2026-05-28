@@ -1,12 +1,3 @@
-'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { authFetch, API_ENDPOINTS, API_BASE_URL } from '@/config/api';
-import { 
-  Search, ArrowLeft, Eye, EyeOff, Plus, 
-  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp, Trash2
-} from 'lucide-react';
-
 export default function HistorialPagos() {
   const router = useRouter();
   
@@ -36,7 +27,6 @@ export default function HistorialPagos() {
   const cargarPagos = async () => {
     setLoading(true);
     try {
-      // El backend espera mes 1-12, mesSeleccionado es 0-11
       const query = `?mes=${mesSeleccionado + 1}&anio=${anioSeleccionado}&page=${paginaActual}&per_page=5`;
       const res = await authFetch(API_ENDPOINTS.LISTAR_PAGOS(query));
       
@@ -81,10 +71,14 @@ export default function HistorialPagos() {
     setFiltrados(result);
   }, [busqueda, pagos]);
 
-  // 5. CÁLCULOS VISUALES
-  const calcularIngresoMensual = (mesIndex) => {
-    // Como la paginación es por servidor, aquí sumamos solo lo que hay en el mes cargado
-    return pagos.reduce((acc, p) => acc + (p.monto || 0), 0);
+  // FUNCIÓN AGREGADA: Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  const formatearFechaTabla = (fechaStr) => {
+    if (!fechaStr) return '-';
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return fechaStr;
   };
 
   const totalRecaudado = filtrados.reduce((acc, p) => acc + p.monto, 0);
@@ -219,16 +213,14 @@ export default function HistorialPagos() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col leading-none">
                         <span className="font-bold text-gray-900">
-                          {pago.fecha ? pago.fecha.split('-').reverse().join('/') : '-'}
+                          {formatearFechaTabla(pago.fecha)}
                         </span>
-                        {/* CAMBIO 1: Solo mostramos los últimos 6 dígitos del código */}
                         <span className="text-[10px] text-gray-400 font-mono mt-1 uppercase tracking-tighter">
                           #{pago.codigo?.split('-').pop()}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {/* CAMBIO 2: Nombre en minúsculas + Capitalize para formato "Pepe Papa" */}
                       <p className="font-bold text-black truncate max-w-[140px] capitalize">
                         {pago.paciente_nombre?.toLowerCase()}
                       </p>

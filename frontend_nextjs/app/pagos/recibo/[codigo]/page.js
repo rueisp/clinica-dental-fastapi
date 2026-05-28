@@ -1,9 +1,3 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { authFetch, API_BASE_URL } from '@/config/api';
-import { Printer, MessageCircle, CheckCircle, LayoutDashboard } from 'lucide-react';
-
 export default function ReciboDetalle() {
   const { codigo } = useParams();
   const router = useRouter();
@@ -39,15 +33,23 @@ export default function ReciboDetalle() {
     }).format(valor);
   };
 
+  // FUNCIÓN AGREGADA: Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  const formatearFechaSegura = (fechaStr) => {
+    if (!fechaStr) return '';
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [anio, mes, dia] = partes;
+      return `${dia}/${mes}/${anio}`;
+    }
+    return fechaStr;
+  };
+
   const enviarWhatsApp = () => {
     const urlRecibo = window.location.href;
-    // Extraemos el nombre de la clínica/doctor dinámicamente y lo convertimos a mayúsculas para el encabezado
     const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
     
-    // Mantenemos exactamente tu mensaje original con %0A y la URL limpia
     const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
     
-    // Lógica inteligente de teléfono (Soporta locales de 10 dígitos e internacionales con "+")
     const telefonoOriginal = pago.telefono || '';
     const telLimpio = telefonoOriginal.replace(/\D/g, '');
     
@@ -82,9 +84,9 @@ export default function ReciboDetalle() {
             <p className="text-gray-400 text-[11px] uppercase tracking-[0.2em] font-medium">
               {pago.codigo}
             </p>
-            {/* ✅ CORRECCIÓN DE FECHA Y HORA */}
+            {/* ✅ FECHA FORMATEADA DE FORMA SEGURA */}
             <div className="text-gray-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
-              <span>{pago.fecha}</span> 
+              <span>{formatearFechaSegura(pago.fecha)}</span> 
               <span className="text-gray-600">•</span>
               <span>{pago.hora ? pago.hora.substring(0, 5) : ''}</span>
             </div>
@@ -155,7 +157,6 @@ export default function ReciboDetalle() {
                 </div>
                 <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
               </button>
-              {/* Este separador solo existe si existe el botón anterior */}
               <div className="w-[1px] h-8 bg-gray-200" />
             </>
           )}
