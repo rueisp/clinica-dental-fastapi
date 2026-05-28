@@ -34,39 +34,32 @@ async def crear_pago(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        # 1. OBTENEMOS EL MOMENTO EXACTO EN COLOMBIA (Reloj del servidor)
-        # Esto garantiza que el pago siempre sea "hoy" y "ahora" en Bogotá.
+        # 1. Obtener el momento exacto en Colombia
         ahora_colombia = datetime.now(COLOMBIA_TZ)
-        
-        # 2. Lógica de rescate de datos del paciente
         paciente_nombre_final = pago_data.paciente_nombre
         telefono_final = pago_data.telefono
         
         if pago_data.paciente_id:
-            # Buscamos al paciente para traer su nombre real y teléfono si no se envió uno
             result = await db.execute(
                 select(Paciente).where(Paciente.id == pago_data.paciente_id)
             )
             paciente = result.scalar_one_or_none()
-            
             if paciente:
-                # Priorizamos nombres de la DB
                 paciente_nombre_final = f"{paciente.nombres} {paciente.apellidos}"
-                # Si en el form no pusieron teléfono, usamos el de la ficha
                 if not telefono_final and paciente.telefono:
                     telefono_final = paciente.telefono
         
-        # 3. Crear el pago usando el objeto 'ahora_colombia' para todo
+        # 2. Crear el registro
         nuevo_pago = PagoClinico(
             paciente_id=pago_data.paciente_id,
             odontologo_id=current_user.id,
             monto=pago_data.monto,
             metodo_pago=pago_data.metodo_pago,
-            fecha=ahora_colombia,           # <--- FECHA Y HORA REAL DE BOGOTÁ
-            hora=ahora_colombia.time(),      # <--- HORA REAL DE BOGOTÁ
+            fecha=ahora_colombia,
+            hora=ahora_colombia.time(),
             paciente_nombre=paciente_nombre_final,
             concepto=pago_data.concepto,
-            codigo=generar_codigo_unico(),   # El código R-2024... coincidirá con 'fecha'
+            codigo=generar_codigo_unico(),
             observacion=pago_data.observacion,
             telefono=telefono_final,
             es_rapido=pago_data.es_rapido
@@ -76,19 +69,37 @@ async def crear_pago(
         await db.commit()
         await db.refresh(nuevo_pago)
 
-        # 4. LIMPIEZA PARA EL FRONTEND:
-        # Antes de devolver el dato, aseguramos que la fecha sea solo el 'date' local.
-        if isinstance(nuevo_pago.fecha, datetime):
-            nuevo_pago.fecha = nuevo_pago.fecha.astimezone(COLOMBIA_TZ).date()
-        
-        return nuevo_pago
+        # 3. Formatear la fecha de forma segura como objeto date local sin modificar el objeto de la DB
+        fecha_local = nuevo_pago.fecha
+        if isinstance(fecha_local, datetime):
+            fecha_local = fecha_local.astimezone(COLOMBIA_TZ).date()
+        elif isinstance(fecha_local, str):
+            try:
+                fecha_local = datetime.strptime(fecha_local, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        return PagoResponse(
+            id=nuevo_pago.id,
+            codigo=nuevo_pago.codigo,
+            paciente_id=nuevo_pago.paciente_id,
+            paciente_nombre=nuevo_pago.paciente_nombre,
+            fecha=fecha_local,
+            hora=nuevo_pago.hora,
+            monto=float(nuevo_pago.monto),
+            metodo_pago=nuevo_pago.metodo_pago,
+            concepto=nuevo_pago.concepto,
+            observacion=nuevo_pago.observacion,
+            telefono=nuevo_pago.telefono,
+            es_rapido=nuevo_pago.es_rapido,
+            created_at=nuevo_pago.fecha if isinstance(nuevo_pago.fecha, datetime) else None
+        )
         
     except Exception as e:
         await db.rollback()
-        print(f"DEBUG ERROR: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al registrar el pago: {str(e)}"
+            detail=str(e)
         )
 
 @router.get("/{id}", response_model=PagoResponse)
@@ -106,7 +117,6 @@ async def obtener_pago_por_codigo(
     codigo: str, 
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscamos el pago y unimos con el odontólogo que lo creó
     query = (
         select(PagoClinico, Usuario)
         .join(Usuario, PagoClinico.odontologo_id == Usuario.id)
@@ -120,21 +130,24 @@ async def obtener_pago_por_codigo(
 
     pago, doctor = row
     
-    # Parche de fecha (el que ya tienes)
-    if hasattr(pago, 'fecha') and isinstance(pago.fecha, datetime):
-        pago.fecha = pago.fecha.astimezone(COLOMBIA_TZ).date()
-
+    # Formatear la fecha de forma segura sin modificar el objeto de la DB
+    fecha_str = ""
+    if pago.fecha:
+        if isinstance(pago.fecha, datetime):
+            fecha_str = pago.fecha.astimezone(COLOMBIA_TZ).strftime('%Y-%m-%d')
+        else:
+            # Si ya es un objeto date, lo formateamos directamente sin astimezone
+            fecha_str = pago.fecha.strftime('%Y-%m-%d')
     return {
         "codigo": pago.codigo,
         "paciente_nombre": pago.paciente_nombre or "Paciente",
-        "fecha": pago.fecha.strftime('%Y-%m-%d') if pago.fecha else "",
+        "fecha": fecha_str,
         "hora": pago.hora.strftime('%H:%M') if pago.hora else "",
         "monto": float(pago.monto),
         "metodo_pago": pago.metodo_pago,
         "concepto": pago.concepto or "Consulta",
         "observacion": pago.observacion,
         "telefono": pago.telefono,
-        # ✅ AQUÍ ENVIAMOS LOS DATOS DE MARCA
         "clinica_nombre": doctor.nombre_consultorio or f"Dr. {doctor.nombres} {doctor.apellidos}",
         "clinica_telefono": doctor.telefono or ""
     }
@@ -168,20 +181,34 @@ async def listar_pagos(
     result = await db.execute(query)
     pagos_db = result.scalars().all()
 
-    # 5. LIMPIEZA DE DATOS: Fechas y nombres
+    # 5. Construir la respuesta mapeando a diccionarios limpios sin alterar la DB
+    pagos_list = []
     for p in pagos_db:
-        if hasattr(p, 'fecha') and p.fecha is not None:
+        fecha_str = ""
+        if p.fecha:
             if isinstance(p.fecha, datetime):
-                p.fecha = p.fecha.astimezone(COLOMBIA_TZ).date()
-        
-        # Mapeo de Concepto (para que no salga vacío)
-        p.concepto = getattr(p, 'concepto', "Consulta")
-        if not getattr(p, 'paciente_nombre', None):
-            p.paciente_nombre = "Paciente General"
+                fecha_str = p.fecha.astimezone(COLOMBIA_TZ).strftime('%Y-%m-%d')
+            else:
+                fecha_str = p.fecha.strftime('%Y-%m-%d')
+                
+        pagos_list.append({
+            "id": p.id,
+            "codigo": p.codigo,
+            "paciente_id": p.paciente_id,
+            "paciente_nombre": p.paciente_nombre or "Paciente General",
+            "fecha": fecha_str,
+            "hora": p.hora.strftime('%H:%M') if p.hora else None,
+            "monto": float(p.monto),
+            "metodo_pago": p.metodo_pago or "Efectivo",
+            "concepto": p.concepto or "Consulta",
+            "observacion": p.observacion,
+            "telefono": p.telefono,
+            "es_rapido": p.es_rapido
+        })
 
     return {
         "total": total_count,
-        "pagos": pagos_db,
+        "pagos": pagos_list,
         "total_pages": (total_count + per_page - 1) // per_page
     }
 
