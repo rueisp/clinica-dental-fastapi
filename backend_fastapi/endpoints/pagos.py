@@ -55,7 +55,7 @@ async def crear_pago(
             odontologo_id=current_user.id,
             monto=pago_data.monto,
             metodo_pago=pago_data.metodo_pago,
-            fecha=ahora_colombia,
+            fecha=ahora_colombia.date(),  
             hora=ahora_colombia.time(),
             paciente_nombre=paciente_nombre_final,
             concepto=pago_data.concepto,
@@ -134,10 +134,12 @@ async def obtener_pago_por_codigo(
     fecha_str = ""
     if pago.fecha:
         if isinstance(pago.fecha, datetime):
-            fecha_str = pago.fecha.astimezone(COLOMBIA_TZ).strftime('%Y-%m-%d')
+            # Si por alguna razón es datetime, extraemos su fecha local directamente sin restar horas
+            fecha_str = pago.fecha.date().strftime('%Y-%m-%d')
         else:
-            # Si ya es un objeto date, lo formateamos directamente sin astimezone
+            # Si es date, lo formateamos directamente
             fecha_str = pago.fecha.strftime('%Y-%m-%d')
+
     return {
         "codigo": pago.codigo,
         "paciente_nombre": pago.paciente_nombre or "Paciente",
@@ -187,10 +189,10 @@ async def listar_pagos(
         fecha_str = ""
         if p.fecha:
             if isinstance(p.fecha, datetime):
-                fecha_str = p.fecha.astimezone(COLOMBIA_TZ).strftime('%Y-%m-%d')
+                fecha_str = p.fecha.date().strftime('%Y-%m-%d')
             else:
                 fecha_str = p.fecha.strftime('%Y-%m-%d')
-                
+
         pagos_list.append({
             "id": p.id,
             "codigo": p.codigo,
