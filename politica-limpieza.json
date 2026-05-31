@@ -1,0 +1,20 @@
+[
+  {
+    "name": "borrar-imagenes-antiguas",
+    "action": {
+      "type": "Delete"
+    },
+    "condition": {
+      "olderThan": "10d"
+    }
+  },
+  {
+    "name": "conservar-minimo-recientes",
+    "action": {
+      "type": "Keep"
+    },
+    "mostRecentVersions": {
+      "keepCount": 2
+    }
+  }
+]

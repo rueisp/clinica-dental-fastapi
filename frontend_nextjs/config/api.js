@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   PLANES: `${API_BASE_URL}/api/planes/`,
   REPORTAR_PAGO: `${API_BASE_URL}/api/pagos/reportar`,
   ACTIVAR_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/activar-manual/${id}`,
+  SUSPENDER_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/suspender-manual/${id}`,
   ADMIN_PAGOS_PENDIENTES: `${API_BASE_URL}/api/pagos/admin/pendientes`,
   APROBAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/aprobar/${id}`,
   RECHAZAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/rechazar/${id}`, // <--- AÑADE ESTA

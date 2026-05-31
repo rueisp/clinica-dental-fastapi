@@ -232,8 +232,8 @@ export default function AdminDashboard() {
                                                         <span className="text-xs font-black uppercase text-gray-600">{user.estado.replace('_', ' ')}</span>
                                                     </div>
                                                     
-                                                    {/* BOTÓN DE RESCATE: Solo aparece si NO está activo */}
-                                                    {user.estado !== 'active' && (
+                                                    {/* BOTÓN DE ACTIVACIÓN: Solo si NO está activo */}
+                                                    {user.estado !== 'active' ? (
                                                         <button 
                                                             onClick={async () => {
                                                                 if(confirm(`¿Deseas activar manualmente a ${user.nombre}?`)) {
@@ -252,9 +252,33 @@ export default function AdminDashboard() {
                                                                     }
                                                                 }
                                                             }}
-                                                            className="text-[9px] bg-black text-white px-2 py-1 rounded-md font-bold hover:bg-purple-600 transition-colors"
+                                                            className="text-[9px] bg-black text-white px-2 py-1 rounded-md font-bold hover:bg-purple-600 transition-colors cursor-pointer"
                                                         >
                                                             ACTIVAR AHORA
+                                                        </button>
+                                                    ) : (
+                                                        /* BOTÓN DE SUSPENSIÓN: Solo si SÍ está activo */
+                                                        <button 
+                                                            onClick={async () => {
+                                                                if(confirm(`⚠️ ¿Estás seguro de suspender la cuenta de ${user.nombre}? Perderá acceso inmediato a la plataforma.`)) {
+                                                                    try {
+                                                                        const res = await authFetch(API_ENDPOINTS.SUSPENDER_MANUAL(user.id), {method: 'POST'});
+                                                                        const data = await res.json();
+                                                                        
+                                                                        if(res.ok) {
+                                                                            alert("🛑 ¡Cuenta suspendida con éxito!");
+                                                                            cargarDatos(); // Recargar la tabla
+                                                                        } else {
+                                                                            alert("❌ Error: " + (data.detail || "No se pudo suspender"));
+                                                                        }
+                                                                    } catch (err) {
+                                                                        alert("❌ Error de conexión al suspender");
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="text-[9px] bg-red-50 text-red-600 border border-red-100 px-2 py-1 rounded-md font-bold hover:bg-red-600 hover:text-white transition-all cursor-pointer"
+                                                        >
+                                                            SUSPENDER
                                                         </button>
                                                     )}
                                                 </div>

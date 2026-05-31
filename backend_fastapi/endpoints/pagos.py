@@ -589,3 +589,26 @@ async def rechazar_pago_admin(
     await db.commit()
     
     return {"success": True, "message": "Pago rechazado. El usuario ha sido desbloqueado."}
+
+@router.post("/admin/suspender-manual/{user_id}")
+async def suspender_manual_admin(
+    user_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    # 1. Buscar la suscripción del usuario
+    res_sub = await db.execute(select(Subscription).where(Subscription.user_id == uuid.UUID(user_id)))
+    suscripcion = res_sub.scalar_one_or_none()
+    
+    if not suscripcion:
+        raise HTTPException(status_code=404, detail="Suscripción no encontrada")
+
+    # 2. Cambiar el estado a inactivo
+    suscripcion.status = "inactive"
+    suscripcion.updated_at = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+
+    await db.commit()
+    return {"success": True, "message": "Suscripción suspendida correctamente"}
