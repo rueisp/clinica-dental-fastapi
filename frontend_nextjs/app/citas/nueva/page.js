@@ -44,7 +44,7 @@ function NuevaCitaForm() {
 
   const buscarPacientesAPI = async (termino) => {
     try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes?search=${termino}`);
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes/?search=${termino}`);
       const data = await response.json();
       setPacientes(data.pacientes || []);
       setMostrarResultados(true);
