@@ -43,6 +43,7 @@ The content is organized as follows:
 .gitignore
 backend_fastapi/.env
 backend_fastapi/.env.example
+backend_fastapi/.gcloudignore
 backend_fastapi/.gitignore
 backend_fastapi/app.py
 backend_fastapi/config.py
@@ -157,44 +158,14 @@ CLOUDINARY_API_KEY=tu_api_key
 CLOUDINARY_API_SECRET=tu_api_secret
 </file>
 
-<file path="backend_fastapi/database.py">
-# database.py
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    pool_size=5,
-    max_overflow=10,
-    pool_pre_ping=True,
-    connect_args={"statement_cache_size": 0}
-)
-
-AsyncSessionLocal = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
-
-Base = declarative_base()
-
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+<file path="backend_fastapi/.gcloudignore">
+.gcloudignore
+.git
+.gitignore
+venv_fastapi/
+__pycache__/
+*.pyc
+.env
 </file>
 
 <file path="backend_fastapi/endpoints/__init__.py">
@@ -1013,45 +984,6 @@ export function UserProvider({ children }) {
 export const useUser = () => useContext(UserContext);
 </file>
 
-<file path="frontend_nextjs/Dockerfile">
-# Etapa 1: Instalar dependencias
-FROM node:18-slim AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-
-# Etapa 2: Construir la aplicación
-FROM node:18-slim AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Variable de entorno requerida en tiempo de compilación (Build-time)
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_TELEMETRY_DISABLED 1
-
-RUN npm run build
-
-# Etapa 3: Servidor de producción ultra-ligero
-FROM node:18-slim AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
-
-# Copiar únicamente lo necesario para ejecutar el modo standalone
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-EXPOSE 3000
-
-# Ejecutar el servidor standalone nativo de Next.js
-CMD ["node", "server.js"]
-</file>
-
 <file path="frontend_nextjs/eslint.config.mjs">
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
@@ -1162,28 +1094,47 @@ echo Host: 0.0.0.0 (Visible en red local)
 pause
 </file>
 
-<file path="backend_fastapi/Dockerfile">
-FROM python:3.11-slim
+<file path="backend_fastapi/database.py">
+# database.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+import os
+from dotenv import load_dotenv
 
-# Evitar que Python escriba archivos .pyc y habilitar salida de logs inmediata
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+load_dotenv()
 
-WORKDIR /app
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Instalar dependencias del sistema necesarias para compilar ciertas librerías
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0
+    }
+)
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+AsyncSessionLocal = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
-COPY . .
+Base = declarative_base()
 
-# Cloud Run inyecta la variable $PORT automáticamente.
-# Escuchamos en 0.0.0.0 para que el tráfico externo sea ruteado correctamente.
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8001}"]
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 </file>
 
 <file path="backend_fastapi/schemas/plan.py">
@@ -3035,210 +2986,6 @@ export default function Papelera() {
 }
 </file>
 
-<file path="frontend_nextjs/app/planes/reportar/page.js">
-'use client';
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { API_ENDPOINTS, authFetch } from '@/config/api';
-import { Upload, CheckCircle, CreditCard, ArrowLeft, Copy, Check, Zap } from 'lucide-react';
-
-function ReportarPagoForm() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    
-    const [planId, setPlanId] = useState(searchParams.get('plan_id') || '');
-    const [planNombre, setPlanNombre] = useState(searchParams.get('plan_nombre') || 'Plan Profesional');
-    const [monto, setMonto] = useState('');
-    const [referencia, setReferencia] = useState('');
-    const [imageUrl, setImageUrl] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [enviado, setEnviado] = useState(false);
-    const [copiado, setCopiado] = useState(false);
-
-    const llaveBreB = "3147953756";
-
-    const handleCopiarLlave = () => {
-        navigator.clipboard.writeText(llaveBreB);
-        setCopiado(true);
-        setTimeout(() => setCopiado(false), 2000);
-    };
-
-    const handleUploadImage = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setLoading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', 'ml_default2');
-
-        try {
-            const res = await fetch('https://api.cloudinary.com/v1_1/dlueb7c6r/image/upload', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            setImageUrl(data.secure_url);
-        } catch (err) {
-            alert("Error al subir la imagen");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!imageUrl) return alert("Por favor sube la captura del pago");
-
-        setLoading(true);
-        try {
-            const response = await authFetch(API_ENDPOINTS.REPORTAR_PAGO, {
-                method: 'POST',
-                body: JSON.stringify({
-                    plan_id: planId,
-                    plan_nombre: planNombre,
-                    monto: parseFloat(monto),
-                    comprobante_url: imageUrl,
-                    referencia_pago: referencia
-                })
-            });
-
-            if (response.ok) {
-                setEnviado(true);
-                setTimeout(() => router.push('/dashboard'), 3000);
-            }
-        } catch (err) {
-            alert("Error al enviar el reporte");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (enviado) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md">
-                    <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold mb-2">¡Pago Reportado!</h2>
-                    <p className="text-gray-600">Estamos verificando tu transferencia. Tu plan se activará en menos de 2 horas.</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen bg-gray-50 py-12 px-4">
-            <div className="max-w-2xl mx-auto">
-                <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-500 mb-6 hover:text-black">
-                    <ArrowLeft size={20} /> Volver
-                </button>
-
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="bg-black p-6 text-white">
-                        <h1 className="text-2xl font-bold">Reportar Pago: {planNombre}</h1>
-                        <p className="opacity-90">Completa los datos para activar tu suscripción.</p>
-                    </div>
-
-                    <div className="p-8">
-                        <div className="mb-8 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-6">
-                            <h2 className="font-bold text-blue-800 flex items-center gap-2 text-lg">
-                                <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
-                            </h2>
-                            
-                            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex-1">
-                                    <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado</span>
-                                    <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
-                                        ⚡ Pago Instantáneo Bre-B
-                                    </h3>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Transfiere gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando esta llave:
-                                    </p>
-                                    <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCopiarLlave}
-                                    className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
-                                >
-                                    {copiado ? <Check size={14} /> : <Copy size={14} />}
-                                    {copiado ? '¡COPIADO!' : 'COPIAR LLAVE'}
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-100/50 text-sm">
-                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
-                                    <p className="font-bold text-gray-700 text-base mt-0.5">314-7953756</p>
-                                </div>
-                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
-                                    <p className="font-bold text-gray-700 text-base mt-0.5">912-113608-82</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold mb-2">Monto Pagado</label>
-                                    <input 
-                                        type="number" placeholder="Ej: 30000" required
-                                        value={monto} onChange={(e) => setMonto(e.target.value)}
-                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold mb-2">Referencia / Celular</label>
-                                    <input 
-                                        type="text" placeholder="Número de comprobante" required
-                                        value={referencia} onChange={(e) => setReferencia(e.target.value)}
-                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold mb-2">Captura de Pantalla (Comprobante)</label>
-                                <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:bg-gray-50 transition-colors">
-                                    {imageUrl ? (
-                                        <img src={imageUrl} alt="Pago" className="max-h-48 mx-auto rounded-lg" />
-                                    ) : (
-                                        <div className="flex flex-col items-center">
-                                            <Upload className="text-gray-400 mb-2" size={32} />
-                                            <p className="text-gray-500 text-sm">Haz clic para subir la foto del recibo</p>
-                                        </div>
-                                    )}
-                                    <input 
-                                        type="file" accept="image/*" onChange={handleUploadImage}
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                    />
-                                </div>
-                            </div>
-
-                            <button 
-                                type="submit" disabled={loading}
-                                className="w-full py-4 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition disabled:opacity-50"
-                            >
-                                {loading ? 'Procesando...' : 'ENVIAR REPORTE DE PAGO'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-export default function ReportarPago() {
-    return (
-        <Suspense fallback={<div className="p-8 text-center">Cargando formulario de reporte...</div>}>
-            <ReportarPagoForm />
-        </Suspense>
-    );
-}
-</file>
-
 <file path="frontend_nextjs/app/privacidad/page.js">
 'use client';
 import Navbar from '@/components/landing/Navbar';
@@ -3806,6 +3553,30 @@ async def get_current_user(
             detail="Token inválido o expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
+</file>
+
+<file path="backend_fastapi/Dockerfile">
+FROM python:3.11-slim
+
+# Evitar que Python escriba archivos .pyc y habilitar salida de logs inmediata
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Instalar dependencias del sistema necesarias para compilar ciertas librerías
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Cloud Run inyecta la variable $PORT automáticamente.
+# Escuchamos en 0.0.0.0 para que el tráfico externo sea ruteado correctamente.
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8001}"]
 </file>
 
 <file path="backend_fastapi/endpoints/usuarios.py">
@@ -4774,7 +4545,7 @@ export default function ListaPacientes() {
     setHaBuscado(true);
     
     try {
-      const url = `${API_BASE_URL}/api/pacientes?page=1&per_page=${porPagina}`;
+      const url = `${API_BASE_URL}/api/pacientes/?page=1&per_page=${porPagina}`;
       
       const response = await authFetch(url);
       const data = await response.json();
@@ -4795,7 +4566,7 @@ export default function ListaPacientes() {
     setHaBuscado(true);
     
     try {
-      let url = `${API_BASE_URL}/api/pacientes?page=${page}&per_page=${porPagina}`;
+      let url = `${API_BASE_URL}/api/pacientes/?page=${page}&per_page=${porPagina}`;
       if (buscar) {
         url += `&search=${buscar}`;
       }
@@ -4996,7 +4767,7 @@ export default function PlanesPage() {
       }
 
       // Cargar todos los planes
-      const resPlanes = await fetch(`${API_BASE_URL}/api/planes`);
+      const resPlanes = await fetch(`${API_BASE_URL}/api/planes/`);
       const planesData = await resPlanes.json();
       setPlanes(planesData);
     } catch (error) {
@@ -5202,6 +4973,210 @@ export default function PlanesPage() {
       </div>
     </div>
   );
+}
+</file>
+
+<file path="frontend_nextjs/app/planes/reportar/page.js">
+'use client';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { API_ENDPOINTS, authFetch } from '@/config/api';
+import { Upload, CheckCircle, CreditCard, ArrowLeft, Copy, Check, Zap } from 'lucide-react';
+
+function ReportarPagoForm() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    
+    const [planId, setPlanId] = useState(searchParams.get('plan_id') || '');
+    const [planNombre, setPlanNombre] = useState(searchParams.get('plan_nombre') || 'Plan Profesional');
+    const [monto, setMonto] = useState('');
+    const [referencia, setReferencia] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [enviado, setEnviado] = useState(false);
+    const [copiado, setCopiado] = useState(false);
+
+    const llaveBreB = "3147953756";
+
+    const handleCopiarLlave = () => {
+        navigator.clipboard.writeText(llaveBreB);
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 2000);
+    };
+
+    const handleUploadImage = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setLoading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'ml_default2');
+
+        try {
+            const res = await fetch('https://api.cloudinary.com/v1_1/dlueb7c6r/image/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            setImageUrl(data.secure_url);
+        } catch (err) {
+            alert("Error al subir la imagen");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!imageUrl) return alert("Por favor sube la captura del pago");
+
+        setLoading(true);
+        try {
+            const response = await authFetch(API_ENDPOINTS.REPORTAR_PAGO, {
+                method: 'POST',
+                body: JSON.stringify({
+                    plan_id: planId,
+                    plan_nombre: planNombre,
+                    monto: parseFloat(monto),
+                    comprobante_url: imageUrl,
+                    referencia_pago: referencia
+                })
+            });
+
+            if (response.ok) {
+                setEnviado(true);
+                setTimeout(() => router.push('/dashboard'), 3000);
+            }
+        } catch (err) {
+            alert("Error al enviar el reporte");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (enviado) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md">
+                    <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold mb-2">¡Pago Reportado!</h2>
+                    <p className="text-gray-600">Estamos verificando tu transferencia. Tu plan se activará en menos de 2 horas.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-50 py-12 px-4">
+            <div className="max-w-2xl mx-auto">
+                <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-500 mb-6 hover:text-black">
+                    <ArrowLeft size={20} /> Volver
+                </button>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-black p-6 text-white">
+                        <h1 className="text-2xl font-bold">Reportar Pago: {planNombre}</h1>
+                        <p className="opacity-90">Completa los datos para activar tu suscripción.</p>
+                    </div>
+
+                    <div className="p-8">
+                        <div className="mb-8 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-6">
+                            <h2 className="font-bold text-blue-800 flex items-center gap-2 text-lg">
+                                <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
+                            </h2>
+                            
+                            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                    <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado</span>
+                                    <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
+                                        ⚡ Pago Instantáneo Bre-B
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Transfiere gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando esta llave:
+                                    </p>
+                                    <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleCopiarLlave}
+                                    className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
+                                >
+                                    {copiado ? <Check size={14} /> : <Copy size={14} />}
+                                    {copiado ? '¡COPIADO!' : 'COPIAR LLAVE'}
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-100/50 text-sm">
+                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
+                                    <p className="font-bold text-gray-700 text-base mt-0.5">314-7953756</p>
+                                </div>
+                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
+                                    <p className="font-bold text-gray-700 text-base mt-0.5">912-113608-82</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Monto Pagado</label>
+                                    <input 
+                                        type="number" placeholder="Ej: 30000" required
+                                        value={monto} onChange={(e) => setMonto(e.target.value)}
+                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">Referencia / Celular</label>
+                                    <input 
+                                        type="text" placeholder="Número de comprobante" required
+                                        value={referencia} onChange={(e) => setReferencia(e.target.value)}
+                                        className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold mb-2">Captura de Pantalla (Comprobante)</label>
+                                <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:bg-gray-50 transition-colors">
+                                    {imageUrl ? (
+                                        <img src={imageUrl} alt="Pago" className="max-h-48 mx-auto rounded-lg" />
+                                    ) : (
+                                        <div className="flex flex-col items-center">
+                                            <Upload className="text-gray-400 mb-2" size={32} />
+                                            <p className="text-gray-500 text-sm">Haz clic para subir la foto del recibo</p>
+                                        </div>
+                                    )}
+                                    <input 
+                                        type="file" accept="image/*" onChange={handleUploadImage}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+
+                            <button 
+                                type="submit" disabled={loading}
+                                className="w-full py-4 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition disabled:opacity-50"
+                            >
+                                {loading ? 'Procesando...' : 'ENVIAR REPORTE DE PAGO'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default function ReportarPago() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center">Cargando formulario de reporte...</div>}>
+            <ReportarPagoForm />
+        </Suspense>
+    );
 }
 </file>
 
@@ -5453,38 +5428,43 @@ export default function Pricing() {
 }
 </file>
 
-<file path="frontend_nextjs/next.config.mjs">
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  allowedDevOrigins: ['192.168.1.8', 'localhost', '*.localhost', '*.192.168.1.8'],
-  output: 'standalone',
-  
-  // Ignorar errores de ESLint durante el build para que no bloqueen el despliegue
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+<file path="frontend_nextjs/Dockerfile">
+# Etapa 1: Instalar dependencias
+FROM node:20-slim AS deps
+WORKDIR /app
+COPY package*.json ./
+# Usamos --legacy-peer-deps para evitar conflictos estrictos con React 19
+RUN npm ci --legacy-peer-deps
 
-  // Desactivar el indicador de desarrollo que congela el celular
-  devIndicators: {
-    appIsrStatus: false,
-  },
-};
+# Etapa 2: Construir la aplicación
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
-export default nextConfig;
-</file>
+# Definimos la URL real del backend directamente para la compilación de Next.js
+ENV NEXT_PUBLIC_API_URL=https://dental-backend-779789369655.us-east1.run.app
+ENV NEXT_TELEMETRY_DISABLED 1
 
-<file path="backend_fastapi/.env">
-DATABASE_URL=postgresql+asyncpg://postgres.lzzhrmhurkahkplygtkc:Mandoca1407roso@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
-SUPABASE_URL=https://lzzhrmhurkahkplygtkc.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6emhybWh1cmtha2hwbHlndGtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDY5Njg4MTIsImV4cCI6MjAyMjU0NDgxMn0.v6-uO64
-SECRET_KEY=a75560a0869fdf1b58dcbf78eed6b53bd1823de25ff5aa17
+RUN npm run build
 
-TELEGRAM_TOKEN=8677917355:AAFI5bE5r9IsGEUkxWaQLrXImOmNRz1q_BE
-CHAT_ID=1108080476
+# Etapa 3: Servidor de producción ultra-ligero
+FROM node:20-slim AS runner
+WORKDIR /app
 
-CLOUDINARY_CLOUD_NAME=dlueb7c6r
-CLOUDINARY_API_KEY=769636716889216
-CLOUDINARY_API_SECRET=Z2YYOqLAi0ql4jFGjhHiDjslApo
+ENV NODE_ENV production
+ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+
+# Copiar únicamente lo necesario para ejecutar el modo standalone
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+
+# Ejecutar el servidor standalone nativo de Next.js
+CMD ["node", "server.js"]
 </file>
 
 <file path="backend_fastapi/app.py">
@@ -6234,297 +6214,6 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
 export default AgendaDiaria;
 </file>
 
-<file path="frontend_nextjs/app/dashboard/page.js">
-'use client';
-
-import { useState, useEffect, useRef, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import { LayoutList, Grid3X3, Zap, ChevronLeft, ChevronRight, DollarSign, Users, User } from 'lucide-react';
-import { authFetch, API_ENDPOINTS } from '@/config/api';
-import AuthGuard from '@/components/AuthGuard';
-import PlanAlerta from '@/components/dashboard/PlanAlerta';
-import AgendaDiaria from '@/app/components/dashboard/AgendaDiaria';
-import { getFechaHoyLocal } from '@/app/utils/fechas';
-import './calendar-styles.css';
-
-function DashboardContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  
-  const fechaSeleccionada = searchParams.get('fecha') || getFechaHoyLocal();
-
-  const [vista, setVista] = useState('dia');
-  const [eventos, setEventos] = useState([]);
-  const [usuario, setUsuario] = useState(null);
-  const [citasDia, setCitasDia] = useState([]);
-  const [loadingCitas, setLoadingCitas] = useState(true);
-  const cacheCitas = useRef({});
-
-  // ESTADOS PARA EL FILTRADO DE DOCTORES (EXCLUSIVO ADMIN)
-  const [doctores, setDoctores] = useState([]);
-  const [doctorSeleccionado, setDoctorSeleccionado] = useState('');
-
-  // 1. CARGAR LISTA DE DOCTORES SI EL USUARIO ES ADMIN
-  useEffect(() => {
-    const cargarDoctoresAdmin = async () => {
-      const isAdmin = localStorage.getItem('is_admin') === 'true';
-      if (isAdmin) {
-        try {
-          const res = await authFetch(API_ENDPOINTS.ADMIN_RESUMEN_USUARIOS);
-          if (res.ok) {
-            const data = await res.json();
-            setDoctores(data || []);
-          }
-        } catch (err) {
-          console.error("Error cargando doctores para admin:", err);
-        }
-      }
-    };
-    cargarDoctoresAdmin();
-  }, []);
-
-  // 2. RE-CARGAR DATOS CUANDO CAMBIE LA FECHA, LA VISTA O EL DOCTOR SELECCIONADO
-  useEffect(() => {
-    if (cacheCitas.current[fechaSeleccionada + doctorSeleccionado]) {
-      delete cacheCitas.current[fechaSeleccionada + doctorSeleccionado];
-    }
-    fetchDashboardData();
-  }, [fechaSeleccionada, vista, doctorSeleccionado]);
-
-  const fetchDashboardData = async (startDate = null, endDate = null) => {
-    const esConsultaDia = !startDate && !endDate;
-    const cacheKey = fechaSeleccionada + doctorSeleccionado;
-
-    if (esConsultaDia && cacheCitas.current[cacheKey]) {
-      setCitasDia(cacheCitas.current[cacheKey]);
-    } else if (esConsultaDia) {
-      setCitasDia([]);
-    }
-
-    if (!citasDia.length) {
-      setLoadingCitas(true);
-    }
-
-    try {
-      let queryParams = `?selected_date=${fechaSeleccionada}`;
-      
-      if (startDate && endDate) {
-        queryParams += `&start=${startDate}&end=${endDate}`;
-      }
-      
-      // Si el admin seleccionó un doctor, lo enviamos en la consulta
-      if (doctorSeleccionado) {
-        queryParams += `&doctor_id=${doctorSeleccionado}`;
-      }
-
-      const response = await authFetch(API_ENDPOINTS.DASHBOARD_HOME_DATA(queryParams));
-      const data = await response.json();
-      
-      if (data.success) {
-        setUsuario(data.usuario);
-        
-        if (data.eventos) {
-          setEventos(data.eventos.map(e => ({
-            ...e,
-            title: `${e.title?.match(/\d+/)?.[0] || '0'}`
-          })));
-        }
-        
-        const nuevasCitas = data.citas_dia || [];
-        setCitasDia(nuevasCitas);
-        
-        if (esConsultaDia) {
-          cacheCitas.current[cacheKey] = nuevasCitas;
-        }
-      }
-    } catch (err) {
-      console.error('Error cargando Dashboard:', err);
-    } finally {
-      setLoadingCitas(false);
-    }
-  };
-
-  const cambiarFecha = (offset) => {
-    const [year, month, day] = fechaSeleccionada.split('-').map(Number);
-    const fechaActual = new Date(year, month - 1, day);
-    
-    fechaActual.setDate(fechaActual.getDate() + offset);
-    
-    const nuevaFecha = `${fechaActual.getFullYear()}-${String(fechaActual.getMonth() + 1).padStart(2, '0')}-${String(fechaActual.getDate()).padStart(2, '0')}`;
-    
-    router.replace(`/dashboard?fecha=${nuevaFecha}`, { scroll: false });
-  };
-
-  const formatearFechaMostrar = (fechaStr) => {
-    const [year, month, day] = fechaStr.split('-').map(Number);
-    const fechaObj = new Date(year, month - 1, day);
-    return fechaObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
-  };
-
-  return (
-    <AuthGuard>
-      <div className="min-h-screen bg-gray-50 pb-20">
-        {/* Cabecera */}
-        <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto sm:pr-40">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-black leading-tight">
-                Hola, {usuario?.nombre || 'Odontólogo'}!
-              </h1>
-              <p className="text-gray-500 text-sm font-medium">Panel Clínico</p>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              {/* SELECTOR DE DOCTOR (SOLO VISIBLE PARA EL ADMINISTRADOR) */}
-              {usuario?.is_admin && doctores.length > 0 && (
-                <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
-                  <User size={16} className="text-purple-600" />
-                  <select
-                    value={doctorSeleccionado}
-                    onChange={(e) => setDoctorSeleccionado(e.target.value)}
-                    className="bg-transparent border-none text-xs font-bold text-gray-700 outline-none cursor-pointer"
-                  >
-                    <option value="">Mi Agenda (Admin)</option>
-                    {doctores.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.nombre} ({doc.total_pacientes} pac)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Selector de Vistas */}
-              <div className="flex bg-gray-200/60 p-1 rounded-xl backdrop-blur-sm">
-                <button 
-                  onClick={() => setVista('dia')}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'dia' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-                >
-                  <LayoutList size={16} />
-                  <span className="text-[11px] font-bold uppercase tracking-tight">Día</span>
-                </button>
-                <button 
-                  onClick={() => setVista('mes')}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'mes' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
-                >
-                  <Grid3X3 size={16} />
-                  <span className="text-[11px] font-bold uppercase tracking-tight">Mes</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {vista === 'dia' && (
-            <div className="flex items-center justify-between mb-6 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-              <button onClick={() => cambiarFecha(-1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
-                <ChevronLeft size={20} />
-              </button>
-              
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-bold capitalize text-gray-800">
-                  {formatearFechaMostrar(fechaSeleccionada)}
-                </h2>
-                {fechaSeleccionada !== getFechaHoyLocal() && (
-                  <button 
-                    onClick={() => router.replace(`/dashboard?fecha=${getFechaHoyLocal()}`, { scroll: false })}
-                    className="px-4 py-2 bg-black text-white hover:bg-gray-800 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-md active:scale-95"
-                  >
-                    Hoy
-                  </button>
-                )}
-              </div>
-
-              <button onClick={() => cambiarFecha(1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="max-w-5xl mx-auto px-4">
-          <PlanAlerta />
-
-          {vista === 'dia' && (
-            <AgendaDiaria 
-              fecha={fechaSeleccionada} 
-              citasExternas={citasDia} 
-              loading={loadingCitas} 
-            />
-          )}
-
-          {vista === 'mes' && (
-            <div className="bg-white min-h-[500px] w-screen sm:w-auto ml-[calc(-50vw+50%)] sm:ml-0 rounded-none sm:rounded-3xl p-4 border-y border-x-0 sm:border border-gray-100 shadow-sm">
-              <FullCalendar
-                plugins={[dayGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                locale="es"
-                headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-                events={eventos}
-                height="auto"
-                initialDate={fechaSeleccionada}
-                
-                datesSet={(dateInfo) => {
-                  fetchDashboardData(dateInfo.startStr.split('T')[0], dateInfo.endStr.split('T')[0]);
-                }}
-
-                dateClick={(info) => {
-                  router.push(`/dashboard?fecha=${info.dateStr}`);
-                  setVista('dia');
-                }}
-                
-                eventContent={(info) => (
-                  <div className="w-full flex justify-center items-center pt-1 pointer-events-none">
-                    <div className="flex items-center gap-1 bg-gray-100 border-2 border-gray-200 px-3 py-0.3 rounded-full">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
-                      <span className="text-sm font-black text-[#3b82f6] leading-none">
-                        {info.event.title}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Botones Flotantes */}
-        <div className="fixed top-6 right-6 z-50">
-          <button
-            onClick={() => router.push('/pacientes')}
-            className="flex items-center gap-2 bg-black hover:bg-gray-900 text-white px-5 py-3 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95"
-          >
-            <Users className="w-5 h-5" />
-            <span className="font-bold text-sm">Pacientes</span>
-          </button>
-        </div>
-
-        <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => router.push('/pagos/nuevo?rapido=1')}
-            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-4 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
-          >
-            <Zap className="w-5 h-5 fill-white" />
-            <span className="font-bold text-sm sm:text-base">Cobro Rápido</span>
-            <DollarSign className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-    </AuthGuard>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando Dashboard...</div>}>
-      <DashboardContent />
-    </Suspense>
-  );
-}
-</file>
-
 <file path="frontend_nextjs/app/pacientes/[id]/editar/page.js">
 'use client';
 
@@ -6740,293 +6429,33 @@ export default function EditarPaciente() {
 }
 </file>
 
-<file path="frontend_nextjs/app/pagos/page.js">
-'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { authFetch, API_ENDPOINTS, API_BASE_URL } from '@/config/api';
-import { 
-  Search, ArrowLeft, Eye, EyeOff, Plus, 
-  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp, Trash2
-} from 'lucide-react';
+<file path="frontend_nextjs/next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  allowedDevOrigins: ['192.168.1.8', 'localhost', '*.localhost', '*.192.168.1.8'],
+  output: 'standalone',
 
-export default function HistorialPagos() {
-  const router = useRouter();
-  
-  // --- ESTADOS PRINCIPALES ---
-  const [pagos, setPagos] = useState([]);
-  const [filtrados, setFiltrados] = useState([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [loading, setLoading] = useState(true);
-  
-  // --- ESTADOS DE PRIVACIDAD Y FILTROS ---
-  const [mostrarTotal, setMostrarTotal] = useState(false); 
-  const [mostrarHistorialAnual, setMostrarHistorialAnual] = useState(false);
-  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().getMonth()); 
-  const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
+  // Desactivar el indicador de desarrollo que congela el celular
+  devIndicators: {
+    appIsrStatus: false,
+  },
+};
 
-  // --- ESTADOS DE PAGINACIÓN ---
-  const [paginaActual, setPaginaActual] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [totalRegistros, setTotalRegistros] = useState(0);
+export default nextConfig;
+</file>
 
-  const meses = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
+<file path="backend_fastapi/.env">
+DATABASE_URL=postgresql+asyncpg://postgres.lzzhrmhurkahkplygtkc:Mandoca1407roso@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
+SUPABASE_URL=https://lzzhrmhurkahkplygtkc.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6emhybWh1cmtha2hwbHlndGtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDY5Njg4MTIsImV4cCI6MjAyMjU0NDgxMn0.v6-uO64
+SECRET_KEY=a75560a0869fdf1b58dcbf78eed6b53bd1823de25ff5aa17
 
-  // 1. FUNCIÓN DE CARGA: Trae los datos filtrados del servidor
-  const cargarPagos = async () => {
-    setLoading(true);
-    try {
-      // El backend espera mes 1-12, mesSeleccionado es 0-11
-      const query = `?mes=${mesSeleccionado + 1}&anio=${anioSeleccionado}&page=${paginaActual}&per_page=5`;
-      const res = await authFetch(API_ENDPOINTS.LISTAR_PAGOS(query));
-      
-      if (res.ok) {
-        const data = await res.json();
-        setPagos(data.pagos || []);
-        setFiltrados(data.pagos || []);
-        setTotalPaginas(data.total_pages || 1);
-        setTotalRegistros(data.total || 0);
-      }
-    } catch (err) {
-      console.error("Error cargando pagos:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+TELEGRAM_TOKEN=8677917355:AAFI5bE5r9IsGEUkxWaQLrXImOmNRz1q_BE
+CHAT_ID=1108080476
 
-  // 2. EFECTO: Se activa al cambiar mes, año o página
-  useEffect(() => {
-    cargarPagos();
-  }, [mesSeleccionado, anioSeleccionado, paginaActual]);
-
-  // 3. EFECTO: Reinicia a página 1 solo cuando cambias el filtro de tiempo
-  useEffect(() => {
-    setPaginaActual(1);
-  }, [mesSeleccionado, anioSeleccionado]);
-
-  // 4. EFECTO DE BÚSQUEDA: Filtra localmente lo que ya está en pantalla
-  useEffect(() => {
-    if (busqueda.trim().length < 3) {
-      setFiltrados(pagos);
-      return;
-    }
-
-    const terminos = busqueda.toLowerCase().split(' ').filter(t => t !== '');
-    const result = pagos.filter(p => {
-      const nombre = (p.paciente_nombre || '').toLowerCase();
-      const codigo = (p.codigo || '').toLowerCase();
-      return terminos.every(t => nombre.includes(t) || codigo.includes(t));
-    });
-
-    setFiltrados(result);
-  }, [busqueda, pagos]);
-
-  // 5. CÁLCULOS VISUALES
-  const calcularIngresoMensual = (mesIndex) => {
-    // Como la paginación es por servidor, aquí sumamos solo lo que hay en el mes cargado
-    return pagos.reduce((acc, p) => acc + (p.monto || 0), 0);
-  };
-
-  const totalRecaudado = filtrados.reduce((acc, p) => acc + p.monto, 0);
-
-  const eliminarPago = async (id, codigo) => {
-    if (!window.confirm(`¿Estás seguro de eliminar el recibo ${codigo}?`)) return;
-    try {
-      const res = await authFetch(`${API_BASE_URL}/api/pagos/${id}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        alert("Pago eliminado correctamente");
-        cargarPagos();
-      }
-    } catch (err) {
-      console.error("Error al eliminar:", err);
-    }
-  };
-
-  const formatearCOP = (valor) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency', currency: 'COP', minimumFractionDigits: 0
-    }).format(valor);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8 text-black">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* Cabecera */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <button onClick={() => router.push('/')} className="flex items-center text-gray-500 mb-2 hover:text-black transition-colors">
-              <ArrowLeft size={18} className="mr-1" /> Inicio
-            </button>
-            <h1 className="text-3xl font-black tracking-tight">Gestión de Ingresos</h1>
-          </div>
-          <button onClick={() => router.push('/pagos/nuevo')} className="w-full md:w-auto bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-gray-800 transition-all">
-            <Plus size={20} /> Nuevo Cobro
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Card Total Principal */}
-          <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-6">
-              <div className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center shadow-xl">
-                <TrendingUp size={32} />
-              </div>
-              <div>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Recaudación {meses[mesSeleccionado]}</p>
-                <div className="flex items-center gap-3">
-                  <p className={`text-4xl font-black transition-all duration-300 ${!mostrarTotal ? 'blur-md select-none' : ''}`}>
-                    {formatearCOP(totalRecaudado)}
-                  </p>
-                  <button onClick={() => setMostrarTotal(!mostrarTotal)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400">
-                    {mostrarTotal ? <EyeOff size={24} /> : <Eye size={24} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-start md:items-end gap-2 border-t md:border-none pt-4 md:pt-0">
-               <select 
-                value={mesSeleccionado}
-                onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
-                className="bg-gray-100 border-none rounded-xl font-bold text-sm p-2 outline-none cursor-pointer"
-               >
-                 {meses.map((m, i) => (
-                   <option key={i} value={i}>{m}</option>
-                 ))}
-               </select>
-               <p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">
-                 Página {paginaActual} de {totalPaginas} ({totalRegistros} total)
-               </p>
-            </div>
-          </div>
-
-          {/* Card Historial Anual */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 self-start overflow-hidden transition-all duration-300">
-            <button 
-              onClick={() => setMostrarHistorialAnual(!mostrarHistorialAnual)}
-              className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gray-100 rounded-lg text-gray-600">
-                  <CalendarDays size={18}/>
-                </div>
-                <h3 className="text-sm font-black text-gray-700 uppercase tracking-tight">
-                  Historial {anioSeleccionado}
-                </h3>
-              </div>
-              {mostrarHistorialAnual ? <ChevronUp size={20} className="text-gray-400"/> : <ChevronDown size={20} className="text-gray-400"/>}
-            </button>
-
-            {mostrarHistorialAnual && (
-              <div className="px-6 pb-6 pt-2 space-y-4">
-                <p className="text-[10px] text-gray-400 text-center uppercase font-bold tracking-widest pt-2">
-                   Filtra arriba para ver otros meses
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Buscador */}
-        <div className="flex gap-3 mb-6">
-          <input
-            type="text"
-            placeholder="Buscar por paciente o código..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="flex-1 md:w-96 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-black transition-all bg-white shadow-sm"
-          />
-        </div>
-
-        {/* Tabla de Resultados */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
-                  <th className="px-6 py-4">Fecha</th>
-                  <th className="px-6 py-4">Paciente</th>
-                  <th className="hidden sm:table-cell px-6 py-4">Concepto</th>
-                  <th className="px-6 py-4">Monto</th>
-                  <th className="px-6 py-4 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {!loading && filtrados.map((pago) => (
-                  <tr key={pago.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)}>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col leading-none">
-                        <span className="font-bold text-gray-900">
-                          {pago.fecha ? pago.fecha.split('-').reverse().join('/') : '-'}
-                        </span>
-                        {/* CAMBIO 1: Solo mostramos los últimos 6 dígitos del código */}
-                        <span className="text-[10px] text-gray-400 font-mono mt-1 uppercase tracking-tighter">
-                          #{pago.codigo?.split('-').pop()}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {/* CAMBIO 2: Nombre en minúsculas + Capitalize para formato "Pepe Papa" */}
-                      <p className="font-bold text-black truncate max-w-[140px] capitalize">
-                        {pago.paciente_nombre?.toLowerCase()}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
-                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-gray-100 text-gray-600">
-                        {pago.concepto || 'Consulta'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-black text-gray-900">{formatearCOP(pago.monto)}</span>
-                    </td>
-                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)} className="p-2 hover:bg-black hover:text-white rounded-xl transition-all text-gray-400">
-                          <Eye size={18} />
-                        </button>
-                        <button onClick={() => eliminarPago(pago.id, pago.codigo)} className="p-2 hover:bg-red-500 hover:text-white rounded-xl transition-all text-gray-400">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Paginación */}
-          {totalPaginas > 1 && (
-            <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Página {paginaActual} de {totalPaginas}</p>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => setPaginaActual(p => Math.max(p - 1, 1))} 
-                  disabled={paginaActual === 1} 
-                  className="p-2 bg-white border rounded-xl disabled:opacity-20 hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronLeft size={20}/>
-                </button>
-                <button 
-                  onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))} 
-                  disabled={paginaActual === totalPaginas} 
-                  className="p-2 bg-white border rounded-xl disabled:opacity-20 hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronRight size={20}/>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+CLOUDINARY_CLOUD_NAME=dlueb7c6r
+CLOUDINARY_API_KEY=769636716889216
+CLOUDINARY_API_SECRET=Z2YYOqLAi0ql4jFGjhHiDjslApo
 </file>
 
 <file path="backend_fastapi/dependencies/limites.py">
@@ -8078,258 +7507,6 @@ class PagoReporte(BaseModel):
     referencia_pago: str # El número que el doctor anote de Nequi/Bancolombia
 </file>
 
-<file path="frontend_nextjs/app/citas/nueva/page.js">
-'use client';
-
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react';
-import Link from 'next/link';
-import Button from '@/app/components/ui/Button';
-import { API_BASE_URL, authFetch } from '@/config/api';
-
-function NuevaCitaForm() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  
-  const fechaParam = searchParams.get('fecha');
-  const horaParam = searchParams.get('hora');
-  
-  const [formData, setFormData] = useState({
-    fecha: fechaParam || '',
-    hora: horaParam || '',
-    paciente_id: null,
-    paciente_nombre: '',
-    paciente_telefono: '',
-    motivo: '',
-    doctor: ''
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [buscarPaciente, setBuscarPaciente] = useState('');
-  const [pacientes, setPacientes] = useState([]);
-  const [mostrarResultados, setMostrarResultados] = useState(false);
-
-  useEffect(() => {
-    if (buscarPaciente.length >= 3) {
-      const delayDebounceFn = setTimeout(() => {
-        buscarPacientesAPI(buscarPaciente);
-      }, 400);
-
-      return () => clearTimeout(delayDebounceFn);
-    } else {
-      setPacientes([]);
-      setMostrarResultados(false);
-    }
-  }, [buscarPaciente]);
-
-  const buscarPacientesAPI = async (termino) => {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes?search=${termino}`);
-      const data = await response.json();
-      setPacientes(data.pacientes || []);
-      setMostrarResultados(true);
-    } catch (err) {
-      console.error('Error buscando pacientes:', err);
-    }
-  };
-
-  const seleccionarPaciente = (paciente) => {
-    setFormData({
-      ...formData,
-      paciente_id: paciente.id,
-      paciente_nombre: `${paciente.nombres} ${paciente.apellidos}`,
-      paciente_telefono: paciente.telefono
-    });
-    setBuscarPaciente('');
-    setMostrarResultados(false);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    const datosLimpios = {
-      paciente_id: formData.paciente_id,
-      paciente_nombre: formData.paciente_nombre,
-      paciente_telefono: formData.paciente_telefono,
-      fecha: formData.fecha,
-      hora: formData.hora,
-      motivo: formData.motivo || "Consulta",
-      doctor: formData.doctor || "Odontólogo General"
-    };
-
-    try {
-      const response = await authFetch(`${API_BASE_URL}/api/citas`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(datosLimpios) 
-      });
-      
-      if (response.ok) {
-        router.replace(`/dashboard?fecha=${formData.fecha}`);
-      } else {
-        const error = await response.json();
-        alert("Error: " + (error.detail || "No se pudo agendar"));
-      }
-    } catch (err) {
-      alert('Error de conexión');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8 text-black">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">Nueva Cita</h1>
-          <p className="text-gray-400 font-medium">Agendar cita médica</p>
-        </div>
-        <Link href="/dashboard">
-          <button className="bg-gray-100 text-gray-600 p-3 rounded-2xl hover:bg-gray-200 transition-all">
-            <Home className="w-6 h-6" />
-          </button>
-        </Link>
-      </div>
-
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="relative">
-            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-              Buscar Paciente Existente
-            </label>
-            <div className="relative">
-              <Search className="absolute left-4 top-3.5 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={buscarPaciente}
-                onChange={(e) => setBuscarPaciente(e.target.value)}
-                placeholder="Escribe nombre o documento..."
-                className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black/5 transition-all text-black font-medium"
-              />
-            </div>
-            
-            {mostrarResultados && pacientes.length > 0 && (
-              <div className="absolute z-10 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                {pacientes.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => seleccionarPaciente(p)}
-                    className="w-full text-left px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors group"
-                  >
-                    <div className="font-bold text-black group-hover:text-blue-600">{p.nombres} {p.apellidos}</div>
-                    <div className="text-xs text-gray-400 font-medium">Doc: {p.documento || 'N/A'} • Tel: {p.telefono}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
-            <div>
-              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-                <Calendar className="w-3.5 h-3.5" /> Fecha
-              </label>
-              <input
-                type="date"
-                value={formData.fecha}
-                onChange={(e) => setFormData({...formData, fecha: e.target.value})}
-                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-                <span className="text-[10px]">⏰</span> Hora
-              </label>
-              <input
-                type="time"
-                value={formData.hora}
-                onChange={(e) => setFormData({...formData, hora: e.target.value})}
-                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-4">
-             <div>
-                <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-                  <User className="w-3.5 h-3.5" /> Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  value={formData.paciente_nombre}
-                  onChange={(e) => setFormData({...formData, paciente_nombre: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5 font-medium"
-                  placeholder="Nombre del paciente"
-                  required
-                />
-             </div>
-             
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-                    <Phone className="w-3.5 h-3.5" /> Teléfono
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.paciente_telefono}
-                    onChange={(e) => setFormData({...formData, paciente_telefono: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
-                    <MessageSquare className="w-3.5 h-3.5" /> Motivo / Procedimiento
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.motivo}
-                    onChange={(e) => setFormData({...formData, motivo: e.target.value})}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
-                    placeholder="Ej: Limpieza dental"
-                  />
-                </div>
-             </div>
-          </div>
-
-          <div className="flex gap-4 pt-6">
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
-            >
-              {loading ? 'Agendando...' : 'Crear Cita'}
-            </button>
-            <button 
-              type="button"
-              onClick={() => router.back()}
-              className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
-            >
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export default function NuevaCita() {
-  return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de cita...</div>}>
-      <NuevaCitaForm />
-    </Suspense>
-  );
-}
-</file>
-
 <file path="frontend_nextjs/app/components/pacientes/Evoluciones.jsx">
 'use client';
 
@@ -8846,6 +8023,313 @@ export default function Sidebar() {
 }
 </file>
 
+<file path="frontend_nextjs/app/dashboard/page.js">
+'use client';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import { LayoutList, Grid3X3, Zap, ChevronLeft, ChevronRight, DollarSign, Users, User } from 'lucide-react';
+import { authFetch, API_ENDPOINTS } from '@/config/api';
+import AuthGuard from '@/components/AuthGuard';
+import PlanAlerta from '@/components/dashboard/PlanAlerta';
+import AgendaDiaria from '@/app/components/dashboard/AgendaDiaria';
+import { getFechaHoyLocal } from '@/app/utils/fechas';
+import './calendar-styles.css';
+
+function DashboardContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  const fechaSeleccionada = searchParams.get('fecha') || getFechaHoyLocal();
+
+  // 1. Forzamos que la vista inicial sea siempre 'dia'
+  const [vista, setVista] = useState('dia');
+  const [eventos, setEventos] = useState([]);
+  const [usuario, setUsuario] = useState(null);
+  const [citasDia, setCitasDia] = useState([]);
+  const [loadingCitas, setLoadingCitas] = useState(true);
+  const cacheCitas = useRef({});
+
+  // ESTADOS PARA EL FILTRADO DE DOCTORES (EXCLUSIVO ADMIN)
+  const [doctores, setDoctores] = useState([]);
+  const [doctorSeleccionado, setDoctorSeleccionado] = useState('');
+
+  // 1. CARGAR LISTA DE DOCTORES SI EL USUARIO ES ADMIN
+  useEffect(() => {
+    const cargarDoctoresAdmin = async () => {
+      const isAdmin = localStorage.getItem('is_admin') === 'true';
+      if (isAdmin) {
+        try {
+          const res = await authFetch(API_ENDPOINTS.ADMIN_RESUMEN_USUARIOS);
+          if (res.ok) {
+            const data = await res.json();
+            setDoctores(data || []);
+          }
+        } catch (err) {
+          console.error("Error cargando doctores para admin:", err);
+        }
+      }
+    };
+    cargarDoctoresAdmin();
+  }, []);
+
+  // 2. RE-CARGAR DATOS CUANDO CAMBIE LA FECHA, LA VISTA O EL DOCTOR SELECCIONADO
+  useEffect(() => {
+    if (cacheCitas.current[fechaSeleccionada + doctorSeleccionado]) {
+      delete cacheCitas.current[fechaSeleccionada + doctorSeleccionado];
+    }
+    fetchDashboardData();
+  }, [fechaSeleccionada, vista, doctorSeleccionado]);
+
+  const fetchDashboardData = async (startDate = null, endDate = null) => {
+    const esConsultaDia = !startDate && !endDate;
+    const cacheKey = fechaSeleccionada + doctorSeleccionado;
+
+    if (esConsultaDia && cacheCitas.current[cacheKey]) {
+      setCitasDia(cacheCitas.current[cacheKey]);
+    } else if (esConsultaDia) {
+      setCitasDia([]);
+    }
+
+    if (!citasDia.length) {
+      setLoadingCitas(true);
+    }
+
+    try {
+      let queryParams = `?selected_date=${fechaSeleccionada}`;
+      
+      if (startDate && endDate) {
+        queryParams += `&start=${startDate}&end=${endDate}`;
+      }
+      
+      // Si el admin seleccionó un doctor, lo enviamos en la consulta
+      if (doctorSeleccionado) {
+        queryParams += `&doctor_id=${doctorSeleccionado}`;
+      }
+
+      const response = await authFetch(API_ENDPOINTS.DASHBOARD_HOME_DATA(queryParams));
+      const data = await response.json();
+      
+      if (data.success) {
+        setUsuario(data.usuario);
+        
+        if (data.eventos) {
+          setEventos(data.eventos.map(e => ({
+            ...e,
+            title: `${e.title?.match(/\d+/)?.[0] || '0'}`
+          })));
+        }
+        
+        const nuevasCitas = data.citas_dia || [];
+        setCitasDia(nuevasCitas);
+        
+        if (esConsultaDia) {
+          cacheCitas.current[cacheKey] = nuevasCitas;
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando Dashboard:', err);
+    } finally {
+      setLoadingCitas(false);
+    }
+  };
+
+  const cambiarFecha = (offset) => {
+    const [year, month, day] = fechaSeleccionada.split('-').map(Number);
+    const fechaActual = new Date(year, month - 1, day);
+    
+    fechaActual.setDate(fechaActual.getDate() + offset);
+    
+    const nuevaFecha = `${fechaActual.getFullYear()}-${String(fechaActual.getMonth() + 1).padStart(2, '0')}-${String(fechaActual.getDate()).padStart(2, '0')}`;
+    
+    router.replace(`/dashboard?fecha=${nuevaFecha}`, { scroll: false });
+  };
+
+  const formatearFechaMostrar = (fechaStr) => {
+    const [year, month, day] = fechaStr.split('-').map(Number);
+    const fechaObj = new Date(year, month - 1, day);
+    return fechaObj.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'long' });
+  };
+
+  return (
+    <AuthGuard>
+      <div className="min-h-screen bg-gray-50 pb-20">
+        {/* Cabecera */}
+        <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto sm:pr-40">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-black leading-tight">
+                Hola, {usuario?.nombre || 'Odontólogo'}!
+              </h1>
+              <p className="text-gray-500 text-sm font-medium">Panel Clínico</p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              {/* SELECTOR DE DOCTOR (SOLO VISIBLE PARA EL ADMINISTRADOR) */}
+              {usuario?.is_admin && doctores.length > 0 && (
+                <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
+                  <User size={16} className="text-purple-600" />
+                  <select
+                    value={doctorSeleccionado}
+                    onChange={(e) => setDoctorSeleccionado(e.target.value)}
+                    className="bg-transparent border-none text-xs font-bold text-gray-700 outline-none cursor-pointer"
+                  >
+                    <option value="">Mi Agenda (Admin)</option>
+                    {doctores.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.nombre} ({doc.total_pacientes} pac)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selector de Vistas */}
+              <div className="flex bg-gray-200/60 p-1 rounded-xl backdrop-blur-sm">
+                <button 
+                  onClick={() => setVista('dia')}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'dia' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
+                >
+                  <LayoutList size={16} />
+                  <span className="text-[11px] font-bold uppercase tracking-tight">Día</span>
+                </button>
+                <button 
+                  onClick={() => setVista('mes')}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition-all ${vista === 'mes' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
+                >
+                  <Grid3X3 size={16} />
+                  <span className="text-[11px] font-bold uppercase tracking-tight">Mes</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {vista === 'dia' && (
+            <div className="flex items-center justify-between mb-6 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+              <button onClick={() => cambiarFecha(-1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
+                <ChevronLeft size={20} />
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-bold capitalize text-gray-800">
+                  {formatearFechaMostrar(fechaSeleccionada)}
+                </h2>
+                {fechaSeleccionada !== getFechaHoyLocal() && (
+                  <button 
+                    onClick={() => router.replace(`/dashboard?fecha=${getFechaHoyLocal()}`, { scroll: false })}
+                    className="px-4 py-2 bg-black text-white hover:bg-gray-800 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-md active:scale-95"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
+
+              <button onClick={() => cambiarFecha(1)} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="max-w-5xl mx-auto px-4">
+          <PlanAlerta />
+
+          {vista === 'dia' && (
+            <AgendaDiaria 
+              fecha={fechaSeleccionada} 
+              citasExternas={citasDia} 
+              loading={loadingCitas} 
+            />
+          )}
+
+          {vista === 'mes' && (
+            <div className="bg-white min-h-[500px] w-screen sm:w-auto ml-[calc(-50vw+50%)] sm:ml-0 rounded-none sm:rounded-3xl p-4 border-y border-x-0 sm:border border-gray-100 shadow-sm">
+              <FullCalendar
+                plugins={[dayGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                locale="es"
+                headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+                events={eventos}
+                height="auto"
+                initialDate={fechaSeleccionada}
+                
+                datesSet={(dateInfo) => {
+                  fetchDashboardData(dateInfo.startStr.split('T')[0], dateInfo.endStr.split('T')[0]);
+                }}
+
+                dateClick={(info) => {
+                  router.push(`/dashboard?fecha=${info.dateStr}`);
+                  setVista('dia');
+                }}
+                
+                eventContent={(info) => (
+                  <div className="w-full flex justify-center items-center pt-1 pointer-events-none">
+                    <div className="flex items-center gap-1 bg-gray-100 border-2 border-gray-200 px-3 py-0.3 rounded-full">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
+                      <span className="text-sm font-black text-[#3b82f6] leading-none">
+                        {info.event.title}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Botones Flotantes */}
+        <div className="fixed top-6 right-6 z-50">
+          <button
+            onClick={() => router.push('/pacientes')}
+            className="flex items-center gap-2 bg-black hover:bg-gray-900 text-white px-5 py-3 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95"
+          >
+            <Users className="w-5 h-5" />
+            <span className="font-bold text-sm">Pacientes</span>
+          </button>
+        </div>
+
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => router.push('/pagos/nuevo?rapido=1')}
+            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-4 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
+          >
+            <Zap className="w-5 h-5 fill-white" />
+            <span className="font-bold text-sm sm:text-base">Cobro Rápido</span>
+            <DollarSign className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </AuthGuard>
+  );
+}
+
+const DashboardPage = () => {
+  // Cambiado: Quitar "React." y usar directamente "useState"
+  const [isClient, setIsClient] = useState(false);
+
+  // Cambiado: Quitar "React." y usar directamente "useEffect"
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) return <div className="p-8 text-center">Cargando Dashboard...</div>;
+
+  return (
+    <AuthGuard>
+      <Suspense fallback={<div className="p-8 text-center">Cargando Dashboard...</div>}>
+        <DashboardContent />
+      </Suspense>
+    </AuthGuard>
+  );
+};
+
+export default DashboardPage;
+</file>
+
 <file path="frontend_nextjs/app/login/page.js">
 'use client';
 import { useState } from 'react';
@@ -8947,8 +8431,8 @@ export default function LoginPage() {
         </form>
         
         <div className="mt-4 text-sm text-gray-500 text-center">
-          <p>Usuario: admin</p>
-          <p>Contraseña: admin123</p>
+          <p>Organiza tu consultorio de manera eficiente.</p>
+          
         </div>
       </div>
     </div>
@@ -9095,429 +8579,6 @@ export default function LandingPage() {
     <Suspense fallback={null}>
       <LandingContent />
     </Suspense>
-  );
-}
-</file>
-
-<file path="frontend_nextjs/app/pagos/nuevo/page.js">
-'use client';
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { authFetch, API_ENDPOINTS } from '@/config/api';
-import { ArrowLeft, Save, User, Phone, X } from 'lucide-react';
-
-function NuevoPagoForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const esRapidoParam = searchParams.get('rapido') === '1';
-
-  const [form, setForm] = useState({
-    paciente_id: null,
-    paciente_nombre: '',
-    fecha: new Date().toISOString().split('T')[0],
-    concepto: '',
-    monto: '',
-    metodo_pago: 'Efectivo',
-    observacion: '', // Campo vinculado a Supabase
-    telefono: '',
-    es_rapido: esRapidoParam
-  });
-
-  const [pacientes, setPacientes] = useState([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
-
-  useEffect(() => {
-    if (busqueda.length > 1) {
-      const timer = setTimeout(async () => {
-        const res = await authFetch(`${API_ENDPOINTS.PACIENTES}?search=${busqueda}`);
-        if (res.ok) {
-          const data = await res.json();
-          setPacientes(data.pacientes || []);
-        }
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [busqueda]);
-
-  const seleccionarPaciente = (p) => {
-    setForm({ 
-      ...form, 
-      paciente_id: p.id, 
-      paciente_nombre: `${p.nombres} ${p.apellidos}`,
-      telefono: p.telefono || '',
-      es_rapido: false 
-    });
-    setBusqueda(`${p.nombres} ${p.apellidos}`);
-    setMostrarSugerencias(false);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const datosParaEnviar = {
-      paciente_id: form.paciente_id, // UUID o null
-      paciente_nombre: form.paciente_nombre,
-      monto: parseFloat(form.monto), // Forzar número
-      metodo_pago: form.metodo_pago,
-      concepto: form.concepto,
-      fecha: form.fecha,
-      telefono: form.telefono,
-      observacion: form.observacion,
-      es_rapido: form.es_rapido
-    };
-
-    try {
-      const res = await authFetch(API_ENDPOINTS.NUEVO_PAGO, {
-        method: 'POST',
-        body: JSON.stringify(datosParaEnviar)
-      });
-
-      if (res.ok) {
-        const pagoCreado = await res.json();
-        router.push(`/pagos/recibo/${pagoCreado.codigo}`);
-      } else {
-        const errorData = await res.json();
-        alert(`Error del servidor: ${errorData.detail}`);
-      }
-    } catch (err) {
-      console.error("Error en el envío:", err);
-      alert("No se pudo conectar con el servidor. Verifique la conexión.");
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto">
-        <button onClick={() => router.back()} className="flex items-center text-gray-600 mb-6">
-          <ArrowLeft size={20} className="mr-2" /> Volver
-        </button>
-
-        <h1 className="text-2xl font-bold mb-6 text-black">
-          {form.es_rapido ? '⚡ Cobro Rápido' : '💰 Registrar Pago'}
-        </h1>
-
-        <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-2xl shadow-sm border">
-          {/* Autocompletado de Paciente */}
-          <div className="relative">
-            <label className="text-xs font-bold text-gray-500 uppercase">Paciente</label>
-            <div className="relative">
-              <User className="absolute left-3 top-3 text-gray-400" size={18} />
-              <input
-                type="text"
-                value={busqueda || form.paciente_nombre}
-                onChange={(e) => {
-                  setBusqueda(e.target.value);
-                  setForm({...form, paciente_nombre: e.target.value, paciente_id: null, es_rapido: true});
-                  setMostrarSugerencias(true);
-                }}
-                className={`w-full pl-10 ${form.paciente_id ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 rounded-xl border-none text-black`}
-                placeholder="Nombre del paciente..."
-                required
-              />
-              {(busqueda || form.paciente_nombre) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBusqueda('');
-                    setForm({
-                      ...form,
-                      paciente_id: null,
-                      paciente_nombre: '',
-                      telefono: '',
-                      es_rapido: true
-                    });
-                  }}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-black transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              )}
-            </div>
-            {mostrarSugerencias && pacientes.length > 0 && (
-              <div className="absolute z-10 w-full bg-white border rounded-xl shadow-lg mt-1">
-                {pacientes.map(p => (
-                  <div 
-                    key={p.id} 
-                    onClick={() => seleccionarPaciente(p)}
-                    className="p-3 hover:bg-gray-50 cursor-pointer border-bottom text-black"
-                  >
-                    {p.nombres} {p.apellidos}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase">Monto (COP)</label>
-              <input
-                type="number"
-                value={form.monto}
-                onChange={(e) => setForm({...form, monto: e.target.value})}
-                className="w-full p-3 bg-gray-50 rounded-xl text-black font-bold"
-                placeholder="0"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase">Método</label>
-              <select 
-                value={form.metodo_pago}
-                onChange={(e) => setForm({...form, metodo_pago: e.target.value})}
-                className="w-full p-3 bg-gray-50 rounded-xl text-black"
-              >
-                <option value="Efectivo">Efectivo</option>
-                <option value="Transferencia">Transferencia</option>
-                <option value="Nequi">Nequi</option>
-                <option value="Bancolombia">Bancolombia</option>
-                <option value="Bre-B">Bre-B</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase">Concepto</label>
-            <input
-              type="text"
-              value={form.concepto}
-              onChange={(e) => setForm({...form, concepto: e.target.value})}
-              className="w-full p-3 bg-gray-50 rounded-xl text-black"
-              placeholder="Ej. Limpieza, Resina..."
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase">Teléfono (WhatsApp)</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
-              <input
-                type="text"
-                value={form.telefono}
-                onChange={(e) => setForm({...form, telefono: e.target.value})}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl text-black"
-                placeholder="300..."
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase">Observación (Opcional)</label>
-            <textarea
-              value={form.observacion}
-              onChange={(e) => setForm({...form, observacion: e.target.value})}
-              className="w-full p-3 bg-gray-50 rounded-xl text-black resize-none"
-              placeholder="Notas adicionales sobre el pago..."
-              rows="2"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-green-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-green-600 shadow-lg"
-          >
-            <Save size={20} /> Guardar y Generar Recibo
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export default function NuevoPago() {
-  return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de pago...</div>}>
-      <NuevoPagoForm />
-    </Suspense>
-  );
-}
-</file>
-
-<file path="frontend_nextjs/app/pagos/recibo/[codigo]/page.js">
-'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { authFetch, API_BASE_URL } from '@/config/api';
-import { Printer, MessageCircle, CheckCircle, LayoutDashboard } from 'lucide-react';
-
-export default function ReciboDetalle() {
-  const { codigo } = useParams();
-  const router = useRouter();
-  const [pago, setPago] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [showControls, setShowControls] = useState(true);
-
-  useEffect(() => {
-    const fetchPago = async () => {
-      try {
-        const res = await authFetch(`${API_BASE_URL}/api/pagos/codigo/${codigo}`);
-        if (res.ok) {
-          const data = await res.json();
-          setPago(data);
-        }
-      } catch (err) {
-        console.error("Error al cargar el recibo:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPago();
-  }, [codigo]);
-
-  if (loading) return <div className="p-10 text-center font-sans">Cargando recibo...</div>;
-  if (!pago) return <div className="p-10 text-center text-red-500 font-sans">Recibo no encontrado</div>;
-
-  const formatearMoneda = (valor) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0
-    }).format(valor);
-  };
-
-  const enviarWhatsApp = () => {
-    const urlRecibo = window.location.href;
-    // Extraemos el nombre de la clínica/doctor dinámicamente y lo convertimos a mayúsculas para el encabezado
-    const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
-    
-    // Mantenemos exactamente tu mensaje original con %0A y la URL limpia
-    const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
-    
-    // Lógica inteligente de teléfono (Soporta locales de 10 dígitos e internacionales con "+")
-    const telefonoOriginal = pago.telefono || '';
-    const telLimpio = telefonoOriginal.replace(/\D/g, '');
-    
-    if (!telLimpio) {
-      window.open(`https://wa.me/?text=${mensaje}`, '_blank');
-    } else {
-      const telFinal = (telefonoOriginal.trim().startsWith('+') || telLimpio.startsWith('57')) 
-        ? telLimpio 
-        : `57${telLimpio}`;
-      window.open(`https://wa.me/${telFinal}?text=${mensaje}`, '_blank');
-    }
-  };
-
-  return (
-    <div 
-      onClick={() => setShowControls(!showControls)}
-      className="min-h-screen bg-gray-100 p-4 sm:p-8 flex flex-col items-center justify-center relative cursor-pointer select-none"
-    >
-      
-      {/* EL RECIBO */}
-      <div className="w-full max-w-md bg-white shadow-2xl rounded-[3.5rem] overflow-hidden border border-gray-200 transition-all duration-300 print:shadow-none print:border-none print:my-0">
-        
-        {/* Cabecera Negra */}
-        <div className="bg-black p-8 text-center text-white">
-          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle size={40} className="text-green-400" />
-          </div>
-          
-          <h1 className="text-xl font-bold tracking-tight uppercase">Pago Exitoso</h1>
-          
-          <div className="flex flex-col items-center mt-4 space-y-1">
-            <p className="text-gray-400 text-[11px] uppercase tracking-[0.2em] font-medium">
-              {pago.codigo}
-            </p>
-            {/* ✅ CORRECCIÓN DE FECHA Y HORA */}
-            <div className="text-gray-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
-              <span>{pago.fecha}</span> 
-              <span className="text-gray-600">•</span>
-              <span>{pago.hora ? pago.hora.substring(0, 5) : ''}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-8 space-y-6">
-          <div className="border-b pb-4 border-dashed border-gray-200">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Paciente</p>
-            <p className="text-lg font-bold text-black leading-tight break-words uppercase">
-              {pago.paciente_nombre}
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Concepto</span>
-              <span className="text-xs font-bold text-black uppercase">{pago.concepto}</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Método de Pago</span>
-              <span className="text-xs font-bold text-black uppercase">{pago.metodo_pago}</span>
-            </div>
-
-            {pago.observacion && (
-              <div className="flex justify-between items-start gap-4 border-t border-gray-50 pt-2">
-                <span className="text-xs font-bold text-gray-400 uppercase shrink-0 tracking-wider">Observación</span>
-                <span className="text-xs font-bold text-black uppercase text-right leading-tight">
-                  {pago.observacion}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase mb-1 tracking-widest">Total Pagado</p>
-            <p className="text-4xl font-black text-black">{formatearMoneda(pago.monto)}</p>
-          </div>
-
-          <div className="text-center pt-4 border-t border-gray-100 mt-4">
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.1em] leading-tight">
-              {pago.clinica_nombre}
-            </p>
-            {pago.clinica_telefono && (
-                <p className="text-[9px] text-gray-400 font-medium mt-1">
-                    Contacto: {pago.clinica_telefono}
-                </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* --- BARRA FLOTANTE DE ACCIONES --- */}
-      <div 
-        onClick={(e) => e.stopPropagation()} 
-        className={`fixed bottom-10 left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out z-50 print:hidden
-          ${showControls ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-95 pointer-events-none'}`}
-      >
-        <div className="bg-white/90 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6">
-                  
-          {/* 1. Botón Dashboard (Solo para el Doctor) */}
-          {typeof window !== 'undefined' && localStorage.getItem('auth_token') && (
-            <>
-              <button onClick={() => router.push('/')} className="flex flex-col items-center gap-1 group">
-                <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
-                  <LayoutDashboard size={20} />
-                </div>
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
-              </button>
-              {/* Este separador solo existe si existe el botón anterior */}
-              <div className="w-[1px] h-8 bg-gray-200" />
-            </>
-          )}
-
-          {/* 2. Botón WhatsApp (Para ambos) */}
-          <button onClick={enviarWhatsApp} className="flex flex-col items-center gap-1 group">
-            <div className="p-2 bg-green-50 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition-colors">
-              <MessageCircle size={20} />
-            </div>
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">WhatsApp</span>
-          </button>
-
-          {/* 3. Botón Imprimir (Para ambos) */}
-          <button onClick={() => window.print()} className="flex flex-col items-center gap-1 group">
-            <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
-              <Printer size={20} />
-            </div>
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Imprimir</span>
-          </button>
-
-        </div>
-      </div>
-
-    </div>
   );
 }
 </file>
@@ -10276,6 +9337,1311 @@ async def exportar_paciente_word(
     )
 </file>
 
+<file path="frontend_nextjs/app/citas/nueva/page.js">
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react';
+import Link from 'next/link';
+import Button from '@/app/components/ui/Button';
+import { API_BASE_URL, authFetch } from '@/config/api';
+
+function NuevaCitaForm() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const fechaParam = searchParams.get('fecha');
+  const horaParam = searchParams.get('hora');
+  
+  const [formData, setFormData] = useState({
+    fecha: fechaParam || '',
+    hora: horaParam || '',
+    paciente_id: null,
+    paciente_nombre: '',
+    paciente_telefono: '',
+    motivo: '',
+    doctor: ''
+  });
+  
+  const [loading, setLoading] = useState(false);
+  const [buscarPaciente, setBuscarPaciente] = useState('');
+  const [pacientes, setPacientes] = useState([]);
+  const [mostrarResultados, setMostrarResultados] = useState(false);
+
+  useEffect(() => {
+    if (buscarPaciente.length >= 3) {
+      const delayDebounceFn = setTimeout(() => {
+        buscarPacientesAPI(buscarPaciente);
+      }, 400);
+
+      return () => clearTimeout(delayDebounceFn);
+    } else {
+      setPacientes([]);
+      setMostrarResultados(false);
+    }
+  }, [buscarPaciente]);
+
+  const buscarPacientesAPI = async (termino) => {
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes?search=${termino}`);
+      const data = await response.json();
+      setPacientes(data.pacientes || []);
+      setMostrarResultados(true);
+    } catch (err) {
+      console.error('Error buscando pacientes:', err);
+    }
+  };
+
+  const seleccionarPaciente = (paciente) => {
+    setFormData({
+      ...formData,
+      paciente_id: paciente.id,
+      paciente_nombre: `${paciente.nombres} ${paciente.apellidos}`,
+      paciente_telefono: paciente.telefono
+    });
+    setBuscarPaciente('');
+    setMostrarResultados(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const datosLimpios = {
+      paciente_id: formData.paciente_id,
+      paciente_nombre: formData.paciente_nombre,
+      paciente_telefono: formData.paciente_telefono,
+      fecha: formData.fecha,
+      hora: formData.hora,
+      motivo: formData.motivo || "Consulta",
+      doctor: formData.doctor || "Odontólogo General"
+    };
+
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/citas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(datosLimpios) 
+      });
+      
+      if (response.ok) {
+        router.replace(`/dashboard?fecha=${formData.fecha}`);
+      } else {
+        const error = await response.json();
+        alert("Error: " + (error.detail || "No se pudo agendar"));
+      }
+    } catch (err) {
+      alert('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8 text-black">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Nueva Cita</h1>
+          <p className="text-gray-400 font-medium">Agendar cita médica</p>
+        </div>
+        <Link href="/dashboard">
+          <button className="bg-gray-100 text-gray-600 p-3 rounded-2xl hover:bg-gray-200 transition-all">
+            <Home className="w-6 h-6" />
+          </button>
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="relative">
+            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+              Buscar Paciente Existente
+            </label>
+            <div className="relative">
+              <Search className="absolute left-4 top-3.5 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                value={buscarPaciente}
+                onChange={(e) => setBuscarPaciente(e.target.value)}
+                placeholder="Escribe nombre o documento..."
+                className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-black/5 transition-all text-black font-medium"
+              />
+            </div>
+            
+            {mostrarResultados && pacientes.length > 0 && (
+              <div className="absolute z-10 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                {pacientes.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => seleccionarPaciente(p)}
+                    className="w-full text-left px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors group"
+                  >
+                    <div className="font-bold text-black group-hover:text-blue-600">{p.nombres} {p.apellidos}</div>
+                    <div className="text-xs text-gray-400 font-medium">Doc: {p.documento || 'N/A'} • Tel: {p.telefono}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
+            <div>
+              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                <Calendar className="w-3.5 h-3.5" /> Fecha
+              </label>
+              <input
+                type="date"
+                value={formData.fecha}
+                onChange={(e) => setFormData({...formData, fecha: e.target.value})}
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                <span className="text-[10px]">⏰</span> Hora
+              </label>
+              <input
+                type="time"
+                value={formData.hora}
+                onChange={(e) => setFormData({...formData, hora: e.target.value})}
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4">
+             <div>
+                <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                  <User className="w-3.5 h-3.5" /> Nombre Completo
+                </label>
+                <input
+                  type="text"
+                  value={formData.paciente_nombre}
+                  onChange={(e) => setFormData({...formData, paciente_nombre: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5 font-medium"
+                  placeholder="Nombre del paciente"
+                  required
+                />
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                    <Phone className="w-3.5 h-3.5" /> Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.paciente_telefono}
+                    onChange={(e) => setFormData({...formData, paciente_telefono: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                    <MessageSquare className="w-3.5 h-3.5" /> Motivo / Procedimiento
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.motivo}
+                    onChange={(e) => setFormData({...formData, motivo: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-100 rounded-xl focus:ring-2 focus:ring-black/5"
+                    placeholder="Ej: Limpieza dental"
+                  />
+                </div>
+             </div>
+          </div>
+
+          <div className="flex gap-4 pt-6">
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
+            >
+              {loading ? 'Agendando...' : 'Crear Cita'}
+            </button>
+            <button 
+              type="button"
+              onClick={() => router.back()}
+              className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function NuevaCita() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de cita...</div>}>
+      <NuevaCitaForm />
+    </Suspense>
+  );
+}
+</file>
+
+<file path="frontend_nextjs/app/pacientes/[id]/page.js">
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import HeaderPaciente from '@/app/components/pacientes/HeaderPaciente';
+import TarjetaInfoPaciente from '@/app/components/pacientes/TarjetaInfoPaciente';
+import Dentigrama from '@/app/components/pacientes/Dentigrama';
+import Evoluciones from '@/app/components/pacientes/Evoluciones';
+import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
+import { API_BASE_URL, authFetch, API_ENDPOINTS } from '@/config/api';
+import { ClipboardList, Activity, FileText } from 'lucide-react';
+
+export default function MostrarPaciente() {
+  const { id } = useParams();
+  const router = useRouter();
+  const [paciente, setPaciente] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [planActivo, setPlanActivo] = useState(true);
+
+  // --- ESTO ES LO QUE ESTABA AFUERA Y AHORA ESTÁ ADENTRO (CORRECTO) ---
+  const [canExport, setCanExport] = useState(true);
+
+  useEffect(() => {
+    const validarAcceso = async () => {
+      // 1. Detectar si es Admin (El admin tiene "superpoderes" y no vence)
+      const isAdmin = localStorage.getItem('is_admin') === 'true';
+      
+      if (isAdmin) {
+        setCanExport(true);
+        setPlanActivo(true);
+        return; // Si es admin, no necesitamos validar nada más
+      }
+
+      // 2. Cargar permisos del plan (Lo que compramos: Básico o Pro)
+      const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+      if (perms.can_export_history !== undefined) {
+        setCanExport(perms.can_export_history);
+      }
+
+      // 3. Verificar estado de la suscripción (¿Ya pagó el mes/año actual?)
+      try {
+        const res = await authFetch(`${API_BASE_URL}/api/usuarios/mi-plan-detalle`);
+        if (res.ok) {
+          const data = await res.json();
+          // Solo puede exportar si el estado es exactamente 'active'
+          setPlanActivo(data.status === 'active');
+        }
+      } catch (err) {
+        console.error("Error al validar suscripción:", err);
+        // En caso de error de red, por seguridad lo dejamos activo para no bloquear al doctor
+        setPlanActivo(true); 
+      }
+    };
+
+    validarAcceso();
+  }, []);
+  // ------------------------------------------------------------------
+
+  useEffect(() => {
+    const fetchPaciente = async () => {
+      // 1. Verificación preventiva: Si el ID es nulo o inválido, no disparamos la petición
+      if (!id || id === 'null' || id === 'undefined') {
+          setLoading(false);
+          return;
+      }
+
+      try {
+        const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`);
+        if (!response.ok) throw new Error('Paciente no encontrado');
+        const data = await response.json();
+        setPaciente(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPaciente();
+  }, [id]);
+
+  const handleEliminar = async () => {
+    const confirmar = confirm('¿Estás seguro de mover este paciente a la papelera?');
+    if (!confirmar) return;
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        alert('Paciente movido a la papelera');
+        router.push('/pacientes');
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error al eliminar');
+      }
+    } catch (error) {
+      alert('Error de conexión');
+    }
+  };
+
+  const handleExportarWord = async () => {
+    if (!canExport) return alert("La descarga de historia clínica en Word es exclusiva del Plan PRO");
+    try {
+      const response = await authFetch(API_ENDPOINTS.EXPORTAR_PACIENTE_WORD(id));
+      if (!response.ok) throw new Error('Error al generar el documento');
+
+      // Manejo de archivo binario (Blob)
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Historia_${paciente.apellidos}.docx`);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpieza
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert('No se pudo descargar la historia clínica');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <HeaderPaciente loading={true} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-600">
+          Error: {error}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      
+      {/* 2. Header: Sin el botón manual afuera para evitar duplicados */}
+      <HeaderPaciente 
+        paciente={paciente}
+        modo="mostrar"
+        onEliminar={handleEliminar}
+      />
+      
+      <TarjetaInfoPaciente 
+        paciente={paciente}
+        modo="mostrar"
+      />
+      
+      {/* 3. Evoluciones con Icono y Botón de Exportar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-gray-800">
+            <ClipboardList size={20} className="text-blue-500" />
+            <h2 className="font-bold">Evoluciones Clínicas</h2>
+          </div>
+          
+          <button
+            onClick={handleExportarWord}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+              !canExport 
+              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed grayscale' 
+              : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+            }`}
+          >
+            <FileText size={16} />
+            {canExport ? 'EXPORTAR HISTORIA' : 'EXPORTAR (PRO) 🔒'}
+          </button>
+        </div>
+        <Evoluciones pacienteId={id} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        {/* 4. Dentigrama con Icono */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4 text-gray-800">
+            <Activity size={20} className="text-purple-500" />
+            <h2 className="font-bold">Odontograma Digital</h2>
+          </div>
+          <Dentigrama 
+            dentigramaCanvas={paciente.dentigrama_canvas}
+            modo="mostrar"
+          />
+        </div>
+
+        <ImagenPerfil 
+          imagenUrl={paciente.imagen_perfil_url}
+          nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
+        />
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="frontend_nextjs/app/pagos/nuevo/page.js">
+'use client';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { authFetch, API_ENDPOINTS } from '@/config/api';
+import { ArrowLeft, Save, User, Phone, X } from 'lucide-react';
+
+function NuevoPagoForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const esRapidoParam = searchParams.get('rapido') === '1';
+
+  const [form, setForm] = useState({
+    paciente_id: null,
+    paciente_nombre: '',
+    fecha: new Date().toISOString().split('T')[0],
+    concepto: '',
+    monto: '',
+    metodo_pago: 'Efectivo',
+    observacion: '', // Campo vinculado a Supabase
+    telefono: '',
+    es_rapido: esRapidoParam
+  });
+
+  const [pacientes, setPacientes] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+
+  useEffect(() => {
+    if (busqueda.length > 1) {
+      const timer = setTimeout(async () => {
+        const res = await authFetch(`${API_ENDPOINTS.PACIENTES}?search=${busqueda}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPacientes(data.pacientes || []);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [busqueda]);
+
+  const seleccionarPaciente = (p) => {
+    setForm({ 
+      ...form, 
+      paciente_id: p.id, 
+      paciente_nombre: `${p.nombres} ${p.apellidos}`,
+      telefono: p.telefono || '',
+      es_rapido: false 
+    });
+    setBusqueda(`${p.nombres} ${p.apellidos}`);
+    setMostrarSugerencias(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const datosParaEnviar = {
+      paciente_id: form.paciente_id, // UUID o null
+      paciente_nombre: form.paciente_nombre,
+      monto: parseFloat(form.monto), // Forzar número
+      metodo_pago: form.metodo_pago,
+      concepto: form.concepto,
+      fecha: form.fecha,
+      telefono: form.telefono,
+      observacion: form.observacion,
+      es_rapido: form.es_rapido
+    };
+
+    try {
+      const res = await authFetch(API_ENDPOINTS.NUEVO_PAGO, {
+        method: 'POST',
+        body: JSON.stringify(datosParaEnviar)
+      });
+
+      if (res.ok) {
+        const pagoCreado = await res.json();
+        router.push(`/pagos/recibo/${pagoCreado.codigo}`);
+      } else {
+        const errorData = await res.json();
+        alert(`Error del servidor: ${errorData.detail}`);
+      }
+    } catch (err) {
+      console.error("Error en el envío:", err);
+      alert("No se pudo conectar con el servidor. Verifique la conexión.");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-md mx-auto">
+        <button onClick={() => router.back()} className="flex items-center text-gray-600 mb-6">
+          <ArrowLeft size={20} className="mr-2" /> Volver
+        </button>
+
+        <h1 className="text-2xl font-bold mb-6 text-black">
+          {form.es_rapido ? '⚡ Cobro Rápido' : '💰 Registrar Pago'}
+        </h1>
+
+        <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-2xl shadow-sm border">
+          {/* Autocompletado de Paciente */}
+          <div className="relative">
+            <label className="text-xs font-bold text-gray-500 uppercase">Paciente</label>
+            <div className="relative">
+              <User className="absolute left-3 top-3 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={busqueda || form.paciente_nombre}
+                onChange={(e) => {
+                  setBusqueda(e.target.value);
+                  setForm({...form, paciente_nombre: e.target.value, paciente_id: null, es_rapido: true});
+                  setMostrarSugerencias(true);
+                }}
+                className={`w-full pl-10 ${form.paciente_id ? 'pr-10' : 'pr-4'} py-3 bg-gray-50 rounded-xl border-none text-black`}
+                placeholder="Nombre del paciente..."
+                required
+              />
+              {(busqueda || form.paciente_nombre) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBusqueda('');
+                    setForm({
+                      ...form,
+                      paciente_id: null,
+                      paciente_nombre: '',
+                      telefono: '',
+                      es_rapido: true
+                    });
+                  }}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-black transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+            {mostrarSugerencias && pacientes.length > 0 && (
+              <div className="absolute z-10 w-full bg-white border rounded-xl shadow-lg mt-1">
+                {pacientes.map(p => (
+                  <div 
+                    key={p.id} 
+                    onClick={() => seleccionarPaciente(p)}
+                    className="p-3 hover:bg-gray-50 cursor-pointer border-bottom text-black"
+                  >
+                    {p.nombres} {p.apellidos}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase">Monto (COP)</label>
+              <input
+                type="number"
+                value={form.monto}
+                onChange={(e) => setForm({...form, monto: e.target.value})}
+                className="w-full p-3 bg-gray-50 rounded-xl text-black font-bold"
+                placeholder="0"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 uppercase">Método</label>
+              <select 
+                value={form.metodo_pago}
+                onChange={(e) => setForm({...form, metodo_pago: e.target.value})}
+                className="w-full p-3 bg-gray-50 rounded-xl text-black"
+              >
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Nequi">Nequi</option>
+                <option value="Bancolombia">Bancolombia</option>
+                <option value="Bre-B">Bre-B</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase">Concepto</label>
+            <input
+              type="text"
+              value={form.concepto}
+              onChange={(e) => setForm({...form, concepto: e.target.value})}
+              className="w-full p-3 bg-gray-50 rounded-xl text-black"
+              placeholder="Ej. Limpieza, Resina..."
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase">Teléfono (WhatsApp)</label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={form.telefono}
+                onChange={(e) => setForm({...form, telefono: e.target.value})}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl text-black"
+                placeholder="300..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase">Observación (Opcional)</label>
+            <textarea
+              value={form.observacion}
+              onChange={(e) => setForm({...form, observacion: e.target.value})}
+              className="w-full p-3 bg-gray-50 rounded-xl text-black resize-none"
+              placeholder="Notas adicionales sobre el pago..."
+              rows="2"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-green-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-green-600 shadow-lg"
+          >
+            <Save size={20} /> Guardar y Generar Recibo
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Reemplaza el bloque final por este:
+const NuevoPago = () => {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de pago...</div>}>
+      <NuevoPagoForm />
+    </Suspense>
+  );
+};
+
+export default NuevoPago;
+</file>
+
+<file path="frontend_nextjs/app/pagos/page.js">
+'use client';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { authFetch, API_ENDPOINTS, API_BASE_URL } from '@/config/api';
+import { 
+  Search, ArrowLeft, Eye, EyeOff, Plus, 
+  TrendingUp, ChevronLeft, ChevronRight, CalendarDays, ChevronDown, ChevronUp, Trash2
+} from 'lucide-react';
+
+export default function HistorialPagos() {
+  const router = useRouter();
+  
+  // --- ESTADOS PRINCIPALES ---
+  const [pagos, setPagos] = useState([]);
+  const [filtrados, setFiltrados] = useState([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [loading, setLoading] = useState(true);
+  
+  // --- ESTADOS DE PRIVACIDAD Y FILTROS ---
+  const [mostrarTotal, setMostrarTotal] = useState(false); 
+  const [mostrarHistorialAnual, setMostrarHistorialAnual] = useState(false);
+  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().getMonth()); 
+  const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
+
+  // --- ESTADOS DE PAGINACIÓN ---
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+
+  const meses = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+
+  // 1. FUNCIÓN DE CARGA: Trae los datos filtrados del servidor
+  const cargarPagos = async () => {
+    setLoading(true);
+    try {
+      const query = `?mes=${mesSeleccionado + 1}&anio=${anioSeleccionado}&page=${paginaActual}&per_page=5`;
+      const res = await authFetch(API_ENDPOINTS.LISTAR_PAGOS(query));
+      
+      if (res.ok) {
+        const data = await res.json();
+        setPagos(data.pagos || []);
+        setFiltrados(data.pagos || []);
+        setTotalPaginas(data.total_pages || 1);
+        setTotalRegistros(data.total || 0);
+      }
+    } catch (err) {
+      console.error("Error cargando pagos:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. EFECTO: Se activa al cambiar mes, año o página
+  useEffect(() => {
+    cargarPagos();
+  }, [mesSeleccionado, anioSeleccionado, paginaActual]);
+
+  // 3. EFECTO: Reinicia a página 1 solo cuando cambias el filtro de tiempo
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [mesSeleccionado, anioSeleccionado]);
+
+  // 4. EFECTO DE BÚSQUEDA: Filtra localmente lo que ya está en pantalla
+  useEffect(() => {
+    if (busqueda.trim().length < 3) {
+      setFiltrados(pagos);
+      return;
+    }
+
+    const terminos = busqueda.toLowerCase().split(' ').filter(t => t !== '');
+    const result = pagos.filter(p => {
+      const nombre = (p.paciente_nombre || '').toLowerCase();
+      const codigo = (p.codigo || '').toLowerCase();
+      return terminos.every(t => nombre.includes(t) || codigo.includes(t));
+    });
+
+    setFiltrados(result);
+  }, [busqueda, pagos]);
+
+  // Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  const formatearFechaTabla = (fechaStr) => {
+    if (!fechaStr) return '-';
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    return fechaStr;
+  };
+
+  const totalRecaudado = filtrados.reduce((acc, p) => acc + p.monto, 0);
+
+  const eliminarPago = async (id, codigo) => {
+    if (!window.confirm(`¿Estás seguro de eliminar el recibo ${codigo}?`)) return;
+    try {
+      const res = await authFetch(`${API_BASE_URL}/api/pagos/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        alert("Pago eliminado correctamente");
+        cargarPagos();
+      }
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+    }
+  };
+
+  const formatearCOP = (valor) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency', currency: 'COP', minimumFractionDigits: 0
+    }).format(valor);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8 text-black">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Cabecera */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <button onClick={() => router.push('/')} className="flex items-center text-gray-500 mb-2 hover:text-black transition-colors">
+              <ArrowLeft size={18} className="mr-1" /> Inicio
+            </button>
+            <h1 className="text-3xl font-black tracking-tight">Gestión de Ingresos</h1>
+          </div>
+          <button onClick={() => router.push('/pagos/nuevo')} className="w-full md:w-auto bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-gray-800 transition-all">
+            <Plus size={20} /> Nuevo Cobro
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Card Total Principal */}
+          <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center shadow-xl">
+                <TrendingUp size={32} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Recaudación {meses[mesSeleccionado]}</p>
+                <div className="flex items-center gap-3">
+                  <p className={`text-4xl font-black transition-all duration-300 ${!mostrarTotal ? 'blur-md select-none' : ''}`}>
+                    {formatearCOP(totalRecaudado)}
+                  </p>
+                  <button onClick={() => setMostrarTotal(!mostrarTotal)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400">
+                    {mostrarTotal ? <EyeOff size={24} /> : <Eye size={24} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-start md:items-end gap-2 border-t md:border-none pt-4 md:pt-0">
+               <select 
+                value={mesSeleccionado}
+                onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
+                className="bg-gray-100 border-none rounded-xl font-bold text-sm p-2 outline-none cursor-pointer"
+               >
+                 {meses.map((m, i) => (
+                   <option key={i} value={i}>{m}</option>
+                 ))}
+               </select>
+               <p className="text-xs text-gray-400 font-bold uppercase tracking-tighter">
+                 Página {paginaActual} de {totalPaginas} ({totalRegistros} total)
+               </p>
+            </div>
+          </div>
+
+          {/* Card Historial Anual */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 self-start overflow-hidden transition-all duration-300">
+            <button 
+              onClick={() => setMostrarHistorialAnual(!mostrarHistorialAnual)}
+              className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-100 rounded-lg text-gray-600">
+                  <CalendarDays size={18}/>
+                </div>
+                <h3 className="text-sm font-black text-gray-700 uppercase tracking-tight">
+                  Historial {anioSeleccionado}
+                </h3>
+              </div>
+              {mostrarHistorialAnual ? <ChevronUp size={20} className="text-gray-400"/> : <ChevronDown size={20} className="text-gray-400"/>}
+            </button>
+
+            {mostrarHistorialAnual && (
+              <div className="px-6 pb-6 pt-2 space-y-4">
+                <p className="text-[10px] text-gray-400 text-center uppercase font-bold tracking-widest pt-2">
+                   Filtra arriba para ver otros meses
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Buscador */}
+        <div className="flex gap-3 mb-6">
+          <input
+            type="text"
+            placeholder="Buscar por paciente o código..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="flex-1 md:w-96 px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-black transition-all bg-white shadow-sm"
+          />
+        </div>
+
+        {/* Tabla de Resultados */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100 text-gray-400 text-xs uppercase font-black">
+                  <th className="px-6 py-4">Fecha</th>
+                  <th className="px-6 py-4">Paciente</th>
+                  <th className="hidden sm:table-cell px-6 py-4">Concepto</th>
+                  <th className="px-6 py-4">Monto</th>
+                  <th className="px-6 py-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {!loading && filtrados.map((pago) => (
+                  <tr key={pago.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)}>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col leading-none">
+                        <span className="font-bold text-gray-900">
+                          {formatearFechaTabla(pago.fecha)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono mt-1 uppercase tracking-tighter">
+                          #{pago.codigo?.split('-').pop()}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-black truncate max-w-[140px] capitalize">
+                        {pago.paciente_nombre?.toLowerCase()}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-gray-100 text-gray-600">
+                        {pago.concepto || 'Consulta'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-black text-gray-900">{formatearCOP(pago.monto)}</span>
+                    </td>
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => router.push(`/pagos/recibo/${pago.codigo}`)} className="p-2 hover:bg-black hover:text-white rounded-xl transition-all text-gray-400">
+                          <Eye size={18} />
+                        </button>
+                        <button onClick={() => eliminarPago(pago.id, pago.codigo)} className="p-2 hover:bg-red-500 hover:text-white rounded-xl transition-all text-gray-400">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Paginación */}
+          {totalPaginas > 1 && (
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Página {paginaActual} de {totalPaginas}</p>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setPaginaActual(p => Math.max(p - 1, 1))} 
+                  disabled={paginaActual === 1} 
+                  className="p-2 bg-white border rounded-xl disabled:opacity-20 hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronLeft size={20}/>
+                </button>
+                <button 
+                  onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))} 
+                  disabled={paginaActual === totalPaginas} 
+                  className="p-2 bg-white border rounded-xl disabled:opacity-20 hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronRight size={20}/>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="frontend_nextjs/config/api.js">
+// config/api.js
+
+// 1. Lógica de URL: Usa la variable de entorno o la IP local por defecto
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
+export const API_BASE_URL = rawBaseUrl.replace(/\/$/, ""); 
+
+
+
+export const getAuthToken = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('auth_token');
+  }
+  return null;
+};
+
+export const setAuthToken = (token) => {
+  if (typeof window !== 'undefined') {
+    token ? localStorage.setItem('auth_token', token) : localStorage.removeItem('auth_token');
+  }
+};
+
+export const authFetch = async (url, options = {}) => {
+  const token = getAuthToken();
+  const headers = {
+    ...options.headers,
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  if (options.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  // 🔥 IMPORTANTE: Asegurar que la URL no termine con espacios o caracteres raros
+  const cleanUrl = url.trim();
+  return fetch(cleanUrl, { ...options, headers });
+};
+
+export const API_ENDPOINTS = {
+  LOGIN: `${API_BASE_URL}/api/auth/login`,
+  REGISTER: `${API_BASE_URL}/api/auth/register`,
+  PERFIL_USUARIO: `${API_BASE_URL}/api/usuarios/me`,
+  CITAS_POR_FECHA: (fecha) => `${API_BASE_URL}/api/citas/por-fecha?fecha=${fecha}`,
+  DASHBOARD_HOME_DATA: (params = "") => `${API_BASE_URL}/api/dashboard/home-data${params}`,
+  NUEVA_CITA: `${API_BASE_URL}/api/citas`,
+  EDITAR_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
+  ELIMINAR_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
+  OBTENER_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
+  CITAS_EVENTOS: `${API_BASE_URL}/api/citas/eventos`,
+  PACIENTES: `${API_BASE_URL}/api/pacientes`,
+  PACIENTE_BY_ID: (id) => `${API_BASE_URL}/api/pacientes/${id}`,
+  EVOLUCIONES_BY_PACIENTE: (id) => `${API_BASE_URL}/api/evoluciones/pacientes/${id}`,
+  NUEVA_EVOLUCION: `${API_BASE_URL}/api/evoluciones`,
+  NUEVO_PAGO: `${API_BASE_URL}/api/pagos/nuevo`,
+  OBTENER_PAGO: (id) => `${API_BASE_URL}/api/pagos/${id}`,
+  LISTAR_PAGOS: (params = "") => `${API_BASE_URL}/api/pagos/${params}`,
+  EXPORTAR_PACIENTE_WORD: (id) => `${API_BASE_URL}/api/pacientes/${id}/exportar-word`,
+  PLANES: `${API_BASE_URL}/api/planes/`,
+  REPORTAR_PAGO: `${API_BASE_URL}/api/pagos/reportar`,
+  ACTIVAR_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/activar-manual/${id}`,
+  ADMIN_PAGOS_PENDIENTES: `${API_BASE_URL}/api/pagos/admin/pendientes`,
+  APROBAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/aprobar/${id}`,
+  RECHAZAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/rechazar/${id}`, // <--- AÑADE ESTA
+  ADMIN_RESUMEN_USUARIOS: `${API_BASE_URL}/api/pagos/admin/usuarios-resumen`,
+  ACTUALIZAR_PERFIL: `${API_BASE_URL}/api/usuarios/me`,
+  CAMBIAR_PASSWORD: `${API_BASE_URL}/api/usuarios/cambiar-password`,
+};
+
+/**
+ * Optimiza una URL de Cloudinary inyectando parámetros de transformación.
+ * @param {string} url - URL original de la imagen
+ * @param {number} width - Ancho deseado
+ * @param {number} quality - Calidad (default auto)
+ * @returns {string} URL transformada
+ */
+export const optimizarImagen = (url, width = 800) => {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  
+  // f_auto: elige el formato más ligero (WebP/AVIF) según el navegador
+  // q_auto: comprime la imagen sin pérdida visual perceptible
+  // w_XXX: redimensiona al ancho exacto
+  // c_limit: no agranda la imagen si es más pequeña que el ancho pedido
+  const transformacion = `f_auto,q_auto,w_${width},c_limit`;
+  
+  // Insertamos la transformación después de '/upload/'
+  return url.replace('/upload/', `/upload/${transformacion}/`);
+};
+</file>
+
+<file path="backend_fastapi/requirements.txt">
+# Servidor y Framework
+fastapi==0.110.0
+uvicorn==0.27.1
+gunicorn==21.2.0
+
+# Base de Datos
+SQLAlchemy==2.0.27
+asyncpg==0.29.0
+alembic==1.13.1
+
+# Seguridad y Autenticación
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+# Utilidades y Variables de Entorno
+python-dotenv==1.0.1
+pytz==2024.1
+httpx==0.27.0
+
+# Integraciones (Cloudinary y Word)
+cloudinary==1.38.0
+python-docx==1.1.0
+
+# Validación de Emails
+pydantic[email]==2.6.1
+
+werkzeug==3.0.1
+bcrypt==4.3.0
+</file>
+
+<file path="frontend_nextjs/app/pagos/recibo/[codigo]/page.js">
+'use client';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { authFetch, API_BASE_URL } from '@/config/api';
+import { Printer, MessageCircle, CheckCircle, LayoutDashboard } from 'lucide-react';
+
+export default function ReciboDetalle() {
+  const { codigo } = useParams();
+  const router = useRouter();
+  const [pago, setPago] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showControls, setShowControls] = useState(true);
+
+  useEffect(() => {
+    const fetchPago = async () => {
+      try {
+        const res = await authFetch(`${API_BASE_URL}/api/pagos/codigo/${codigo}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPago(data);
+        }
+      } catch (err) {
+        console.error("Error al cargar el recibo:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPago();
+  }, [codigo]);
+
+  if (loading) return <div className="p-10 text-center font-sans">Cargando recibo...</div>;
+  if (!pago) return <div className="p-10 text-center text-red-500 font-sans">Recibo no encontrado</div>;
+
+  const formatearMoneda = (valor) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(valor);
+  };
+
+  // Formatea la fecha de forma segura sin usar zonas horarias del navegador
+  const formatearFechaSegura = (fechaStr) => {
+    if (!fechaStr) return '';
+    const partes = fechaStr.split('T')[0].split('-');
+    if (partes.length === 3) {
+      const [anio, mes, dia] = partes;
+      return `${dia}/${mes}/${anio}`;
+    }
+    return fechaStr;
+  };
+
+  const enviarWhatsApp = () => {
+    const urlRecibo = window.location.href;
+    const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
+    
+    const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
+    
+    const telefonoOriginal = pago.telefono || '';
+    const telLimpio = telefonoOriginal.replace(/\D/g, '');
+    
+    if (!telLimpio) {
+      window.open(`https://wa.me/?text=${mensaje}`, '_blank');
+    } else {
+      const telFinal = (telefonoOriginal.trim().startsWith('+') || telLimpio.startsWith('57')) 
+        ? telLimpio 
+        : `57${telLimpio}`;
+      window.open(`https://wa.me/${telFinal}?text=${mensaje}`, '_blank');
+    }
+  };
+
+  return (
+    <div 
+      onClick={() => setShowControls(!showControls)}
+      className="min-h-screen bg-gray-100 p-4 sm:p-8 flex flex-col items-center justify-center relative cursor-pointer select-none"
+    >
+      
+      {/* EL RECIBO */}
+      <div className="w-full max-w-md bg-white shadow-2xl rounded-[3.5rem] overflow-hidden border border-gray-200 transition-all duration-300 print:shadow-none print:border-none print:my-0">
+        
+        {/* Cabecera Negra */}
+        <div className="bg-black p-8 text-center text-white">
+          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle size={40} className="text-green-400" />
+          </div>
+          
+          <h1 className="text-xl font-bold tracking-tight uppercase">Pago Exitoso</h1>
+          
+          <div className="flex flex-col items-center mt-4 space-y-1">
+            <p className="text-gray-400 text-[11px] uppercase tracking-[0.2em] font-medium">
+              {pago.codigo}
+            </p>
+            {/* ✅ FECHA FORMATEADA DE FORMA SEGURA */}
+            <div className="text-gray-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
+              <span>{formatearFechaSegura(pago.fecha)}</span> 
+              <span className="text-gray-600">•</span>
+              <span>{pago.hora ? pago.hora.substring(0, 5) : ''}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-6">
+          <div className="border-b pb-4 border-dashed border-gray-200">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Paciente</p>
+            <p className="text-lg font-bold text-black leading-tight break-words uppercase">
+              {pago.paciente_nombre}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Concepto</span>
+              <span className="text-xs font-bold text-black uppercase">{pago.concepto}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Método de Pago</span>
+              <span className="text-xs font-bold text-black uppercase">{pago.metodo_pago}</span>
+            </div>
+
+            {pago.observacion && (
+              <div className="flex justify-between items-start gap-4 border-t border-gray-50 pt-2">
+                <span className="text-xs font-bold text-gray-400 uppercase shrink-0 tracking-wider">Observación</span>
+                <span className="text-xs font-bold text-black uppercase text-right leading-tight">
+                  {pago.observacion}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-gray-50 p-6 rounded-3xl text-center border border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase mb-1 tracking-widest">Total Pagado</p>
+            <p className="text-4xl font-black text-black">{formatearMoneda(pago.monto)}</p>
+          </div>
+
+          <div className="text-center pt-4 border-t border-gray-100 mt-4">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.1em] leading-tight">
+              {pago.clinica_nombre}
+            </p>
+            {pago.clinica_telefono && (
+                <p className="text-[9px] text-gray-400 font-medium mt-1">
+                    Contacto: {pago.clinica_telefono}
+                </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* --- BARRA FLOTANTE DE ACCIONES --- */}
+      <div 
+        onClick={(e) => e.stopPropagation()} 
+        className={`fixed bottom-10 left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out z-50 print:hidden
+          ${showControls ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-95 pointer-events-none'}`}
+      >
+        <div className="bg-white/90 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6">
+                  
+          {/* 1. Botón Dashboard (Solo para el Doctor) */}
+          {typeof window !== 'undefined' && localStorage.getItem('auth_token') && (
+            <>
+              <button onClick={() => router.push('/')} className="flex flex-col items-center gap-1 group">
+                <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
+                  <LayoutDashboard size={20} />
+                </div>
+                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Dashboard</span>
+              </button>
+              <div className="w-[1px] h-8 bg-gray-200" />
+            </>
+          )}
+
+          {/* 2. Botón WhatsApp (Para ambos) */}
+          <button onClick={enviarWhatsApp} className="flex flex-col items-center gap-1 group">
+            <div className="p-2 bg-green-50 text-green-600 rounded-full group-hover:bg-green-600 group-hover:text-white transition-colors">
+              <MessageCircle size={20} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">WhatsApp</span>
+          </button>
+
+          {/* 3. Botón Imprimir (Para ambos) */}
+          <button onClick={() => window.print()} className="flex flex-col items-center gap-1 group">
+            <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
+              <Printer size={20} />
+            </div>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Imprimir</span>
+          </button>
+
+        </div>
+      </div>
+
+    </div>
+  );
+}
+</file>
+
 <file path="backend_fastapi/endpoints/pagos.py">
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10313,39 +10679,32 @@ async def crear_pago(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        # 1. OBTENEMOS EL MOMENTO EXACTO EN COLOMBIA (Reloj del servidor)
-        # Esto garantiza que el pago siempre sea "hoy" y "ahora" en Bogotá.
+        # 1. Obtener el momento exacto en Colombia
         ahora_colombia = datetime.now(COLOMBIA_TZ)
-        
-        # 2. Lógica de rescate de datos del paciente
         paciente_nombre_final = pago_data.paciente_nombre
         telefono_final = pago_data.telefono
         
         if pago_data.paciente_id:
-            # Buscamos al paciente para traer su nombre real y teléfono si no se envió uno
             result = await db.execute(
                 select(Paciente).where(Paciente.id == pago_data.paciente_id)
             )
             paciente = result.scalar_one_or_none()
-            
             if paciente:
-                # Priorizamos nombres de la DB
                 paciente_nombre_final = f"{paciente.nombres} {paciente.apellidos}"
-                # Si en el form no pusieron teléfono, usamos el de la ficha
                 if not telefono_final and paciente.telefono:
                     telefono_final = paciente.telefono
         
-        # 3. Crear el pago usando el objeto 'ahora_colombia' para todo
+        # 2. Crear el registro
         nuevo_pago = PagoClinico(
             paciente_id=pago_data.paciente_id,
             odontologo_id=current_user.id,
             monto=pago_data.monto,
             metodo_pago=pago_data.metodo_pago,
-            fecha=ahora_colombia,           # <--- FECHA Y HORA REAL DE BOGOTÁ
-            hora=ahora_colombia.time(),      # <--- HORA REAL DE BOGOTÁ
+            fecha=ahora_colombia.date(),  
+            hora=ahora_colombia.time(),
             paciente_nombre=paciente_nombre_final,
             concepto=pago_data.concepto,
-            codigo=generar_codigo_unico(),   # El código R-2024... coincidirá con 'fecha'
+            codigo=generar_codigo_unico(),
             observacion=pago_data.observacion,
             telefono=telefono_final,
             es_rapido=pago_data.es_rapido
@@ -10355,19 +10714,37 @@ async def crear_pago(
         await db.commit()
         await db.refresh(nuevo_pago)
 
-        # 4. LIMPIEZA PARA EL FRONTEND:
-        # Antes de devolver el dato, aseguramos que la fecha sea solo el 'date' local.
-        if isinstance(nuevo_pago.fecha, datetime):
-            nuevo_pago.fecha = nuevo_pago.fecha.astimezone(COLOMBIA_TZ).date()
-        
-        return nuevo_pago
+        # 3. Formatear la fecha de forma segura como objeto date local sin modificar el objeto de la DB
+        fecha_local = nuevo_pago.fecha
+        if isinstance(fecha_local, datetime):
+            fecha_local = fecha_local.astimezone(COLOMBIA_TZ).date()
+        elif isinstance(fecha_local, str):
+            try:
+                fecha_local = datetime.strptime(fecha_local, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        return PagoResponse(
+            id=nuevo_pago.id,
+            codigo=nuevo_pago.codigo,
+            paciente_id=nuevo_pago.paciente_id,
+            paciente_nombre=nuevo_pago.paciente_nombre,
+            fecha=fecha_local,
+            hora=nuevo_pago.hora,
+            monto=float(nuevo_pago.monto),
+            metodo_pago=nuevo_pago.metodo_pago,
+            concepto=nuevo_pago.concepto,
+            observacion=nuevo_pago.observacion,
+            telefono=nuevo_pago.telefono,
+            es_rapido=nuevo_pago.es_rapido,
+            created_at=nuevo_pago.fecha if isinstance(nuevo_pago.fecha, datetime) else None
+        )
         
     except Exception as e:
         await db.rollback()
-        print(f"DEBUG ERROR: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error al registrar el pago: {str(e)}"
+            detail=str(e)
         )
 
 @router.get("/{id}", response_model=PagoResponse)
@@ -10385,7 +10762,6 @@ async def obtener_pago_por_codigo(
     codigo: str, 
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscamos el pago y unimos con el odontólogo que lo creó
     query = (
         select(PagoClinico, Usuario)
         .join(Usuario, PagoClinico.odontologo_id == Usuario.id)
@@ -10399,21 +10775,26 @@ async def obtener_pago_por_codigo(
 
     pago, doctor = row
     
-    # Parche de fecha (el que ya tienes)
-    if hasattr(pago, 'fecha') and isinstance(pago.fecha, datetime):
-        pago.fecha = pago.fecha.astimezone(COLOMBIA_TZ).date()
+    # Formatear la fecha de forma segura sin modificar el objeto de la DB
+    fecha_str = ""
+    if pago.fecha:
+        if isinstance(pago.fecha, datetime):
+            # Si por alguna razón es datetime, extraemos su fecha local directamente sin restar horas
+            fecha_str = pago.fecha.date().strftime('%Y-%m-%d')
+        else:
+            # Si es date, lo formateamos directamente
+            fecha_str = pago.fecha.strftime('%Y-%m-%d')
 
     return {
         "codigo": pago.codigo,
         "paciente_nombre": pago.paciente_nombre or "Paciente",
-        "fecha": pago.fecha.strftime('%Y-%m-%d') if pago.fecha else "",
+        "fecha": fecha_str,
         "hora": pago.hora.strftime('%H:%M') if pago.hora else "",
         "monto": float(pago.monto),
         "metodo_pago": pago.metodo_pago,
         "concepto": pago.concepto or "Consulta",
         "observacion": pago.observacion,
         "telefono": pago.telefono,
-        # ✅ AQUÍ ENVIAMOS LOS DATOS DE MARCA
         "clinica_nombre": doctor.nombre_consultorio or f"Dr. {doctor.nombres} {doctor.apellidos}",
         "clinica_telefono": doctor.telefono or ""
     }
@@ -10447,20 +10828,34 @@ async def listar_pagos(
     result = await db.execute(query)
     pagos_db = result.scalars().all()
 
-    # 5. LIMPIEZA DE DATOS: Fechas y nombres
+    # 5. Construir la respuesta mapeando a diccionarios limpios sin alterar la DB
+    pagos_list = []
     for p in pagos_db:
-        if hasattr(p, 'fecha') and p.fecha is not None:
+        fecha_str = ""
+        if p.fecha:
             if isinstance(p.fecha, datetime):
-                p.fecha = p.fecha.astimezone(COLOMBIA_TZ).date()
-        
-        # Mapeo de Concepto (para que no salga vacío)
-        p.concepto = getattr(p, 'concepto', "Consulta")
-        if not getattr(p, 'paciente_nombre', None):
-            p.paciente_nombre = "Paciente General"
+                fecha_str = p.fecha.date().strftime('%Y-%m-%d')
+            else:
+                fecha_str = p.fecha.strftime('%Y-%m-%d')
+
+        pagos_list.append({
+            "id": p.id,
+            "codigo": p.codigo,
+            "paciente_id": p.paciente_id,
+            "paciente_nombre": p.paciente_nombre or "Paciente General",
+            "fecha": fecha_str,
+            "hora": p.hora.strftime('%H:%M') if p.hora else None,
+            "monto": float(p.monto),
+            "metodo_pago": p.metodo_pago or "Efectivo",
+            "concepto": p.concepto or "Consulta",
+            "observacion": p.observacion,
+            "telefono": p.telefono,
+            "es_rapido": p.es_rapido
+        })
 
     return {
         "total": total_count,
-        "pagos": pagos_db,
+        "pagos": pagos_list,
         "total_pages": (total_count + per_page - 1) // per_page
     }
 
@@ -10839,333 +11234,6 @@ async def rechazar_pago_admin(
     await db.commit()
     
     return {"success": True, "message": "Pago rechazado. El usuario ha sido desbloqueado."}
-</file>
-
-<file path="backend_fastapi/requirements.txt">
-# Servidor y Framework
-fastapi==0.110.0
-uvicorn==0.27.1
-gunicorn==21.2.0
-
-# Base de Datos
-SQLAlchemy==2.0.27
-asyncpg==0.29.0
-alembic==1.13.1
-
-# Seguridad y Autenticación
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.9
-
-# Utilidades y Variables de Entorno
-python-dotenv==1.0.1
-pytz==2024.1
-httpx==0.27.0
-
-# Integraciones (Cloudinary y Word)
-cloudinary==1.38.0
-python-docx==1.1.0
-
-# Validación de Emails
-pydantic[email]==2.6.1
-</file>
-
-<file path="frontend_nextjs/app/pacientes/[id]/page.js">
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import HeaderPaciente from '@/app/components/pacientes/HeaderPaciente';
-import TarjetaInfoPaciente from '@/app/components/pacientes/TarjetaInfoPaciente';
-import Dentigrama from '@/app/components/pacientes/Dentigrama';
-import Evoluciones from '@/app/components/pacientes/Evoluciones';
-import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
-import { API_BASE_URL, authFetch, API_ENDPOINTS } from '@/config/api';
-import { ClipboardList, Activity, FileText } from 'lucide-react';
-
-export default function MostrarPaciente() {
-  const { id } = useParams();
-  const router = useRouter();
-  const [paciente, setPaciente] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [planActivo, setPlanActivo] = useState(true);
-
-  // --- ESTO ES LO QUE ESTABA AFUERA Y AHORA ESTÁ ADENTRO (CORRECTO) ---
-  const [canExport, setCanExport] = useState(true);
-
-  useEffect(() => {
-    const validarAcceso = async () => {
-      // 1. Detectar si es Admin (El admin tiene "superpoderes" y no vence)
-      const isAdmin = localStorage.getItem('is_admin') === 'true';
-      
-      if (isAdmin) {
-        setCanExport(true);
-        setPlanActivo(true);
-        return; // Si es admin, no necesitamos validar nada más
-      }
-
-      // 2. Cargar permisos del plan (Lo que compramos: Básico o Pro)
-      const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
-      if (perms.can_export_history !== undefined) {
-        setCanExport(perms.can_export_history);
-      }
-
-      // 3. Verificar estado de la suscripción (¿Ya pagó el mes/año actual?)
-      try {
-        const res = await authFetch(`${API_BASE_URL}/api/usuarios/mi-plan-detalle`);
-        if (res.ok) {
-          const data = await res.json();
-          // Solo puede exportar si el estado es exactamente 'active'
-          setPlanActivo(data.status === 'active');
-        }
-      } catch (err) {
-        console.error("Error al validar suscripción:", err);
-        // En caso de error de red, por seguridad lo dejamos activo para no bloquear al doctor
-        setPlanActivo(true); 
-      }
-    };
-
-    validarAcceso();
-  }, []);
-  // ------------------------------------------------------------------
-
-  useEffect(() => {
-    const fetchPaciente = async () => {
-      // 1. Verificación preventiva: Si el ID es nulo o inválido, no disparamos la petición
-      if (!id || id === 'null' || id === 'undefined') {
-          setLoading(false);
-          return;
-      }
-
-      try {
-        const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`);
-        if (!response.ok) throw new Error('Paciente no encontrado');
-        const data = await response.json();
-        setPaciente(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPaciente();
-  }, [id]);
-
-  const handleEliminar = async () => {
-    const confirmar = confirm('¿Estás seguro de mover este paciente a la papelera?');
-    if (!confirmar) return;
-    try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes/${id}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        alert('Paciente movido a la papelera');
-        router.push('/pacientes');
-      } else {
-        const error = await response.json();
-        alert(error.detail || 'Error al eliminar');
-      }
-    } catch (error) {
-      alert('Error de conexión');
-    }
-  };
-
-  const handleExportarWord = async () => {
-    if (!canExport) return alert("La descarga de historia clínica en Word es exclusiva del Plan PRO");
-    try {
-      const response = await authFetch(API_ENDPOINTS.EXPORTAR_PACIENTE_WORD(id));
-      if (!response.ok) throw new Error('Error al generar el documento');
-
-      // Manejo de archivo binario (Blob)
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Historia_${paciente.apellidos}.docx`);
-      document.body.appendChild(link);
-      link.click();
-      
-      // Limpieza
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      alert('No se pudo descargar la historia clínica');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <HeaderPaciente loading={true} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center text-red-600">
-          Error: {error}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      
-      {/* 2. Header: Sin el botón manual afuera para evitar duplicados */}
-      <HeaderPaciente 
-        paciente={paciente}
-        modo="mostrar"
-        onEliminar={handleEliminar}
-      />
-      
-      <TarjetaInfoPaciente 
-        paciente={paciente}
-        modo="mostrar"
-      />
-      
-      {/* 3. Evoluciones con Icono y Botón de Exportar */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-gray-800">
-            <ClipboardList size={20} className="text-blue-500" />
-            <h2 className="font-bold">Evoluciones Clínicas</h2>
-          </div>
-          
-          <button
-            onClick={handleExportarWord}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-              !canExport 
-              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed grayscale' 
-              : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
-            }`}
-          >
-            <FileText size={16} />
-            {canExport ? 'EXPORTAR HISTORIA' : 'EXPORTAR (PRO) 🔒'}
-          </button>
-        </div>
-        <Evoluciones pacienteId={id} />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        {/* 4. Dentigrama con Icono */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4 text-gray-800">
-            <Activity size={20} className="text-purple-500" />
-            <h2 className="font-bold">Odontograma Digital</h2>
-          </div>
-          <Dentigrama 
-            dentigramaCanvas={paciente.dentigrama_canvas}
-            modo="mostrar"
-          />
-        </div>
-
-        <ImagenPerfil 
-          imagenUrl={paciente.imagen_perfil_url}
-          nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
-        />
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="frontend_nextjs/config/api.js">
-// config/api.js
-
-// 1. Lógica de URL: Usa la variable de entorno o la IP local por defecto
-const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-
-export const API_BASE_URL = rawBaseUrl.replace(/\/$/, ""); 
-
-
-
-export const getAuthToken = () => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('auth_token');
-  }
-  return null;
-};
-
-export const setAuthToken = (token) => {
-  if (typeof window !== 'undefined') {
-    token ? localStorage.setItem('auth_token', token) : localStorage.removeItem('auth_token');
-  }
-};
-
-export const authFetch = async (url, options = {}) => {
-  const token = getAuthToken();
-  const headers = {
-    ...options.headers,
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  if (options.body && !(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
-  
-  // 🔥 IMPORTANTE: Asegurar que la URL no termine con espacios o caracteres raros
-  const cleanUrl = url.trim();
-  return fetch(cleanUrl, { ...options, headers });
-};
-
-export const API_ENDPOINTS = {
-  LOGIN: `${API_BASE_URL}/api/auth/login`,
-  REGISTER: `${API_BASE_URL}/api/auth/register`,
-  PERFIL_USUARIO: `${API_BASE_URL}/api/usuarios/me`,
-  CITAS_POR_FECHA: (fecha) => `${API_BASE_URL}/api/citas/por-fecha?fecha=${fecha}`,
-  DASHBOARD_HOME_DATA: (params = "") => `${API_BASE_URL}/api/dashboard/home-data${params}`,
-  NUEVA_CITA: `${API_BASE_URL}/api/citas`,
-  EDITAR_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
-  ELIMINAR_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
-  OBTENER_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
-  CITAS_EVENTOS: `${API_BASE_URL}/api/citas/eventos`,
-  PACIENTES: `${API_BASE_URL}/api/pacientes`,
-  PACIENTE_BY_ID: (id) => `${API_BASE_URL}/api/pacientes/${id}`,
-  EVOLUCIONES_BY_PACIENTE: (id) => `${API_BASE_URL}/api/evoluciones/pacientes/${id}`,
-  NUEVA_EVOLUCION: `${API_BASE_URL}/api/evoluciones`,
-  NUEVO_PAGO: `${API_BASE_URL}/api/pagos/nuevo`,
-  OBTENER_PAGO: (id) => `${API_BASE_URL}/api/pagos/${id}`,
-  LISTAR_PAGOS: (params = "") => `${API_BASE_URL}/api/pagos/${params}`,
-  EXPORTAR_PACIENTE_WORD: (id) => `${API_BASE_URL}/api/pacientes/${id}/exportar-word`,
-  PLANES: `${API_BASE_URL}/api/planes/`,
-  REPORTAR_PAGO: `${API_BASE_URL}/api/pagos/reportar`,
-  ACTIVAR_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/activar-manual/${id}`,
-  ADMIN_PAGOS_PENDIENTES: `${API_BASE_URL}/api/pagos/admin/pendientes`,
-  APROBAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/aprobar/${id}`,
-  RECHAZAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/rechazar/${id}`, // <--- AÑADE ESTA
-  ADMIN_RESUMEN_USUARIOS: `${API_BASE_URL}/api/pagos/admin/usuarios-resumen`,
-  ACTUALIZAR_PERFIL: `${API_BASE_URL}/api/usuarios/me`,
-  CAMBIAR_PASSWORD: `${API_BASE_URL}/api/usuarios/cambiar-password`,
-};
-
-/**
- * Optimiza una URL de Cloudinary inyectando parámetros de transformación.
- * @param {string} url - URL original de la imagen
- * @param {number} width - Ancho deseado
- * @param {number} quality - Calidad (default auto)
- * @returns {string} URL transformada
- */
-export const optimizarImagen = (url, width = 800) => {
-  if (!url || !url.includes('cloudinary.com')) return url;
-  
-  // f_auto: elige el formato más ligero (WebP/AVIF) según el navegador
-  // q_auto: comprime la imagen sin pérdida visual perceptible
-  // w_XXX: redimensiona al ancho exacto
-  // c_limit: no agranda la imagen si es más pequeña que el ancho pedido
-  const transformacion = `f_auto,q_auto,w_${width},c_limit`;
-  
-  // Insertamos la transformación después de '/upload/'
-  return url.replace('/upload/', `/upload/${transformacion}/`);
-};
 </file>
 
 </files>

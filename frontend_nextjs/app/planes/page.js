@@ -27,7 +27,7 @@ export default function PlanesPage() {
       }
 
       // Cargar todos los planes
-      const resPlanes = await fetch(`${API_BASE_URL}/api/planes`);
+      const resPlanes = await fetch(`${API_BASE_URL}/api/planes/`);
       const planesData = await resPlanes.json();
       setPlanes(planesData);
     } catch (error) {

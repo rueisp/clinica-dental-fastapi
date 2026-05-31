@@ -282,9 +282,11 @@ function DashboardContent() {
 }
 
 const DashboardPage = () => {
-  const [isClient, setIsClient] = React.useState(false);
+  // Cambiado: Quitar "React." y usar directamente "useState"
+  const [isClient, setIsClient] = useState(false);
 
-  React.useEffect(() => {
+  // Cambiado: Quitar "React." y usar directamente "useEffect"
+  useEffect(() => {
     setIsClient(true);
   }, []);
 

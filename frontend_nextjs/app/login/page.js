@@ -98,8 +98,8 @@ export default function LoginPage() {
         </form>
         
         <div className="mt-4 text-sm text-gray-500 text-center">
-          <p>Usuario: admin</p>
-          <p>Contraseña: admin123</p>
+          <p>Organiza tu consultorio de manera eficiente.</p>
+          
         </div>
       </div>
     </div>

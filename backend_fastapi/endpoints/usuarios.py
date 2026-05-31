@@ -47,7 +47,9 @@ async def get_usuario_actual(
         status = sub.status
         es_anual = plan.duracion_dias == 365
         if sub.current_period_end:
-            fecha_fin = sub.current_period_end.replace(tzinfo=None) if sub.current_period_end.tzinfo else sub.current_period_end
+            # Extraemos una copia limpia del valor para evitar mutar el objeto de la DB
+            db_date = sub.current_period_end
+            fecha_fin = db_date.replace(tzinfo=None) if db_date.tzinfo else db_date
             dias_restantes = max(0, (fecha_fin - hoy).days)
             fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
 
@@ -173,27 +175,23 @@ async def get_mi_plan_detalle(
     
     sub, plan = row
     
-    # 2. SINCRONIZACIÓN BOGOTÁ
-    # Usamos la zona horaria de Colombia para comparar contra el vencimiento
+    # 2. SINCRONIZACIÓN BOGOTÁ (Evitando mutar los objetos de la DB)
     ahora = datetime.now(COLOMBIA_TZ)
     
-    # Si por algún error no hay fecha de fin, ponemos una de seguridad (7 días)
-    fecha_fin = sub.current_period_end
-    if fecha_fin.tzinfo is None:
-        fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
+    # Extraemos copias limpias de las fechas de la DB
+    db_fecha_fin = sub.current_period_end
+    fecha_fin = db_fecha_fin.replace(tzinfo=None) if db_fecha_fin.tzinfo else db_fecha_fin
+    fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
 
     # 3. CÁLCULO DE DÍAS REALES (Sin pánico de '0 días')
     diferencia = fecha_fin - ahora
-    # Usamos total_seconds para captar las horas restantes y redondeamos hacia arriba
-    # Así, si le quedan 10 horas, el sistema dirá "1 día restante" en lugar de "0"
     segundos_restantes = diferencia.total_seconds()
     dias_restantes = max(0, int(segundos_restantes / 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
     
     # 4. CÁLCULO DE PROGRESO (Barra Visual)
-    # Calculamos cuánto tiempo ha pasado desde que inició el ciclo
-    fecha_inicio = sub.current_period_start or (fecha_fin - timedelta(days=plan.duracion_dias))
-    if fecha_inicio.tzinfo is None:
-        fecha_inicio = COLOMBIA_TZ.localize(fecha_inicio)
+    db_fecha_inicio = sub.current_period_start or (db_fecha_fin - timedelta(days=plan.duracion_dias))
+    fecha_inicio = db_fecha_inicio.replace(tzinfo=None) if db_fecha_inicio.tzinfo else db_fecha_inicio
+    fecha_inicio = COLOMBIA_TZ.localize(fecha_inicio)
         
     duracion_total_segundos = (fecha_fin - fecha_inicio).total_seconds()
     tiempo_transcurrido_segundos = (ahora - fecha_inicio).total_seconds()

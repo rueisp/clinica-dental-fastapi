@@ -46,7 +46,7 @@ export default function ListaPacientes() {
     setHaBuscado(true);
     
     try {
-      const url = `${API_BASE_URL}/api/pacientes?page=1&per_page=${porPagina}`;
+      const url = `${API_BASE_URL}/api/pacientes/?page=1&per_page=${porPagina}`;
       
       const response = await authFetch(url);
       const data = await response.json();
@@ -67,7 +67,7 @@ export default function ListaPacientes() {
     setHaBuscado(true);
     
     try {
-      let url = `${API_BASE_URL}/api/pacientes?page=${page}&per_page=${porPagina}`;
+      let url = `${API_BASE_URL}/api/pacientes/?page=${page}&per_page=${porPagina}`;
       if (buscar) {
         url += `&search=${buscar}`;
       }
