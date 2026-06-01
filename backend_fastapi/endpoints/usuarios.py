@@ -50,7 +50,12 @@ async def get_usuario_actual(
             # Extraemos una copia limpia del valor para evitar mutar el objeto de la DB
             db_date = sub.current_period_end
             fecha_fin = db_date.replace(tzinfo=None) if db_date.tzinfo else db_date
-            dias_restantes = max(0, (fecha_fin - hoy).days)
+            
+            # Cálculo preciso de días restantes redondeando hacia arriba (evita marcar como expirado antes de tiempo)
+            diferencia = fecha_fin - hoy
+            segundos_restantes = diferencia.total_seconds()
+            dias_restantes = max(0, int(segundos_restantes / 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+            
             fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
 
     return {

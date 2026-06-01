@@ -34,15 +34,15 @@ function LandingContent() {
       {/* --- SECCIÓN 1: BLINDAJE LEGAL (Naturaleza del servicio) --- */}
       <section className="bg-zinc-50 py-12 border-y border-zinc-100">
         <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto bg-white p-8 rounded-[2rem] border border-zinc-200 flex flex-col md:flex-row items-center gap-8 shadow-sm">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
+          <div className="max-w-4xl mx-auto bg-amber-50/60 p-8 rounded-[2rem] border border-amber-200 flex flex-col md:flex-row items-center gap-8 shadow-sm">
+            <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
               <ShieldAlert size={32} />
             </div>
             <div>
-              <h3 className="text-xl font-black text-zinc-900 uppercase tracking-tight mb-2">Herramienta de Apoyo Administrativo</h3>
-              <p className="text-zinc-500 leading-relaxed text-sm italic">
+              <h3 className="text-xl font-black text-amber-900 uppercase tracking-tight mb-2">Herramienta de Apoyo Administrativo</h3>
+              <p className="text-amber-800 leading-relaxed text-sm italic">
                 CloudentApp es un software diseñado para facilitar la gestión organizacional. 
-                <span className="text-zinc-900 font-bold"> No constituye un sistema de historia clínica oficial </span> 
+                <span className="text-amber-950 font-bold"> No constituye un sistema de historia clínica oficial </span> 
                 según la Resolución 3100 de 2019 (Colombia). El odontólogo usuario es el único responsable legal del tratamiento de los datos de sus pacientes.
               </p>
             </div>
@@ -62,29 +62,37 @@ function LandingContent() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {/* Agenda */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all">
-              <div className="aspect-video bg-zinc-100 rounded-2xl mb-4 overflow-hidden border border-zinc-100">
-                <img src="/Agenda de citas.PNG" alt="Agenda de citas" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
+              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
+                <img src="/agenda.png" alt="Agenda de citas" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
               </div>
-              <h4 className="font-bold flex items-center gap-2"><Calendar size={18} className="text-blue-600" /> Agenda Inteligente</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-auto"><Calendar size={18} className="text-blue-600" /> Agenda Inteligente</h4>
             </div>
 
             {/* Evolución por Voz */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all">
-              <div className="aspect-video bg-zinc-100 rounded-2xl mb-4 overflow-hidden border border-zinc-100">
-                <img src="/Evolución por voz.PNG" alt="Evolución por voz" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
+              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
+                <img src="/evolucion.png" alt="Evolución por voz" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
               </div>
-              <h4 className="font-bold flex items-center gap-2"><Mic size={18} className="text-blue-600" /> Evolución por Voz</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-auto"><Mic size={18} className="text-blue-600" /> Evolución por Voz</h4>
             </div>
 
             {/* Odontograma */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all">
-              <div className="aspect-video bg-zinc-100 rounded-2xl mb-4 overflow-hidden border border-zinc-100">
-                <img src="/odontograma.PNG" alt="Odontograma Digital" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
+              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
+                <img src="/odontograma.png" alt="Odontograma Digital" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
               </div>
-              <h4 className="font-bold flex items-center gap-2"><Layout size={18} className="text-blue-600" /> Odontograma Interactivo</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-auto"><Layout size={18} className="text-blue-600" /> Odontograma Interactivo</h4>
+            </div>
+
+            {/* Recibo de Pago Rápido */}
+            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
+              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
+                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
+              </div>
+              <h4 className="font-bold flex items-center gap-2 mt-auto"><FileText size={18} className="text-blue-600" /> Recibo de Pago Rápido</h4>
             </div>
           </div>
           
