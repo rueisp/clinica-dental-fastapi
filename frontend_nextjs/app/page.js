@@ -62,37 +62,61 @@ function LandingContent() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {/* Agenda */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
-              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
-                <img src="/agenda.png" alt="Agenda de citas" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 justify-items-center">
+            {/* Agenda Inteligente */}
+            <div className="group flex flex-col items-center">
+              {/* Smartphone Frame */}
+              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
+                {/* Isla Dinámica / Notch */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
+                {/* Pantalla */}
+                <img src="/agenda.png" alt="Agenda de citas" className="w-full h-full object-cover" />
               </div>
-              <h4 className="font-bold flex items-center gap-2 mt-auto"><Calendar size={18} className="text-blue-600" /> Agenda Inteligente</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
+                <Calendar size={20} className="text-blue-600" /> Agenda Inteligente
+              </h4>
             </div>
 
             {/* Evolución por Voz */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
-              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
-                <img src="/evolucion.png" alt="Evolución por voz" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
+            <div className="group flex flex-col items-center">
+              {/* Smartphone Frame */}
+              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
+                {/* Isla Dinámica / Notch */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
+                {/* Pantalla */}
+                <img src="/evolucion.png" alt="Evolución por voz" className="w-full h-full object-cover" />
               </div>
-              <h4 className="font-bold flex items-center gap-2 mt-auto"><Mic size={18} className="text-blue-600" /> Evolución por Voz</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
+                <Mic size={20} className="text-blue-600" /> Evolución por Voz
+              </h4>
             </div>
 
-            {/* Odontograma */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
-              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
-                <img src="/odontograma.png" alt="Odontograma Digital" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
+            {/* Odontograma Interactivo */}
+            <div className="group flex flex-col items-center">
+              {/* Smartphone Frame */}
+              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
+                {/* Isla Dinámica / Notch */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
+                {/* Pantalla */}
+                <img src="/odontograma.png" alt="Odontograma Digital" className="w-full h-full object-cover" />
               </div>
-              <h4 className="font-bold flex items-center gap-2 mt-auto"><Layout size={18} className="text-blue-600" /> Odontograma Interactivo</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
+                <Layout size={20} className="text-blue-600" /> Odontograma Interactivo
+              </h4>
             </div>
 
             {/* Recibo de Pago Rápido */}
-            <div className="group bg-white p-4 rounded-3xl border border-zinc-200 shadow-sm hover:shadow-xl transition-all flex flex-col">
-              <div className="h-56 bg-zinc-50 rounded-2xl mb-4 overflow-hidden border border-zinc-100 flex items-center justify-center p-4">
-                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="max-w-full max-h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500 shadow-sm" />
+            <div className="group flex flex-col items-center">
+              {/* Smartphone Frame */}
+              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
+                {/* Isla Dinámica / Notch */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
+                {/* Pantalla */}
+                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="w-full h-full object-cover" />
               </div>
-              <h4 className="font-bold flex items-center gap-2 mt-auto"><FileText size={18} className="text-blue-600" /> Recibo de Pago Rápido</h4>
+              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
+                <FileText size={20} className="text-blue-600" /> Recibo de Pago Rápido
+              </h4>
             </div>
           </div>
           
