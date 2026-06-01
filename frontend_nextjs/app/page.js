@@ -70,7 +70,8 @@ function LandingContent() {
                 {/* Isla Dinámica / Notch */}
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
                 {/* Pantalla */}
-                <img src="/agenda.png" alt="Agenda de citas" className="w-full h-full object-cover" />
+                {/* Pantalla */}
+                <img src="/agenda.png" alt="Agenda de citas" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
               </div>
               <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
                 <Calendar size={20} className="text-blue-600" /> Agenda Inteligente
@@ -84,7 +85,7 @@ function LandingContent() {
                 {/* Isla Dinámica / Notch */}
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
                 {/* Pantalla */}
-                <img src="/evolucion.png" alt="Evolución por voz" className="w-full h-full object-cover" />
+                <img src="/evolucion.png" alt="Evolución por voz" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
               </div>
               <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
                 <Mic size={20} className="text-blue-600" /> Evolución por Voz
@@ -98,7 +99,8 @@ function LandingContent() {
                 {/* Isla Dinámica / Notch */}
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
                 {/* Pantalla */}
-                <img src="/odontograma.png" alt="Odontograma Digital" className="w-full h-full object-cover" />
+                {/* Pantalla */}
+                <img src="/odontograma.png" alt="Odontograma Digital" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
               </div>
               <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
                 <Layout size={20} className="text-blue-600" /> Odontograma Interactivo
@@ -112,7 +114,7 @@ function LandingContent() {
                 {/* Isla Dinámica / Notch */}
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
                 {/* Pantalla */}
-                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="w-full h-full object-cover" />
+                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
               </div>
               <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
                 <FileText size={20} className="text-blue-600" /> Recibo de Pago Rápido
