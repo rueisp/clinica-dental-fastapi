@@ -171,7 +171,7 @@ export default function PlanesPage() {
                   </li>
 
                   {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Incluido en todos) */}
-                  <li className="flex items-center gap-2 text-blue-700 font-bold bg-blue-50 px-2 py-1 rounded-lg">
+                  <li className="flex items-center gap-2 text-gray-700">
                     <span>🧾</span> Generar recibos rápidos
                   </li>
 

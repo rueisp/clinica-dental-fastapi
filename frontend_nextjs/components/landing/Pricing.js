@@ -107,7 +107,7 @@ export default function Pricing() {
                                 </li>
                                 
                                 {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Para todos los planes) */}
-                                <li className="flex items-center gap-2 text-blue-700 font-semibold bg-blue-50/50 p-1 rounded">
+                                <li className="flex items-center gap-2 text-gray-700">
                                     <span className="text-blue-500">🧾</span> Generar recibos de cobro rápido
                                 </li>
 
