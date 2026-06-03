@@ -51,19 +51,41 @@ export default function TerminosPage() {
               </ul>
             </section>
 
+            {/* 🔥 NUEVA SECCIÓN DE SEGURIDAD Y BLINDAJE LEGAL */}
+            <section className="bg-red-50/50 p-6 rounded-2xl border border-red-100">
+              <h3 className="text-lg font-black text-red-950 uppercase flex items-center gap-2">
+                ⚠️ 3. Política de Uso Aceptable y Suspensión de Servicio
+              </h3>
+              <p className="text-red-900 text-sm mt-2 leading-relaxed">
+                CloudentApp promueve un entorno seguro y profesional. Queda estrictamente prohibido el uso de la plataforma para almacenar, transmitir o procesar material que sea ilegal, difamatorio, obsceno, ofensivo o que infrinja derechos de propiedad intelectual.
+              </p>
+              <p className="text-red-900 text-sm mt-2 leading-relaxed font-bold">
+                Nos reservamos el derecho unilateral de suspender temporalmente o rescindir de forma definitiva y sin previo aviso el acceso a cualquier cuenta que:
+              </p>
+              <ul className="list-disc pl-6 mt-2 text-red-900 text-xs space-y-1">
+                <li>Suba imágenes inadecuadas, obscenas, de contenido explícito no clínico o ajenas a la práctica odontológica.</li>
+                <li>Registre textos ofensivos, difamatorios o lenguaje inapropiado en las evoluciones, observaciones o fichas de pacientes.</li>
+                <li>Realice actividades que saturen, comprometan o intenten vulnerar la seguridad de los servidores de CloudentApp.</li>
+                <li>Incurra en impago de las tarifas correspondientes a los planes profesionales contratados.</li>
+              </ul>
+              <p className="text-red-900 text-xs mt-2 italic">
+                La suspensión por violación a esta política no dará derecho a reembolsos ni indemnizaciones de ningún tipo.
+              </p>
+            </section>
+
             <section>
-              <h3 className="text-lg font-black text-zinc-900 uppercase">3. Suscripciones y Pagos</h3>
+              <h3 className="text-lg font-black text-zinc-900 uppercase">4. Suscripciones y Pagos</h3>
               <p>Ofrecemos una prueba gratuita de 7 días. Los planes profesionales se activan mediante reporte de pago manual. CloudentApp se reserva el derecho de suspender el acceso ante la falta de pago o uso indebido.</p>
             </section>
 
             <section>
-              <h3 className="text-lg font-black text-zinc-900 uppercase">4. Limitación de Responsabilidad</h3>
+              <h3 className="text-lg font-black text-zinc-900 uppercase">5. Limitación de Responsabilidad</h3>
               <p>CloudentApp no se hace responsable por pérdida de datos ajena a nuestra voluntad, ni por reclamaciones de terceros derivadas del ejercicio profesional del Usuario.</p>
             </section>
 
             <section className="pt-8 border-t border-zinc-100">
               <p className="text-sm font-bold italic">Estos términos se rigen por las leyes de la República de Colombia.</p>
-              <p className="text-sm">Contacto legal: <span className="text-blue-600 font-bold text-lg">tucorreo@ejemplo.com</span></p>
+              <p className="text-sm">Contacto legal: <span className="text-blue-600 font-bold text-lg">cloudentapp.cliente@gmail.com</span></p>
             </section>
           </article>
         </div>

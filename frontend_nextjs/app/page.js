@@ -153,12 +153,12 @@ function LandingContent() {
           <div className="space-y-4">
             <h5 className="font-black uppercase text-xs tracking-widest text-blue-500">Soporte</h5>
             <p className="text-zinc-400 text-sm">¿Dudas o sugerencias?</p>
-            <p className="font-bold text-white tracking-tight">tucorreo@ejemplo.com</p>
+            <p className="font-bold text-white tracking-tight">cloudentapp.cliente@gmail.com</p>
           </div>
         </div>
         <div className="container mx-auto max-w-6xl pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-zinc-600 gap-4">
           <p>© 2026 CloudentApp. Todos los derechos reservados.</p>
-          <p className="bg-zinc-900 px-3 py-1 rounded-full">Operado por Luis Pitre - Proveedor Tecnológico</p>
+          <p className="bg-zinc-900 px-3 py-1 rounded-full">Operado por Rueis Pitre - Proveedor Tecnológico</p>
         </div>
       </footer>
     </main>
