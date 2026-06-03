@@ -99,11 +99,8 @@ export default function Pricing() {
                             
                             <ul className="space-y-3 mb-8 flex-grow text-sm">
                                 {/* 1. Funciones Administrativas (Para todos los planes) */}
-                                <li className="flex items-center gap-2 text-gray-700 font-bold">
-                                    <span className="text-green-500">✅</span> Pacientes Ilimitados
-                                </li>
                                 <li className="flex items-center gap-2 text-gray-700">
-                                    <span className="text-green-500">✅</span> Agenda de Citas
+                                    <span className="text-green-500">✅</span> <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
                                 </li>
                                 
                                 {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Para todos los planes) */}
