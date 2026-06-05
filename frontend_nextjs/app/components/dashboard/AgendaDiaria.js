@@ -146,12 +146,7 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
                               {cita.motivo}
                             </span>
                           )}
-                          {/* Si eres admin, te muestra qué doctor atiende esta cita */}
-                          {cita.doctor && (
-                            <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-md font-bold">
-                              {cita.doctor}
-                            </span>
-                          )}
+
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">

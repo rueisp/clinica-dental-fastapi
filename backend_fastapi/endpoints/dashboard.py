@@ -309,6 +309,7 @@ async def create_cita(
         fecha=fecha_obj,
         hora=hora_obj,
         motivo=cita_data.motivo,
+        doctor=cita_data.doctor if cita_data.doctor else f"Dr. {current_user.nombres} {current_user.apellidos or ''}".strip(),
         odontologo_id=current_user.id,
         paciente_id=cita_data.paciente_id if cita_data.paciente_id else None,
         # Guardamos nombre y teléfono "sueltos" para que aparezcan en negro si no hay historial

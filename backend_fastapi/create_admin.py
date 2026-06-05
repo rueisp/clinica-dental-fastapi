@@ -17,6 +17,7 @@ async def create_admin():
                 email="admin@clinica.com",
                 password_hash=hash_password("admin123"),
                 nombres="Administrador",
+                apellidos="Sistema",  # <--- AGREGADO PARA EVITAR EL ERROR NOT-NULL
                 is_admin=True
             )
             db.add(admin)
