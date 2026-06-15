@@ -10,6 +10,11 @@ COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
     """Valida que la suscripción esté activa."""
+    # 2. ✅ BYPASS PARA EL ADMINISTRADOR: Retorna una suscripción activa ficticia
+    if current_user.is_admin:
+        return Subscription(status="active", plan_type="pro")
+
+    # El resto de tu función se mantiene exactamente igual:
     result = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
@@ -52,6 +57,11 @@ async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSessio
     return True
 
 async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
+    # 1. ✅ BYPASS PARA EL ADMINISTRADOR: El admin no tiene límites de registro
+    if current_user.is_admin:
+        return True
+
+    # El resto de tu función se mantiene exactamente igual:
     sub = await verificar_suscripcion_activa(current_user, db)
     
     # ✅ FECHA LOCAL: Obtenemos la fecha actual en Colombia

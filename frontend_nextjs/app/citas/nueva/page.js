@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -28,6 +28,8 @@ function NuevaCitaForm() {
   const [buscarPaciente, setBuscarPaciente] = useState('');
   const [pacientes, setPacientes] = useState([]);
   const [mostrarResultados, setMostrarResultados] = useState(false);
+  const [buscando, setBuscando] = useState(false); // Estado de carga local para el buscador
+  const abortControllerRef = useRef(null); // Referencia para abortar peticiones
 
   useEffect(() => {
     if (buscarPaciente.length >= 3) {
@@ -35,21 +37,74 @@ function NuevaCitaForm() {
         buscarPacientesAPI(buscarPaciente);
       }, 400);
 
-      return () => clearTimeout(delayDebounceFn);
+      return () => {
+        clearTimeout(delayDebounceFn);
+      };
     } else {
       setPacientes([]);
       setMostrarResultados(false);
+      setBuscando(false);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
   }, [buscarPaciente]);
 
+  // Limpieza al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const buscarPacientesAPI = async (termino) => {
+    // 1. Cancelar cualquier petición idéntica previa que siga activa
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // 2. Crear un nuevo controlador para esta petición
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setBuscando(true);
+    setMostrarResultados(true);
+
     try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes/?search=${termino}`);
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes/?search=${termino}`, {
+        signal: controller.signal
+      });
+
+      // 3. Validar de forma estricta el estado de la respuesta
+      if (!response.ok) {
+        if (response.status === 401) {
+          alert("Tu sesión ha expirado. Por favor, inicia sesión nuevamente.");
+          router.push('/login');
+          return;
+        }
+        throw new Error(`Error del servidor: ${response.status}`);
+      }
+
       const data = await response.json();
-      setPacientes(data.pacientes || []);
-      setMostrarResultados(true);
+      
+      // Solo actualizamos el estado si esta petición no fue abortada en el camino
+      if (!controller.signal.aborted) {
+        setPacientes(data.pacientes || []);
+      }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        // Petición cancelada intencionalmente por el usuario al seguir escribiendo, ignorar
+        return;
+      }
       console.error('Error buscando pacientes:', err);
+      setPacientes([]);
+    } finally {
+      // Solo apagamos el estado de carga si este controlador sigue siendo el último activo
+      if (abortControllerRef.current === controller) {
+        setBuscando(false);
+      }
     }
   };
 
@@ -131,19 +186,30 @@ function NuevaCitaForm() {
               />
             </div>
             
-            {mostrarResultados && pacientes.length > 0 && (
+            {mostrarResultados && (buscando || pacientes.length > 0 || buscarPaciente.length >= 3) && (
               <div className="absolute z-10 w-full mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                {pacientes.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => seleccionarPaciente(p)}
-                    className="w-full text-left px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors group"
-                  >
-                    <div className="font-bold text-black group-hover:text-blue-600">{p.nombres} {p.apellidos}</div>
-                    <div className="text-xs text-gray-400 font-medium">Doc: {p.documento || 'N/A'} • Tel: {p.telefono}</div>
-                  </button>
-                ))}
+                {buscando ? (
+                  <div className="px-5 py-4 text-sm text-gray-400 font-medium flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    Buscando pacientes...
+                  </div>
+                ) : pacientes.length > 0 ? (
+                  pacientes.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => seleccionarPaciente(p)}
+                      className="w-full text-left px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors group"
+                    >
+                      <div className="font-bold text-black group-hover:text-blue-600">{p.nombres} {p.apellidos}</div>
+                      <div className="text-xs text-gray-400 font-medium">Doc: {p.documento || 'N/A'} • Tel: {p.telefono}</div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-5 py-4 text-gray-400 text-sm font-medium">
+                    No se encontraron pacientes
+                  </div>
+                )}
               </div>
             )}
           </div>

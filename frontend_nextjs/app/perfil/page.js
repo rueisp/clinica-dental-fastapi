@@ -237,7 +237,7 @@ export default function PerfilPage() {
                         <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100">
                              <h4 className="font-bold text-blue-800 text-sm mb-2">¿Necesitas ayuda?</h4>
                              <p className="text-blue-600 text-xs leading-relaxed">
-                                Si tienes problemas con tu cuenta o pagos, contáctanos directamente vía WhatsApp soporte.
+                                Si tienes problemas con tu cuenta o pagos, contáctanos directamente por correo electrónico a cloudentapp.cliente@gmail.com.
                              </p>
                         </div>
                     </div>

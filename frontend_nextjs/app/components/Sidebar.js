@@ -17,23 +17,32 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // 3. CAMBIO: Lógica de etiquetas simplificada (se calcula en cada renderizado)
+  // 3. Lógica de etiquetas corregida basada en el nombre real del plan
   const planLabel = (() => {
     if (loading || !user) return { nombre: 'Cargando...', color: 'text-gray-400' };
     if (user.is_admin) return { nombre: 'Administrador', color: 'text-purple-600' };
     
-    const p = user.permissions;
-    if (p?.can_use_odontogram && p?.can_use_voice) return { nombre: 'Plan Pro', color: 'text-purple-600' };
-    if (p?.can_export_history) return { nombre: 'Plan Básico', color: 'text-blue-600' };
-    return { nombre: 'Plan Trial', color: 'text-green-600' };
+    const planNombre = user.plan_info?.nombre?.toLowerCase() || '';
+    
+    if (planNombre === 'trial') {
+      return { nombre: 'Plan Trial', color: 'text-green-600' };
+    }
+    if (planNombre.includes('basic') || planNombre.includes('basico')) {
+      return { nombre: 'Plan Básico', color: 'text-blue-600' };
+    }
+    if (planNombre.includes('pro')) {
+      return { nombre: 'Plan Pro', color: 'text-purple-600' };
+    }
+    
+    return { nombre: 'Plan Activo', color: 'text-gray-600' };
   })();
 
   // 4. CAMBIO: Solo mantenemos el efecto para el tamaño de pantalla
   useEffect(() => {
     const checkScreenSize = () => {
-      const mobile = window.innerWidth < 768;
+      const mobile = window.innerWidth < 1024; // Cambiado de 768 a 1024
       setIsMobile(mobile);
-      setIsOpen(!mobile); // Abierto en PC, cerrado en móvil
+      setIsOpen(!mobile); // Abierto en PC, cerrado en móvil/tablet
     };
 
     checkScreenSize();

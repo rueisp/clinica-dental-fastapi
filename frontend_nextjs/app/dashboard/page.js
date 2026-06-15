@@ -133,7 +133,7 @@ function DashboardContent() {
     <AuthGuard>
       <div className="min-h-screen bg-gray-50 pb-20">
         {/* Cabecera */}
-        <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto sm:pr-40">
+        <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto lg:pr-40">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-black leading-tight">

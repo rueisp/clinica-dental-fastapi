@@ -1,15 +1,15 @@
 [
   {
-    "name": "borrar-imagenes-antiguas",
+    "name": "borrar-versiones-excedentes",
     "action": {
       "type": "Delete"
     },
     "condition": {
-      "olderThan": "10d"
+      "tagState": "any"
     }
   },
   {
-    "name": "conservar-minimo-recientes",
+    "name": "conservar-maximo-2-recientes",
     "action": {
       "type": "Keep"
     },

@@ -59,8 +59,13 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
       conectorTemporal = "mañana";
     }
 
-    // 4. Formatear el nombre del paciente (Capitalize)
-    const nombreFormateado = nombre.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+    // 4. Formatear el nombre del paciente (Capitalize seguro con tildes y ñ)
+    const nombreFormateado = nombre
+      .toLowerCase()
+      .split(' ')
+      .filter(Boolean) // Evita fallos si hay espacios dobles accidentales
+      .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+      .join(' ');
 
     // 5. Construir el mensaje personalizado
     const mensaje = `Hola ${nombreFormateado}, te recordamos tu cita odontológica ${conectorTemporal} a las ${hora}. Me confirmas por favor si puedes asistir.`;

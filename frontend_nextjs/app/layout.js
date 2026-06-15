@@ -25,8 +25,8 @@ export default function RootLayout({ children }) {
               key={cleanPathname}
               className={`flex-1 w-full ${
                 isPublicRoute 
-                  ? 'md:ml-0 p-0' 
-                  : 'p-4 lg:p-8 md:ml-80 pt-16 md:pt-8'
+                  ? 'lg:ml-0 p-0' 
+                  : 'p-4 lg:p-8 lg:ml-80 pt-16 lg:pt-8'
               }`}
             >
               {children}

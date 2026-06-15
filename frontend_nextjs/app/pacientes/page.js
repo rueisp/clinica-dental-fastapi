@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef  } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Home } from 'lucide-react';
@@ -16,6 +16,7 @@ export default function ListaPacientes() {
   const [totalPacientes, setTotalPacientes] = useState(0);
   const [haBuscado, setHaBuscado] = useState(false);
   const porPagina = 5;
+  const isMounted = useRef(false); // <-- AGREGAR ESTA LÍNEA
 
 // 1. Carga inicial: Se ejecuta solo una vez al entrar a la página
   useEffect(() => {
@@ -24,9 +25,14 @@ export default function ListaPacientes() {
 
   // 2. Búsqueda automática: Se ejecuta cada vez que cambia el texto en "buscar"
   useEffect(() => {
+    // ⚠️ ESTA ES LA BARRERA DE SEGURIDAD QUE FALTA:
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return; // Detiene la ejecución redundante en el primer renderizado
+    }
+
     // Definimos un temporizador para no saturar al servidor (Debounce)
     const delayDebounceFn = setTimeout(() => {
-      
       if (buscar.length >= 3) {
         // Si hay 3 o más letras, buscamos
         handleBuscar();
@@ -34,7 +40,6 @@ export default function ListaPacientes() {
         // Si el usuario borra el buscador, volvemos a mostrar los últimos registros
         cargarUltimosPacientes();
       }
-      
     }, 400); // Espera 400ms después de que el usuario deja de escribir
 
     // Limpiamos el temporizador si el usuario sigue escribiendo antes de los 400ms

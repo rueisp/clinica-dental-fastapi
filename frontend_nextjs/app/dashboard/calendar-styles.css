@@ -27,8 +27,8 @@ body {
   text-align: right !important;
 }
 
-/* --- MÓVIL (Tu configuración original) --- */
-@media (max-width: 768px) {
+/* --- TABLETAS Y MÓVILES (Escalado general de elementos) --- */
+@media (max-width: 1024px) {
   .fc .fc-daygrid-day-frame {
     min-height: 80px !important;
   }
@@ -43,14 +43,17 @@ body {
   .fc-toolbar-title {
     font-size: 3.1rem !important; /* El tamaño grande que te gusta */
   }
-  
+}
+
+/* --- EXCLUSIVO CELULARES (Look iPhone de borde a borde) --- */
+@media (max-width: 640px) {
   /* ESTE ES EL TRUCO PARA EL LOOK IPHONE QUE ROMPE MÁRGENES */
   .fc {
     width: 100vw !important;
     margin-left: calc(-50vw + 50%) !important;
   }
   
-  /* Quitar líneas laterales */
+  /* Quitar líneas laterales solo en pantallas muy estrechas */
   .fc-theme-standard td, 
   .fc-theme-standard th {
     border-left: none !important;
@@ -104,4 +107,14 @@ body {
 .fc-daygrid-day-number {
   z-index: 1;
   pointer-events: none;
+}
+
+/* --- SOLUCIÓN DE FLUIDEZ GLOBAL PARA FULLCALENDAR --- */
+.fc-col-header, 
+.fc-scrollgrid-sync-table, 
+.fc-daygrid-body, 
+.fc-daygrid-body-unbalanced, 
+.fc-daygrid-body-natural,
+.fc-scrollgrid {
+  width: 100% !important;
 }

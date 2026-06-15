@@ -1,6 +1,7 @@
 # database.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import NullPool  # <--- AGREGADO
 import os
 from dotenv import load_dotenv
 import ssl 
@@ -24,8 +25,7 @@ ssl_context.verify_mode = ssl.CERT_NONE
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    pool_size=5,
-    max_overflow=10,
+    poolclass=NullPool,  # <--- AGREGADO: Desactiva el pool local
     pool_pre_ping=True,
     connect_args={
         "statement_cache_size": 0,  # Parámetro nativo de asyncpg

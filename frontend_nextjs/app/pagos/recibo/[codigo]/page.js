@@ -156,8 +156,8 @@ export default function ReciboDetalle() {
                   
           {/* 1. Botón Dashboard (Solo para el Doctor) */}
           {typeof window !== 'undefined' && localStorage.getItem('auth_token') && (
-            <>
-              <button onClick={() => router.push('/')} className="flex flex-col items-center gap-1 group">
+                  <>
+                    <button onClick={() => router.push('/dashboard')} className="flex flex-col items-center gap-1 group">
                 <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
                   <LayoutDashboard size={20} />
                 </div>

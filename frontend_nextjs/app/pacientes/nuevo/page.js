@@ -15,6 +15,7 @@ export default function NuevoPaciente() {
   
   // ✅ ESTADO DE PERMISOS
   const [canUseOdontogram, setCanUseOdontogram] = useState(true);
+  const [modalOdontograma, setModalOdontograma] = useState(false); // <-- AGREGAR ESTA LÍNEA
 
   useEffect(() => {
     const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
@@ -66,7 +67,7 @@ export default function NuevoPaciente() {
     if (imagenFile) submitData.append('imagen_perfil', imagenFile);
     
     try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes`, {
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes/`, {
         method: 'POST',
         body: submitData
       });
@@ -92,26 +93,66 @@ export default function NuevoPaciente() {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          {/* ✅ BLOQUE ODONTOGRAMA UNIFICADO */}
+          {/* ✅ BLOQUE ODONTOGRAMA CON MODAL CONTROLADO POR CSS */}
           <div className="relative">
-            {/* El editor real en gris */}
-            <div className={`transition-all ${!canUseOdontogram ? 'grayscale opacity-30 pointer-events-none' : ''}`}>
-              <DentigramaEditor 
-                ref={dentigramaRef}
-                fondoUrl={null}
-              />
+            <div 
+              className={`bg-gray-50 rounded-3xl border border-gray-100 p-6 min-h-[400px] flex flex-col items-center justify-center transition-all ${
+                !canUseOdontogram ? 'grayscale opacity-40' : 'cursor-pointer hover:bg-gray-100'
+              }`}
+              onClick={canUseOdontogram ? () => setModalOdontograma(true) : () => router.push('/planes')}
+            >
+              <div className="text-center relative w-full">
+                {!canUseOdontogram ? (
+                  <div className="flex flex-col items-center">
+                    <span className="text-4xl mb-3 block">🦷</span>
+                    <span className="text-gray-400 text-xs font-black uppercase tracking-widest">Odontograma Digital Bloqueado</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <span className="text-4xl mb-3 block">🦷</span>
+                    <p className="text-gray-500 text-sm font-black uppercase tracking-widest">
+                      Toca para abrir el Odontograma
+                    </p>
+                    <p className="text-[11px] text-blue-500 font-bold mt-2 uppercase tracking-wider">
+                      (Se abrirá en pantalla completa)
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Pequeño Botón PRO (Mismo tamaño que el de la foto) */}
+            {/* Pequeño Botón PRO (Mismo tamaño y posición que el de la foto de perfil) */}
             {!canUseOdontogram && (
               <button 
                 type="button"
                 onClick={() => router.push('/planes')}
-                className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] tracking-tighter hover:scale-105 transition-transform flex items-center gap-1"
+                className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] tracking-tighter hover:scale-105 transition-transform flex items-center gap-1 z-10"
               >
                 <Lock size={10} strokeWidth={2} /> PRO
               </button>
             )}
+
+            {/* Modal del Editor de Odontograma (Siempre montado en el DOM para preservar el estado y la referencia) */}
+            <div className={modalOdontograma ? "fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4" : "hidden"}>
+              <div className="relative bg-white rounded-[2.5rem] w-full max-w-5xl max-h-[95vh] overflow-auto p-10 shadow-2xl">
+                <h3 className="text-2xl font-black text-black uppercase tracking-tighter mb-8">Editor de Odontograma</h3>
+                <div className="border-2 border-zinc-100 rounded-[2rem] p-6 bg-zinc-50/50">
+                  <DentigramaEditor 
+                    ref={dentigramaRef}
+                    fondoUrl={null}
+                  />
+                </div>
+                <div className="flex justify-end gap-4 mt-10">
+                  <button 
+                    type="button"
+                    onClick={() => setModalOdontograma(false)} 
+                    className="px-10 py-4 bg-black text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl cursor-pointer"
+                  >
+                    Confirmar y Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <ImagenPerfil 

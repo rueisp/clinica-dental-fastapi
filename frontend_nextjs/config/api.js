@@ -50,7 +50,7 @@ export const API_ENDPOINTS = {
   ELIMINAR_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
   OBTENER_CITA: (id) => `${API_BASE_URL}/api/citas/${id}`,
   CITAS_EVENTOS: `${API_BASE_URL}/api/citas/eventos`,
-  PACIENTES: `${API_BASE_URL}/api/pacientes`,
+  PACIENTES: `${API_BASE_URL}/api/pacientes/`,
   PACIENTE_BY_ID: (id) => `${API_BASE_URL}/api/pacientes/${id}`,
   EVOLUCIONES_BY_PACIENTE: (id) => `${API_BASE_URL}/api/evoluciones/pacientes/${id}`,
   NUEVA_EVOLUCION: `${API_BASE_URL}/api/evoluciones`,
