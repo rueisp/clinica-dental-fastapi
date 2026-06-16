@@ -120,7 +120,15 @@ export default function EditarPaciente() {
 
       campos.forEach(campo => {
         if (paciente[campo] !== undefined && paciente[campo] !== null) {
-            formData.append(campo, paciente[campo]);
+            let valor = paciente[campo];
+            
+            // ✅ PUENTE SEGURO: Convertir DD/MM/YYYY a YYYY-MM-DD para el backend
+            if (campo === 'fecha_nacimiento' && typeof valor === 'string' && valor.includes('/')) {
+              const [dia, mes, anio] = valor.split('/');
+              valor = `${anio}-${mes}-${dia}`;
+            }
+            
+            formData.append(campo, valor);
         }
       });
       

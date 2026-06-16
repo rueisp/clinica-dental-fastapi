@@ -11,32 +11,66 @@ export default function TarjetaInfoPaciente({
   formData      
 }) {
   
-  // Función para calcular edad
-  const calcularEdad = (fechaNacimiento) => {
-    if (!fechaNacimiento) return '';
+  // Función para calcular edad de forma segura desde DD/MM/YYYY sin desfases de zona horaria
+  const calcularEdadDesdeDMY = (fechaStr) => {
+    if (!fechaStr || !fechaStr.includes('/')) return '';
+    const partes = fechaStr.split('/');
+    if (partes.length !== 3) return '';
+    
+    const dia = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10);
+    const anio = parseInt(partes[2], 10);
+    
+    if (isNaN(dia) || isNaN(mes) || isNaN(anio) || partes[2].length < 4) return '';
+    
     const hoy = new Date();
-    const fechaNac = new Date(fechaNacimiento);
-    let edad = hoy.getFullYear() - fechaNac.getFullYear();
-    const mes = hoy.getMonth() - fechaNac.getMonth();
-    if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNac.getDate())) {
+    let edad = hoy.getFullYear() - anio;
+    const mesDiferencia = (hoy.getMonth() + 1) - mes;
+    
+    if (mesDiferencia < 0 || (mesDiferencia === 0 && hoy.getDate() < dia)) {
       edad--;
     }
     return edad >= 0 ? edad : '';
   };
 
+  // Aplica la máscara automática DD/MM/YYYY mientras el usuario escribe
+  const aplicarMascaraFecha = (valor) => {
+    const numeros = valor.replace(/\D/g, '');
+    const corte = numeros.slice(0, 8);
+    
+    if (corte.length <= 2) {
+      return corte;
+    }
+    if (corte.length <= 4) {
+      return `${corte.slice(0, 2)}/${corte.slice(2)}`;
+    }
+    return `${corte.slice(0, 2)}/${corte.slice(2, 4)}/${corte.slice(4)}`;
+  };
+
+  // Asegura que la fecha se muestre siempre como DD/MM/YYYY en el campo de texto
+  const obtenerFechaMostrar = (fecha) => {
+    if (!fecha) return '';
+    if (fecha.includes('-')) {
+      const [anio, mes, dia] = fecha.split('-');
+      return `${dia}/${mes}/${anio}`;
+    }
+    return fecha;
+  };
+
+  const handleFechaChange = (e) => {
+    const valorConMascara = aplicarMascaraFecha(e.target.value);
+    const nuevaEdad = calcularEdadDesdeDMY(valorConMascara);
+    
+    if (onChange) {
+      onChange('fecha_nacimiento', valorConMascara);
+      onChange('edad', nuevaEdad);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    if (name === 'fecha_nacimiento') {
-      const nuevaEdad = calcularEdad(value);
-      if (onChange) {
-        onChange(name, value);
-        onChange('edad', nuevaEdad);
-      }
-    } else {
-      if (onChange) {
-        onChange(name, value);
-      }
+    if (onChange) {
+      onChange(name, value);
     }
   };
 
@@ -246,11 +280,14 @@ export default function TarjetaInfoPaciente({
         <div>
           <label className="text-xs text-gray-500 block mb-1">Fecha Nacimiento</label>
           <input
-            type="date"
+            type="text"
             name="fecha_nacimiento"
-            value={data?.fecha_nacimiento ? data.fecha_nacimiento.split('/').reverse().join('-') : ''}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            inputMode="numeric"
+            value={obtenerFechaMostrar(data?.fecha_nacimiento)}
+            onChange={handleFechaChange}
+            placeholder="DD/MM/AAAA"
+            maxLength="10"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm bg-white"
           />
         </div>
         <div>

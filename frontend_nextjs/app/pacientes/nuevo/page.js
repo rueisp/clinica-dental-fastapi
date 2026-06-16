@@ -60,14 +60,24 @@ export default function NuevoPaciente() {
     const textFields = Object.keys(formData);
     
     textFields.forEach(field => {
-      if (formData[field]) submitData.append(field, formData[field]);
+      if (formData[field]) {
+        let valor = formData[field];
+        
+        // Convertir fecha_nacimiento de DD/MM/YYYY a YYYY-MM-DD para el backend
+        if (field === 'fecha_nacimiento' && typeof valor === 'string' && valor.includes('/')) {
+          const [dia, mes, anio] = valor.split('/');
+          valor = `${anio}-${mes}-${dia}`;
+        }
+        
+        submitData.append(field, valor);
+      }
     });
     
     if (dentigramaBase64) submitData.append('dentigrama_canvas', dentigramaBase64);
     if (imagenFile) submitData.append('imagen_perfil', imagenFile);
     
     try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes/`, {
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes`, {
         method: 'POST',
         body: submitData
       });
