@@ -85,6 +85,10 @@ export default function NuevoPaciente() {
       if (response.ok) {
         const data = await response.json();
         router.push(`/pacientes/${data.paciente_id}`);
+      } else {
+        // Captura el error 403 (o cualquier otro) y lo muestra en pantalla
+        const errorData = await response.json();
+        alert(errorData.detail || 'No se pudo registrar el paciente');
       }
     } catch (error) {
       alert('Error de conexión');

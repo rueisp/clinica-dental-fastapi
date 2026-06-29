@@ -10,6 +10,7 @@ from dependencies.auth import get_current_user
 from models import Usuario, Cita, Paciente, Subscription, Plan
 from schemas import CitaCreate, CitaUpdate
 from uuid import UUID
+from dependencies.limites import verificar_suscripcion_activa
 
 router = APIRouter()
 
@@ -209,6 +210,7 @@ async def eliminar_cita(
     db: AsyncSession = Depends(get_db)
 ):
     """Eliminar una cita (soft delete)"""
+    await verificar_suscripcion_activa(current_user, db)
     from models import Cita
     
     result = await db.execute(
@@ -288,6 +290,7 @@ async def create_cita(
     db: AsyncSession = Depends(get_db)
 ):
     """Crear una nueva cita"""
+    await verificar_suscripcion_activa(current_user, db)
     
     from datetime import datetime
     
@@ -336,6 +339,7 @@ async def update_cita(
     db: AsyncSession = Depends(get_db)
 ):
     """Actualizar una cita existente"""
+    await verificar_suscripcion_activa(current_user, db)
     
     from datetime import datetime
     

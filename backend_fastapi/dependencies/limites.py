@@ -9,20 +9,38 @@ from models import LimiteDiario, Usuario, Plan, Subscription
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
-    """Valida que la suscripción esté activa."""
-    # 2. ✅ BYPASS PARA EL ADMINISTRADOR: Retorna una suscripción activa ficticia
+    """Valida que la suscripción esté activa y no haya expirado."""
+    # 1. BYPASS PARA EL ADMINISTRADOR: El administrador no tiene fecha de expiración
     if current_user.is_admin:
         return Subscription(status="active", plan_type="pro")
 
-    # El resto de tu función se mantiene exactamente igual:
+    # Realizamos la consulta única de la suscripción (con indexación rápida)
     result = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
     sub = result.scalar_one_or_none()
     
+    # 2. Validación de estado básico en base de datos
     if not sub or sub.status != "active":
         detail = "Tu pago está pendiente de aprobación." if sub and sub.status == "pending_payment" else "Tu suscripción no está activa."
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+    # 3. Validación de fecha de expiración en memoria (Sin consultas adicionales a la DB)
+    if sub.current_period_end:
+        ahora = datetime.now(COLOMBIA_TZ)
+        
+        # Sincronizamos la fecha de la base de datos con la zona horaria local de Colombia
+        db_fecha_fin = sub.current_period_end
+        fecha_fin = db_fecha_fin.replace(tzinfo=None) if db_fecha_fin.tzinfo else db_fecha_fin
+        fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
+        
+        # Si la fecha de finalización ya pasó el momento actual, bloqueamos la escritura
+        if fecha_fin < ahora:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agregando o editando información."
+            )
+
     return sub
 
 async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSession):

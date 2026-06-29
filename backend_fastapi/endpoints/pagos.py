@@ -17,6 +17,8 @@ from models import PagoSuscripcion, Plan, Subscription, Usuario, Paciente, PagoC
 # Importaciones de esquemas agrupadas
 from schemas.pago import PagoCreate, PagoResponse, PagoReporte
 
+from dependencies.limites import verificar_suscripcion_activa
+
 router = APIRouter(prefix="/pagos", tags=["pagos"])
 
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
@@ -33,6 +35,7 @@ async def crear_pago(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
     try:
         # 1. Obtener el momento exacto en Colombia
         ahora_colombia = datetime.now(COLOMBIA_TZ)

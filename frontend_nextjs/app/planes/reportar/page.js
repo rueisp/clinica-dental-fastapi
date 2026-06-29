@@ -19,10 +19,27 @@ function ReportarPagoForm() {
 
     const llaveBreB = "3147953756";
 
-    const handleCopiarLlave = () => {
-        navigator.clipboard.writeText(llaveBreB);
-        setCopiado(true);
-        setTimeout(() => setCopiado(false), 2000);
+    const handleCopiarLlave = async () => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                // Método nativo para conexiones seguras (HTTPS o localhost)
+                await navigator.clipboard.writeText(llaveBreB);
+            } else {
+                // Respaldo clásico para redes locales (HTTP, IP privada, celulares en red local)
+                const textArea = document.createElement("textarea");
+                textArea.value = llaveBreB;
+                textArea.style.position = "fixed";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy'); // Copia el texto seleccionado al portapapeles
+                document.body.removeChild(textArea);
+            }
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 2000);
+        } catch (err) {
+            console.error("Error al copiar llave Bre-B:", err);
+        }
     };
 
     const handleUploadImage = async (e) => {
@@ -114,7 +131,7 @@ function ReportarPagoForm() {
                                         ⚡ Pago Instantáneo Bre-B
                                     </h3>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Transfiere gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando esta llave:
+                                        Transfiere al instante y gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando este número celular:
                                     </p>
                                     <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
                                 </div>
@@ -124,7 +141,7 @@ function ReportarPagoForm() {
                                     className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
                                 >
                                     {copiado ? <Check size={14} /> : <Copy size={14} />}
-                                    {copiado ? '¡COPIADO!' : 'COPIAR LLAVE'}
+                                    {copiado ? '¡COPIADO!' : 'COPIAR NÚMERO'}
                                 </button>
                             </div>
 

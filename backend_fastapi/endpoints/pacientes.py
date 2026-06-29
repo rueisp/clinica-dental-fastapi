@@ -388,6 +388,7 @@ async def actualizar_paciente(
     db: AsyncSession = Depends(get_db)
 ):
     """Actualizar un paciente existente"""
+    await verificar_suscripcion_activa(current_user, db)
     
     result = await db.execute(
         select(Paciente).where(
@@ -538,6 +539,7 @@ async def eliminar_paciente(
     db: AsyncSession = Depends(get_db)
 ):
     """Soft delete - Mover paciente a papelera"""
+    await verificar_suscripcion_activa(current_user, db)
     
     result = await db.execute(
         select(Paciente).where(
@@ -578,6 +580,7 @@ async def restaurar_paciente(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
     result = await db.execute(
         select(Paciente).where(
             Paciente.id == paciente_id,
@@ -611,6 +614,7 @@ async def eliminar_permanente(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    await verificar_suscripcion_activa(current_user, db)
     # 1. Buscar el paciente
     result = await db.execute(
         select(Paciente).where(
