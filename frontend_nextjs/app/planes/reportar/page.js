@@ -17,30 +17,14 @@ function ReportarPagoForm() {
     const [enviado, setEnviado] = useState(false);
     const [copiado, setCopiado] = useState(false);
 
-    // --- NUEVOS ESTADOS PARA MONEDA Y PAYPAL ---
+    // --- ESTADOS PARA MONEDA Y PAYPAL ---
     const moneda = searchParams.get('moneda') || 'COP';
     const [copiadoPaypal, setCopiadoPaypal] = useState(false);
 
-    const llaveBreB = "3147953756";
-    const correoPaypal = "pagos@cloudentapp.com"; // <-- Reemplace con su correo real de PayPal
+    // --- CONSTANTES DE DATOS DE PAGO ---
+    const correoPaypal = "pagos@cloudentapp.com";
+    const linkBold = "https://bold.co/p/cloudentapp"; // <-- Reemplace con su link único de Bold cuando esté activo
 
-    const handleCopiarLlave = () => {
-        // Fallback robusto para entornos HTTP locales y dispositivos móviles
-        const textArea = document.createElement("textarea");
-        textArea.value = llaveBreB;
-        textArea.style.position = "fixed"; // Evita scroll al final de la página
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            setCopiado(true);
-            setTimeout(() => setCopiado(false), 2000);
-        } catch (err) {
-            console.error('Error al copiar llave Bre-B', err);
-        }
-        document.body.removeChild(textArea);
-    };
 
     const handleCopiarPaypal = () => {
         // Fallback robusto para entornos HTTP locales y dispositivos móviles
@@ -59,6 +43,7 @@ function ReportarPagoForm() {
         }
         document.body.removeChild(textArea);
     };
+
 
     const handleUploadImage = async (e) => {
         const file = e.target.files[0];
@@ -137,88 +122,115 @@ function ReportarPagoForm() {
                     </div>
 
                     <div className="p-8">
-                        <div className="mb-8 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-6">
-                            <h2 className="font-bold text-blue-800 flex items-center gap-2 text-lg">
-                                <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
-                            </h2>
+                        <div className="mb-8 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                                <h2 className="font-bold text-gray-800 flex items-center gap-2 text-lg">
+                                    <CreditCard size={20} className="text-gray-600" /> Métodos de Pago Disponibles
+                                </h2>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Realiza tu pago de forma segura y reporta el comprobante abajo para activar tu plan.
+                                </p>
+                            </div>
                             
-                            {moneda === 'USD' ? (
-                                /* --- RECOMENDADO PAYPAL (USD) --- */
-                                <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="flex-1">
-                                        <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado Internacional</span>
-                                        <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
-                                            🌐 Pago Seguro vía PayPal
-                                        </h3>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Envía tu pago de forma segura desde cualquier país a nuestra cuenta de PayPal:
-                                        </p>
-                                        <p className="font-mono font-black text-base text-blue-800 mt-1 break-all">{correoPaypal}</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleCopiarPaypal}
-                                        className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0"
-                                    >
-                                        {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
-                                        {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
-                                    </button>
-                                </div>
-                            ) : (
-                                /* --- RECOMENDADO BRE-B (COP) --- */
-                                <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="flex-1">
-                                        <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado Colombia</span>
-                                        <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
-                                            ⚡ Pago Instantáneo Bre-B
-                                        </h3>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Transfiere al instante y gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando este número celular:
-                                        </p>
-                                        <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleCopiarLlave}
-                                        className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0"
-                                    >
-                                        {copiado ? <Check size={14} /> : <Copy size={14} />}
-                                        {copiado ? '¡COPIADO!' : 'COPIAR NÚMERO'}
-                                    </button>
-                                </div>
-                            )}
+                            <div className="divide-y divide-gray-100">
+                                {/* Renderizado condicional del orden según la moneda */}
+                                {moneda === 'USD' ? (
+                                    <>
+                                        {/* 1. PayPal (Primero si es USD) */}
+                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
+                                            <div className="space-y-1">
+                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                    🌐 PayPal (Dólares / Internacional)
+                                                </h3>
+                                                <p className="text-xs text-gray-500">
+                                                    Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
+                                                </p>
+                                                <p className="font-mono font-black text-base text-blue-800 pt-1 break-all">{correoPaypal}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleCopiarPaypal}
+                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                                                    copiadoPaypal 
+                                                        ? 'bg-green-50 border-green-200 text-green-600' 
+                                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-95'
+                                                }`}
+                                            >
+                                                {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
+                                                {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
+                                            </button>
+                                        </div>
 
-                            {/* --- MÉTODOS ALTERNATIVOS --- */}
-                            <div className="pt-4 border-t border-blue-100/50">
-                                <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3">Otras Opciones de Pago</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                                    {/* Nequi */}
-                                    <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
-                                        <p className="font-bold text-gray-700 text-sm mt-0.5">314-7953756</p>
-                                    </div>
-                                    {/* Bancolombia */}
-                                    <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
-                                        <p className="font-bold text-gray-700 text-sm mt-0.5">912-113608-82</p>
-                                    </div>
-                                    {/* PayPal o Bre-B según corresponda */}
-                                    {moneda === 'USD' ? (
-                                        <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50 flex flex-col justify-between">
-                                            <div>
-                                                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bre-B (Colombia)</p>
-                                                <p className="font-bold text-gray-700 text-sm mt-0.5">{llaveBreB}</p>
+                                        {/* 2. Bold (Segundo si es USD) */}
+                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
+                                            <div className="space-y-1">
+                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                    💳 Pago en Línea (PSE, Nequi, Bancolombia, Tarjetas)
+                                                </h3>
+                                                <p className="text-xs text-gray-500">
+                                                    Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
+                                                </p>
+                                                <p className="text-xs text-blue-600 font-bold pt-1">Disponible para cuentas en Colombia</p>
                                             </div>
+                                            <a
+                                                href={linkBold}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="sm:self-center px-5 py-2.5 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0 min-w-[140px] text-center"
+                                            >
+                                                PAGAR EN LÍNEA
+                                            </a>
                                         </div>
-                                    ) : (
-                                        <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50 flex flex-col justify-between">
-                                            <div>
-                                                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">PayPal (Internacional)</p>
-                                                <p className="font-bold text-gray-700 text-xs mt-0.5 truncate" title={correoPaypal}>{correoPaypal}</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* 1. Bold (Primero si es COP) */}
+                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
+                                            <div className="space-y-1">
+                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                    💳 Pago en Línea (PSE, Nequi, Bancolombia, Tarjetas)
+                                                </h3>
+                                                <p className="text-xs text-gray-500">
+                                                    Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
+                                                </p>
+                                                <p className="text-xs text-blue-600 font-bold pt-1">Recomendado para Colombia</p>
                                             </div>
+                                            <a
+                                                href={linkBold}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="sm:self-center px-5 py-2.5 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0 min-w-[140px] text-center"
+                                            >
+                                                PAGAR EN LÍNEA
+                                            </a>
                                         </div>
-                                    )}
-                                </div>
+
+                                        {/* 2. PayPal (Segundo si es COP) */}
+                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
+                                            <div className="space-y-1">
+                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                                                    🌐 PayPal (Dólares / Internacional)
+                                                </h3>
+                                                <p className="text-xs text-gray-500">
+                                                    Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
+                                                </p>
+                                                <p className="font-mono font-black text-base text-blue-800 pt-1 break-all">{correoPaypal}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleCopiarPaypal}
+                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                                                    copiadoPaypal 
+                                                        ? 'bg-green-50 border-green-200 text-green-600' 
+                                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-95'
+                                                }`}
+                                            >
+                                                {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
+                                                {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 
