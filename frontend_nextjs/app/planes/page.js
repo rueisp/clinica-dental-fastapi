@@ -8,6 +8,7 @@ export default function PlanesPage() {
   const [planActual, setPlanActual] = useState(null);
   const [planes, setPlanes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [moneda, setMoneda] = useState('COP'); 
   const router = useRouter();
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function PlanesPage() {
         if (data.status === 'pending_payment') {
           // AQUÍ ESTÁ EL CAMBIO: Si está pendiente, obligamos a ir a reportar
           alert('Solicitud registrada. Por favor, procede a adjuntar el comprobante de pago.');
-          router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}`);
+          router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         } else {
           alert('✅ Plan Trial activado correctamente');
           router.push('/dashboard');
@@ -109,9 +110,11 @@ export default function PlanesPage() {
               <TrendingUp size={18} className="text-blue-500" />
               <div>
                 <p className="text-xs text-gray-400">Valor</p>
-                {/* CAMBIO 2: Sufijo dinámico basado en si el plan es anual */}
                 <p className="font-bold">
-                  ${planActual.plan_precio.toLocaleString('es-CO')}
+                  {moneda === 'COP'
+                    ? `$${planActual.plan_precio.toLocaleString('es-CO')}`
+                    : `$${planActual.plan_precio_usd || 0} USD`
+                  }
                   {planActual.es_anual ? '/año' : '/mes'}
                 </p>
               </div>
@@ -146,18 +149,54 @@ export default function PlanesPage() {
         </div>
       )}
 
-      {/* Lista de planes disponibles */}
-      <h2 className="text-xl font-bold text-gray-800 mb-4">Planes disponibles</h2>
+      {/* Cabecera de Planes Disponibles con Switch de Moneda */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Planes disponibles</h2>
+        
+        {/* Switch de Moneda Estilo Apple */}
+        <div className="bg-gray-100 p-1 rounded-xl flex items-center shadow-inner self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setMoneda('COP')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              moneda === 'COP' 
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            COP ($)
+          </button>
+          <button
+            type="button"
+            onClick={() => setMoneda('USD')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              moneda === 'USD' 
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            USD ($)
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {planes.map((plan) => {
           const esPlanActual = planActual?.plan_nombre === plan.nombre;
           const estaPendiente = planActual?.status === 'pending_payment' && esPlanActual;
           
           return (
-            <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-2">{plan.nombre}</h3>
+            <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+              <h3 className="text-xl font-bold text-gray-800 mb-2 capitalize">
+                {plan.nombre.replace('_mensual', '').replace('_anual', '').replace('_', ' ')}
+              </h3>
+              
               <p className="text-3xl font-bold text-blue-600 mb-4">
-                {plan.precio_cop === 0 ? 'Gratis' : `$${plan.precio_cop.toLocaleString('es-CO')}`}
+                {plan.precio_cop === 0 
+                  ? 'Gratis' 
+                  : moneda === 'COP'
+                    ? `$${plan.precio_cop.toLocaleString('es-CO')}`
+                    : `$${plan.precio_mensual} USD`
+                }
                 <span className="text-sm text-gray-500 font-normal">
                   {plan.duracion_dias === 365 ? '/año' : plan.duracion_dias === 7 ? '/7 días' : '/mes'}
                 </span>

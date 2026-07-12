@@ -194,9 +194,8 @@ async def get_mi_plan_detalle(
     dias_restantes = max(0, int(segundos_restantes / 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
     
     # 4. CÁLCULO DE PROGRESO (Barra Visual)
-    db_fecha_inicio = sub.current_period_start or (db_fecha_fin - timedelta(days=plan.duracion_dias))
-    fecha_inicio = db_fecha_inicio.replace(tzinfo=None) if db_fecha_inicio.tzinfo else db_fecha_inicio
-    fecha_inicio = COLOMBIA_TZ.localize(fecha_inicio)
+    # Sincronizamos el inicio del ciclo restando la duración exacta del plan
+    fecha_inicio = fecha_fin - timedelta(days=plan.duracion_dias)
         
     duracion_total_segundos = (fecha_fin - fecha_inicio).total_seconds()
     tiempo_transcurrido_segundos = (ahora - fecha_inicio).total_seconds()
@@ -209,18 +208,35 @@ async def get_mi_plan_detalle(
         
     # Asegurar que el porcentaje no se salga de los límites
     porcentaje = min(100, max(0, porcentaje)) 
+
+    # Diccionario de meses cortos en español para evitar problemas con la región en servidores de la nube
+    meses_es = {
+        1: 'ene', 2: 'feb', 3: 'mar', 4: 'abr',
+        5: 'may', 6: 'jun', 7: 'jul', 8: 'ago',
+        9: 'sep', 10: 'oct', 11: 'nov', 12: 'dic'
+    }
+    
+    # Si el inicio y fin ocurren en el mismo año (planes mensuales)
+    if fecha_inicio.year == fecha_fin.year:
+        fecha_inicio_str = meses_es[fecha_inicio.month]
+        fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
+    # Si el ciclo transcurre entre años diferentes (planes anuales)
+    else:
+        fecha_inicio_str = f"{meses_es[fecha_inicio.month]} {fecha_inicio.year}"
+        fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
     
     return {
         "tiene_plan": True,
         "plan_nombre": plan.nombre,
         "plan_precio": plan.precio_cop,
+        "plan_precio_usd": plan.precio_mensual, 
         "limite_pacientes_diario": plan.limite_pacientes_diario,
-        "fecha_fin": fecha_fin.strftime('%Y-%m-%d'),
+        "fecha_inicio": fecha_inicio_str,
+        "fecha_fin": fecha_fin_str,
         "dias_restantes": dias_restantes,
         "porcentaje_progreso": porcentaje,
         "status": sub.status,
         "es_anual": plan.duracion_dias == 365,
-        # ✅ AGREGA ESTO AQUÍ ABAJO:
         "permissions": {
             "can_use_odontogram": plan.can_use_odontogram,
             "can_use_multimedia": plan.can_use_multimedia,

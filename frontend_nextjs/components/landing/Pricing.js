@@ -9,6 +9,7 @@ export default function Pricing() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     // Nuevo estado: 'mensual' o 'anual'
     const [billingCycle, setBillingCycle] = useState('mensual');
+    const [moneda, setMoneda] = useState('COP'); 
     const router = useRouter();
 
     useEffect(() => {
@@ -37,11 +38,11 @@ export default function Pricing() {
 
     const handlePlanClick = (plan) => {
         if (isLoggedIn) {
-            // Si ya está logueado, lo mandamos a reportar el pago directamente
-            router.push(`/planes/reportar?plan_id=${plan.id}`);
+            // Si ya está logueado, lo mandamos a reportar el pago directamente con la moneda seleccionada
+            router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         } else {
             // Si no, lo mandamos a registrarse primero
-            router.push(`/registro?plan_id=${plan.id}`);
+            router.push(`/registro?plan_id=${plan.id}&moneda=${moneda}`);
         }
     };
 
@@ -51,6 +52,32 @@ export default function Pricing() {
         <section id="precios" className="py-20 bg-gray-50">
             <div className="container mx-auto px-4 text-center">
                 <h3 className="text-3xl font-bold mb-8">Planes que se adaptan a ti</h3>
+
+                {/* --- SWITCH DE MONEDA --- */}
+                <div className="flex justify-center items-center mb-4">
+                    <div className="bg-gray-200 p-1 rounded-full flex items-center shadow-inner inline-flex">
+                        <button
+                            onClick={() => setMoneda('COP')}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                                moneda === 'COP' 
+                                ? 'bg-white text-purple-600 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            COP ($)
+                        </button>
+                        <button
+                            onClick={() => setMoneda('USD')}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                                moneda === 'USD' 
+                                ? 'bg-white text-purple-600 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                        >
+                            USD ($)
+                        </button>
+                    </div>
+                </div>
 
                 {/* Switch de Facturación tipo Google One */}
                 <div className="flex justify-center items-center mb-12">
@@ -85,17 +112,24 @@ export default function Pricing() {
                             <h4 className="text-xl font-bold uppercase text-purple-600 mb-4">
                                 {plan.nombre.replace('_mensual', '').replace('_anual', '').replace('_', ' ')}
                             </h4>
-                            <div className="mb-6">
-                                <span className="text-4xl font-bold">
-                                    {plan.precio_cop === 0 ? 'Gratis' : `$${plan.precio_cop.toLocaleString('es-CO')}`}
-                                </span>
-                                <span className="text-gray-500"> / {plan.duracion_dias === 365 ? 'año' : plan.duracion_dias === 7 ? '7 días' : 'mes'}</span>
-                                {plan.duracion_dias === 365 && (
-                                    <p className="text-xs text-green-600 mt-1 font-semibold italic">
-                                        Pago único anual
-                                    </p>
-                                )}
-                            </div>
+                            {/* --- REEMPLACE ESTE BLOQUE DESDE AQUÍ --- */}
+                                <div className="mb-6">
+                                    <span className="text-4xl font-bold">
+                                        {plan.precio_cop === 0 
+                                            ? 'Gratis' 
+                                            : moneda === 'COP' 
+                                                ? `$${plan.precio_cop.toLocaleString('es-CO')}` 
+                                                : `$${plan.precio_mensual} USD`
+                                        }
+                                    </span>
+                                    <span className="text-gray-500"> / {plan.duracion_dias === 365 ? 'año' : plan.duracion_dias === 7 ? '7 días' : 'mes'}</span>
+                                    {plan.duracion_dias === 365 && (
+                                        <p className="text-xs text-green-600 mt-1 font-semibold italic">
+                                            Pago único anual
+                                        </p>
+                                    )}
+                                </div>
+                                {/* --- HASTA AQUÍ --- */}
                             
                             <ul className="space-y-3 mb-8 flex-grow text-sm">
                                 {/* 1. Funciones Administrativas (Para todos los planes) */}

@@ -17,29 +17,47 @@ function ReportarPagoForm() {
     const [enviado, setEnviado] = useState(false);
     const [copiado, setCopiado] = useState(false);
 
-    const llaveBreB = "3147953756";
+    // --- NUEVOS ESTADOS PARA MONEDA Y PAYPAL ---
+    const moneda = searchParams.get('moneda') || 'COP';
+    const [copiadoPaypal, setCopiadoPaypal] = useState(false);
 
-    const handleCopiarLlave = async () => {
+    const llaveBreB = "3147953756";
+    const correoPaypal = "pagos@cloudentapp.com"; // <-- Reemplace con su correo real de PayPal
+
+    const handleCopiarLlave = () => {
+        // Fallback robusto para entornos HTTP locales y dispositivos móviles
+        const textArea = document.createElement("textarea");
+        textArea.value = llaveBreB;
+        textArea.style.position = "fixed"; // Evita scroll al final de la página
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
         try {
-            if (navigator.clipboard && window.isSecureContext) {
-                // Método nativo para conexiones seguras (HTTPS o localhost)
-                await navigator.clipboard.writeText(llaveBreB);
-            } else {
-                // Respaldo clásico para redes locales (HTTP, IP privada, celulares en red local)
-                const textArea = document.createElement("textarea");
-                textArea.value = llaveBreB;
-                textArea.style.position = "fixed";
-                textArea.style.opacity = "0";
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy'); // Copia el texto seleccionado al portapapeles
-                document.body.removeChild(textArea);
-            }
+            document.execCommand('copy');
             setCopiado(true);
             setTimeout(() => setCopiado(false), 2000);
         } catch (err) {
-            console.error("Error al copiar llave Bre-B:", err);
+            console.error('Error al copiar llave Bre-B', err);
         }
+        document.body.removeChild(textArea);
+    };
+
+    const handleCopiarPaypal = () => {
+        // Fallback robusto para entornos HTTP locales y dispositivos móviles
+        const textArea = document.createElement("textarea");
+        textArea.value = correoPaypal;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopiadoPaypal(true);
+            setTimeout(() => setCopiadoPaypal(false), 2000);
+        } catch (err) {
+            console.error('Error al copiar correo de PayPal', err);
+        }
+        document.body.removeChild(textArea);
     };
 
     const handleUploadImage = async (e) => {
@@ -124,35 +142,82 @@ function ReportarPagoForm() {
                                 <Zap size={20} className="text-blue-600 fill-blue-600" /> Métodos de Pago Disponibles
                             </h2>
                             
-                            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex-1">
-                                    <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado</span>
-                                    <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
-                                        ⚡ Pago Instantáneo Bre-B
-                                    </h3>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Transfiere al instante y gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando este número celular:
-                                    </p>
-                                    <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
+                            {moneda === 'USD' ? (
+                                /* --- RECOMENDADO PAYPAL (USD) --- */
+                                <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                        <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado Internacional</span>
+                                        <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
+                                            🌐 Pago Seguro vía PayPal
+                                        </h3>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Envía tu pago de forma segura desde cualquier país a nuestra cuenta de PayPal:
+                                        </p>
+                                        <p className="font-mono font-black text-base text-blue-800 mt-1 break-all">{correoPaypal}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleCopiarPaypal}
+                                        className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0"
+                                    >
+                                        {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
+                                        {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCopiarLlave}
-                                    className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
-                                >
-                                    {copiado ? <Check size={14} /> : <Copy size={14} />}
-                                    {copiado ? '¡COPIADO!' : 'COPIAR NÚMERO'}
-                                </button>
-                            </div>
+                            ) : (
+                                /* --- RECOMENDADO BRE-B (COP) --- */
+                                <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <div className="flex-1">
+                                        <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider">Recomendado Colombia</span>
+                                        <h3 className="font-black text-gray-900 mt-1.5 flex items-center gap-1.5">
+                                            ⚡ Pago Instantáneo Bre-B
+                                        </h3>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Transfiere al instante y gratis desde <b>cualquier banco</b> (Nu, Lulo, Davivienda, Nequi, etc.) usando este número celular:
+                                        </p>
+                                        <p className="font-mono font-black text-lg text-blue-800 mt-1">{llaveBreB}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleCopiarLlave}
+                                        className="sm:self-center px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0"
+                                    >
+                                        {copiado ? <Check size={14} /> : <Copy size={14} />}
+                                        {copiado ? '¡COPIADO!' : 'COPIAR NÚMERO'}
+                                    </button>
+                                </div>
+                            )}
 
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-100/50 text-sm">
-                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
-                                    <p className="font-bold text-gray-700 text-base mt-0.5">314-7953756</p>
-                                </div>
-                                <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
-                                    <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
-                                    <p className="font-bold text-gray-700 text-base mt-0.5">912-113608-82</p>
+                            {/* --- MÉTODOS ALTERNATIVOS --- */}
+                            <div className="pt-4 border-t border-blue-100/50">
+                                <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3">Otras Opciones de Pago</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                                    {/* Nequi */}
+                                    <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Nequi</p>
+                                        <p className="font-bold text-gray-700 text-sm mt-0.5">314-7953756</p>
+                                    </div>
+                                    {/* Bancolombia */}
+                                    <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50">
+                                        <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bancolombia (Ahorros)</p>
+                                        <p className="font-bold text-gray-700 text-sm mt-0.5">912-113608-82</p>
+                                    </div>
+                                    {/* PayPal o Bre-B según corresponda */}
+                                    {moneda === 'USD' ? (
+                                        <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50 flex flex-col justify-between">
+                                            <div>
+                                                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">Bre-B (Colombia)</p>
+                                                <p className="font-bold text-gray-700 text-sm mt-0.5">{llaveBreB}</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white/50 p-3 rounded-xl border border-blue-100/50 flex flex-col justify-between">
+                                            <div>
+                                                <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">PayPal (Internacional)</p>
+                                                <p className="font-bold text-gray-700 text-xs mt-0.5 truncate" title={correoPaypal}>{correoPaypal}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
