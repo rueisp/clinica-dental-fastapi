@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react'; // Agregamos useEffect
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, Suspense } from 'react'; // Agregamos useEffect
+import { useRouter, useSearchParams } from 'next/navigation';
 import HeaderPaciente from '@/app/components/pacientes/HeaderPaciente';
 import TarjetaInfoPaciente from '@/app/components/pacientes/TarjetaInfoPaciente';
 import DentigramaEditor from '@/app/components/pacientes/DentigramaEditor';
@@ -9,9 +9,12 @@ import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { API_BASE_URL, authFetch } from '@/config/api';
 import { Lock } from 'lucide-react'; // Importamos icono de bloqueo
 
-export default function NuevoPaciente() {
+function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaciente()" a "function NuevoPacienteForm()"
   const router = useRouter();
+  const searchParams = useSearchParams(); // Inicializado para leer la URL
   const dentigramaRef = useRef();
+  
+  const citaId = searchParams.get('cita_id'); // Extraemos el ID de la cita si viene en la URL
   
   // ✅ ESTADO DE PERMISOS
   const [canUseOdontogram, setCanUseOdontogram] = useState(true);
@@ -32,6 +35,22 @@ export default function NuevoPaciente() {
   
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState(null);
+
+  // --- NUEVO: Efecto para precargar los datos de la cita si vienen en la URL ---
+  useEffect(() => {
+    const nombres = searchParams.get('nombres') || '';
+    const apellidos = searchParams.get('apellidos') || '';
+    const telefono = searchParams.get('telefono') || '';
+
+    if (nombres || apellidos || telefono) {
+      setFormData(prev => ({
+        ...prev,
+        nombres,
+        apellidos,
+        telefono
+      }));
+    }
+  }, [searchParams]);
 
   const handleChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -84,7 +103,21 @@ export default function NuevoPaciente() {
       
       if (response.ok) {
         const data = await response.json();
-        router.push(`/pacientes/${data.paciente_id}`);
+        const nuevoPacienteId = data.paciente_id;
+
+        // --- NUEVO: Si venimos de una cita, la vinculamos automáticamente en segundo plano ---
+        if (citaId) {
+          try {
+            await authFetch(`${API_BASE_URL}/api/citas/${citaId}`, {
+              method: 'PUT',
+              body: JSON.stringify({ paciente_id: nuevoPacienteId })
+            });
+          } catch (err) {
+            console.error("Error al vincular la cita con el paciente:", err);
+          }
+        }
+
+        router.push(`/pacientes/${nuevoPacienteId}`);
       } else {
         // Captura el error 403 (o cualquier otro) y lo muestra en pantalla
         const errorData = await response.json();
@@ -94,7 +127,7 @@ export default function NuevoPaciente() {
       alert('Error de conexión');
     }
   };
-
+    
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <form id="form-registrar-paciente" onSubmit={handleSubmit}>
@@ -179,5 +212,14 @@ export default function NuevoPaciente() {
         </div>
       </form>
     </div>
+  );
+}
+
+// Exportación final envuelta en Suspense para Next.js
+export default function NuevoPaciente() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center font-medium text-gray-500">Cargando formulario...</div>}>
+      <NuevoPacienteForm />
+    </Suspense>
   );
 }

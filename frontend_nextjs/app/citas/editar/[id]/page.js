@@ -19,6 +19,22 @@ export default function EditarCita() {
     motivo: '',
     doctor: ''
   });
+
+  const handleRegistrarPaciente = () => {
+    const nombreCompleto = (formData.paciente_nombre || '').trim();
+    const partes = nombreCompleto.split(' ');
+    const nombres = partes[0] || '';
+    const apellidos = partes.slice(1).join(' ') || '';
+    
+    const query = new URLSearchParams({
+      nombres,
+      apellidos,
+      telefono: formData.paciente_telefono || '',
+      cita_id: citaId
+    }).toString();
+
+    router.push(`/pacientes/nuevo?${query}`);
+  };
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,6 +115,13 @@ export default function EditarCita() {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // --- NUEVO: Validación estricta de horario de atención (08:00 AM a 08:30 PM) ---
+    if (formData.hora < "08:00" || formData.hora > "20:30") {
+      alert("❌ El horario de atención permitido es de 08:00 AM a 08:30 PM. Por favor, verifica la hora seleccionada (asegúrate de haber elegido PM si es por la tarde).");
+      return;
+    }
+
     setSaving(true);
     
     try {
@@ -258,6 +281,15 @@ export default function EditarCita() {
                 placeholder="Ej: Limpieza, Consulta, Urgencia"
               />
             </div>
+
+            {!formData.paciente_id && (
+              <Button
+                texto="Registrar como Paciente Nuevo"
+                variant="blue" // <-- Cambiado a la nueva variante nativa
+                onClick={handleRegistrarPaciente}
+                className="w-full mb-4 shadow-lg shadow-blue-100 transition-all active:scale-[0.98]"
+              />
+            )}
             
             <div className="flex gap-3 pt-4">
               <Button 

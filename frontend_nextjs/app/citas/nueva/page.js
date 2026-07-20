@@ -121,6 +121,13 @@ function NuevaCitaForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // --- NUEVO: Validación estricta de horario de atención (08:00 AM a 08:30 PM) ---
+    if (formData.hora < "08:00" || formData.hora > "20:30") {
+      alert("❌ El horario de atención permitido es de 08:00 AM a 08:30 PM. Por favor, verifica la hora seleccionada (asegúrate de haber elegido PM si es por la tarde).");
+      return;
+    }
+
     setLoading(true);
 
     const datosLimpios = {

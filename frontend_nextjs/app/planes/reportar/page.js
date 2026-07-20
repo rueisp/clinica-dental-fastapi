@@ -22,7 +22,7 @@ function ReportarPagoForm() {
     const [copiadoPaypal, setCopiadoPaypal] = useState(false);
 
     // --- CONSTANTES DE DATOS DE PAGO ---
-    const correoPaypal = "pagos@cloudentapp.com";
+    const correoPaypal = "cloudentapp.cliente@gmail.com";
     const linkBold = "https://bold.co/p/cloudentapp"; // <-- Reemplace con su link único de Bold cuando esté activo
 
 
@@ -145,7 +145,7 @@ function ReportarPagoForm() {
                                                 <p className="text-xs text-gray-500">
                                                     Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
                                                 </p>
-                                                <p className="font-mono font-black text-base text-blue-800 pt-1 break-all">{correoPaypal}</p>
+                                                <p className="text-sm text-blue-600 font-semibold pt-1 break-all">{correoPaypal}</p>
                                             </div>
                                             <button
                                                 type="button"
@@ -170,7 +170,7 @@ function ReportarPagoForm() {
                                                 <p className="text-xs text-gray-500">
                                                     Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
                                                 </p>
-                                                <p className="text-xs text-blue-600 font-bold pt-1">Disponible para cuentas en Colombia</p>
+                                                <p className="text-sm text-blue-600 font-semibold pt-1">Disponible para cuentas en Colombia</p>
                                             </div>
                                             <a
                                                 href={linkBold}
@@ -193,7 +193,7 @@ function ReportarPagoForm() {
                                                 <p className="text-xs text-gray-500">
                                                     Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
                                                 </p>
-                                                <p className="text-xs text-blue-600 font-bold pt-1">Recomendado para Colombia</p>
+                                                <p className="text-sm text-blue-600 font-semibold pt-1">Recomendado para Colombia</p>
                                             </div>
                                             <a
                                                 href={linkBold}
@@ -214,7 +214,7 @@ function ReportarPagoForm() {
                                                 <p className="text-xs text-gray-500">
                                                     Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
                                                 </p>
-                                                <p className="font-mono font-black text-base text-blue-800 pt-1 break-all">{correoPaypal}</p>
+                                                <p className="text-sm text-blue-600 font-semibold pt-1 break-all">{correoPaypal}</p>
                                             </div>
                                             <button
                                                 type="button"

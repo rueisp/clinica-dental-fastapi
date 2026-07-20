@@ -334,7 +334,7 @@ async def create_cita(
 @router.put("/citas/{cita_id}")
 async def update_cita(
     cita_id: UUID,
-    cita_data: CitaUpdate,  # ← Cambiado: dict → CitaUpdate
+    cita_data: CitaUpdate,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -357,30 +357,27 @@ async def update_cita(
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     
     # Actualizar campos (todos con . en lugar de .get)
-    if cita_data.fecha:  # ← Cambiado: .get('fecha') → .fecha
+    if cita_data.fecha:
         try:
             cita.fecha = datetime.strptime(cita_data.fecha, '%Y-%m-%d').date()
         except ValueError:
             pass
     
-    if cita_data.hora:  # ← Cambiado: .get('hora') → .hora
+    if cita_data.hora:
         try:
             cita.hora = datetime.strptime(cita_data.hora, '%H:%M').time()
         except ValueError:
             pass
     
-    # Actualizar solo los campos que existen en el modelo Cita
-        cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo
-        cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor
-        
-        # IMPORTANTE: Los datos del paciente (nombre/teléfono) NO se guardan en Cita.
-        # Si necesitas actualizarlos, se hace en la tabla Paciente, no aquí.
-        
-        # Actualizar el ID del paciente si se proporciona uno nuevo
-        if cita_data.paciente_id is not None:
-            cita.paciente_id = cita_data.paciente_id
+    # --- CORREGIDO: Este bloque ahora tiene 8 espacios de indentación y se ejecuta siempre ---
+    cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo
+    cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor
+    
+    # Actualizar el ID del paciente si se proporciona uno nuevo
+    if cita_data.paciente_id is not None:
+        cita.paciente_id = cita_data.paciente_id
 
-        await db.commit()
+    await db.commit()
     
     return {
         "success": True,

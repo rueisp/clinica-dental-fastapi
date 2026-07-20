@@ -11,6 +11,7 @@ const variantStyles = {
   danger: 'bg-red-600 text-white hover:bg-red-700',
   outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
   ghost: 'hover:bg-gray-100', // Para botones sin fondo como flechas
+  blue: 'bg-blue-600 text-white hover:bg-blue-500', // <-- AGREGADO: Azul con hover azul sutil
 };
 
 // Definimos los tamaños

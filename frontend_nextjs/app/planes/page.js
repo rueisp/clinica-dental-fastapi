@@ -39,12 +39,16 @@ export default function PlanesPage() {
   };
 
   const handleCambiarPlan = async (plan) => {
+    // --- ASEGÚRESE DE QUE ESTA DEFINICIÓN ESTÉ AQUÍ ---
+    const precioMostrar = moneda === 'COP'
+      ? `$${plan.precio_cop.toLocaleString('es-CO')} COP`
+      : `$${plan.precio_mensual} USD`;
     // Alerta de confirmación detallada para evitar errores
     const mensajeConfirmar = plan.precio_cop > 0 
       ? `⚠️ ATENCIÓN: Estás a punto de solicitar el plan "${plan.nombre.replace('_', ' ').toUpperCase()}".\n\n` +
-        `• Valor: $${plan.precio_cop.toLocaleString('es-CO')}\n` +
+        `• Valor: ${precioMostrar}\n` +
         `• Duración: ${plan.duracion_dias === 365 ? '1 Año' : '1 Mes'}\n\n` +
-        `Para activar este plan, el sistema te redirigirá para que adjuntes tu comprobante de pago (Nequi/Bancolombia).\n\n` +
+        `Para activar este plan, el sistema te redirigirá para que realices tu pago en línea (Bold/PayPal).\n\n` +
         `¿Estás seguro de que deseas continuar con esta solicitud?`
       : `¿Confirmas que deseas activar el plan gratuito "${plan.nombre.toUpperCase()}"?`;
 
