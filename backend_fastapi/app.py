@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
-from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios, whatsapp
+from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios, whatsapp, bot_config
 
 # 1. Cargar el entorno al puro inicio
 load_dotenv()
@@ -42,6 +42,7 @@ app.include_router(evoluciones.router, prefix="/api/evoluciones", tags=["Evoluci
 app.include_router(pagos.router, prefix="/api", tags=["Pagos"])
 app.include_router(usuarios.router, prefix="/api/usuarios", tags=["Usuarios"])
 app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["WhatsApp Evolution"])
+app.include_router(bot_config.router, prefix="/api", tags=["Configuración Bot"])
 
 @app.get("/")
 async def root():

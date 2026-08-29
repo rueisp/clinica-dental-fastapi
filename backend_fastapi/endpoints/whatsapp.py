@@ -17,7 +17,9 @@ from services.bot_engine_service import (
     verificar_silencio_humano,
     registrar_historial_db,
     obtener_respuesta_faq_db,
-    consultar_gemini_ia
+    consultar_gemini_ia,
+    extraer_user_id_de_instancia,
+    poblar_plantilla_bot_doctor
 )
 
 router = APIRouter()
@@ -36,6 +38,13 @@ def obtener_nombre_instancia(usuario: Usuario) -> str:
 @router.get("/estado")
 async def consultar_estado_whatsapp(current_user: Usuario = Depends(get_current_user)):
     instance_name = obtener_nombre_instancia(current_user)
+    # Auto-asegurar que este doctor tenga su plantilla base inicializada
+    await poblar_plantilla_bot_doctor(
+        user_id=str(current_user.id),
+        doctor_nombre=f"{current_user.nombres} {current_user.apellidos or ''}".strip(),
+        consultorio_nombre=current_user.nombre_consultorio,
+        telefono=current_user.telefono
+    )
     resultado = await obtener_estado_conexion(instance_name)
     return {
         "instancia": instance_name,
@@ -47,6 +56,14 @@ async def consultar_estado_whatsapp(current_user: Usuario = Depends(get_current_
 async def conectar_whatsapp(request: Request, current_user: Usuario = Depends(get_current_user)):
     instance_name = obtener_nombre_instancia(current_user)
     
+    # Auto-asegurar plantilla base
+    await poblar_plantilla_bot_doctor(
+        user_id=str(current_user.id),
+        doctor_nombre=f"{current_user.nombres} {current_user.apellidos or ''}".strip(),
+        consultorio_nombre=current_user.nombre_consultorio,
+        telefono=current_user.telefono
+    )
+
     host = request.headers.get("host", "")
     if "localhost" in host or "127.0.0.1" in host:
         base_url = "https://dental-backend-779789369655.us-east1.run.app"
@@ -93,7 +110,7 @@ async def enviar_mensaje_manual(datos: EnviarMensajeRequest, current_user: Usuar
 
 @router.post("/webhook/evolution")
 async def webhook_evolution_receiver(request: Request):
-    """Receptor del Webhook de Evolution API: Silencio Humano + Jerarquía 3 Niveles (Supabase / Gemini)"""
+    """Receptor del Webhook de Evolution API: Silencio Humano + Jerarquía 3 Niveles Multi-Tenant"""
     try:
         body = await request.json()
         evento = body.get("event")
@@ -138,7 +155,10 @@ async def webhook_evolution_receiver(request: Request):
             if not texto_paciente:
                 return {"status": "ignored_no_text"}
 
-            print(f"📩 [Webhook Evolution] Mensaje recibido de {numero_paciente} (Destino: {destinatario_respuesta}) en {instance}: '{texto_paciente}'", flush=True)
+            # 🆔 Obtener el odontologo_id a partir del nombre de instancia
+            odontologo_id = extraer_user_id_de_instancia(instance)
+
+            print(f"📩 [Webhook Evolution] Mensaje recibido de {numero_paciente} en {instance} (Doctor ID: {odontologo_id}): '{texto_paciente}'", flush=True)
 
             # 1. Silencio humano
             if await verificar_silencio_humano(numero_paciente, ventana_horas=0, instance=instance):
@@ -146,10 +166,10 @@ async def webhook_evolution_receiver(request: Request):
                 await registrar_historial_db(numero_paciente, texto_paciente, "", instance=instance)
                 return {"status": "silence_active"}
 
-            # 2. Jerarquía de Respuestas
-            respuesta = await obtener_respuesta_faq_db(texto_paciente)
+            # 2. Jerarquía de Respuestas Multi-Tenant
+            respuesta = await obtener_respuesta_faq_db(texto_paciente, odontologo_id=odontologo_id)
             if not respuesta:
-                respuesta = await consultar_gemini_ia(texto_paciente, numero_paciente, instance=instance)
+                respuesta = await consultar_gemini_ia(texto_paciente, numero_paciente, instance=instance, odontologo_id=odontologo_id)
 
             if not respuesta:
                 respuesta = {

@@ -7,6 +7,7 @@ from models import Usuario, Plan, Subscription
 from schemas.auth import LoginRequest, TokenResponse, UsuarioCreate
 from utils.auth_utils import verificar_password, hash_password, crear_token_acceso
 from datetime import datetime, timedelta
+from services.bot_engine_service import poblar_plantilla_bot_doctor
 
 router = APIRouter()
 
@@ -95,6 +96,13 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
         db.add(nuevo_usuario_plan)
         await db.commit()
         await db.refresh(nuevo_usuario)
+        # Inicializar automáticamente su bot con la plantilla oficial
+        await poblar_plantilla_bot_doctor(
+            user_id=str(nuevo_usuario.id),
+            doctor_nombre=f"{nuevo_usuario.nombres} {nuevo_usuario.apellidos or ''}".strip(),
+            consultorio_nombre=nuevo_usuario.nombre_consultorio,
+            telefono=nuevo_usuario.telefono
+        )
         
         token_data = {"sub": nuevo_usuario.username}
         access_token = crear_token_acceso(token_data)

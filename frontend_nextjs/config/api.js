@@ -1,10 +1,8 @@
-// config/api.js
+// frontend_nextjs/config/api.js
 
 export const API_BASE_URL = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
   ? 'http://localhost:8001'
   : 'https://dental-backend-779789369655.us-east1.run.app';
-
-
 
 export const getAuthToken = () => {
   if (typeof window !== 'undefined') {
@@ -64,7 +62,7 @@ export const API_ENDPOINTS = {
   SUSPENDER_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/suspender-manual/${id}`,
   ADMIN_PAGOS_PENDIENTES: `${API_BASE_URL}/api/pagos/admin/pendientes`,
   APROBAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/aprobar/${id}`,
-  RECHAZAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/rechazar/${id}`, // <--- AÑADE ESTA
+  RECHAZAR_PAGO: (id) => `${API_BASE_URL}/api/pagos/admin/rechazar/${id}`,
   ADMIN_RESUMEN_USUARIOS: `${API_BASE_URL}/api/pagos/admin/usuarios-resumen`,
   ACTUALIZAR_PERFIL: `${API_BASE_URL}/api/usuarios/me`,
   CAMBIAR_PASSWORD: `${API_BASE_URL}/api/usuarios/cambiar-password`,
@@ -73,6 +71,12 @@ export const API_ENDPOINTS = {
   WHATSAPP_CONECTAR: `${API_BASE_URL}/api/whatsapp/conectar`,
   WHATSAPP_DESCONECTAR: `${API_BASE_URL}/api/whatsapp/desconectar`,
   WHATSAPP_ENVIAR: `${API_BASE_URL}/api/whatsapp/enviar-mensaje`,
+  // 🤖 Configuración Personalizada del Bot
+  BOT_CONFIG_GENERAL: `${API_BASE_URL}/api/bot-config/general`,
+  BOT_CONFIG_SERVICIOS: `${API_BASE_URL}/api/bot-config/servicios`,
+  BOT_CONFIG_CHATBOT: `${API_BASE_URL}/api/bot-config/chatbot`,
+  BOT_CONFIG_RESTAURAR: `${API_BASE_URL}/api/bot-config/restaurar-plantilla`,
+  BOT_CONFIG_UPLOAD_AFICHE: `${API_BASE_URL}/api/bot-config/subir-afiche`,
 };
 
 /**

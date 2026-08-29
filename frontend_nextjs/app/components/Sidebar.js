@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare } from 'lucide-react';
+import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare, Bot } from 'lucide-react';
 import { setAuthToken } from '@/config/api';
 import { useUser } from '@/context/UserContext';
 
@@ -139,6 +139,19 @@ export default function Sidebar() {
           >
             <MessageSquare className="w-5 h-5" />
             <span>Chat WhatsApp</span>
+          </Link>
+
+          <Link
+            href="/bot-config"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/bot-config'
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+            onClick={closeSidebar}
+          >
+            <Bot className="w-5 h-5" />
+            <span>Configurar Bot</span>
           </Link>
 
           <Link

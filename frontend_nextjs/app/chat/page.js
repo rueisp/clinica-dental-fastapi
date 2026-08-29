@@ -276,6 +276,15 @@ function ChatContent() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Link
+              href="/bot-config"
+              className="p-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl transition-all flex items-center gap-2 text-xs font-bold shadow-sm"
+              title="Personalizar Precios, Horarios y Afiches del Bot"
+            >
+              <Bot size={14} />
+              <span className="hidden sm:inline">Configurar Bot</span>
+            </Link>
+
             <button
               onClick={() => setModalConexionAbierto(true)}
               className="p-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all flex items-center gap-2 text-xs font-bold shadow-sm shadow-green-100 cursor-pointer"
