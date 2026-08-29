@@ -3,21 +3,19 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut } from 'lucide-react';
+import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare } from 'lucide-react';
 import { setAuthToken } from '@/config/api';
-import { useUser } from '@/context/UserContext'; // <--- 1. Importación del hook
+import { useUser } from '@/context/UserContext';
 
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   
-  // 2. CAMBIO: Extraemos user y loading del contexto global
   const { user, loading } = useUser(); 
   
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // 3. Lógica de etiquetas corregida basada en el nombre real del plan
   const planLabel = (() => {
     if (loading || !user) return { nombre: 'Cargando...', color: 'text-gray-400' };
     if (user.is_admin) return { nombre: 'Administrador', color: 'text-purple-600' };
@@ -37,12 +35,11 @@ export default function Sidebar() {
     return { nombre: 'Plan Activo', color: 'text-gray-600' };
   })();
 
-  // 4. CAMBIO: Solo mantenemos el efecto para el tamaño de pantalla
   useEffect(() => {
     const checkScreenSize = () => {
-      const mobile = window.innerWidth < 1024; // Cambiado de 768 a 1024
+      const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
-      setIsOpen(!mobile); // Abierto en PC, cerrado en móvil/tablet
+      setIsOpen(!mobile);
     };
 
     checkScreenSize();
@@ -55,17 +52,12 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     setAuthToken(null);
-    // Usamos window.location para limpiar completamente el estado de React al salir
     window.location.href = '/login'; 
   };
 
-  // 5. CAMBIO: Si está cargando el contexto, mostramos un esqueleto o nada para evitar parpadeos
   if (loading) return <div className="fixed inset-y-0 left-0 w-80 bg-white border-r border-gray-200 animate-pulse" />;
 
   return (
-    // ... Aquí sigue tu JSX
-    // IMPORTANTE: En el JSX, donde antes usabas 'userData.nombres', ahora usa 'user?.nombres'
-    // Donde antes usabas 'isAdmin', ahora usa 'user?.is_admin'
     <>
       {/* Botón Hamburguesa - solo visible en móvil */}
       {isMobile && (
@@ -135,7 +127,20 @@ export default function Sidebar() {
             <span>Pacientes</span>
           </Link>
 
-          {/* Ajustado: Ahora apunta al Dashboard principal y tiene el mismo estilo */}
+          {/* 💬 NUEVO ACCESO: Chat WhatsApp */}
+          <Link
+            href="/chat"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/chat'
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+            onClick={closeSidebar}
+          >
+            <MessageSquare className="w-5 h-5" />
+            <span>Chat WhatsApp</span>
+          </Link>
+
           <Link
             href="/"
             className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
@@ -166,53 +171,51 @@ export default function Sidebar() {
 
         <hr className="my-4 border-gray-200" />
 
-          <nav className="p-4 space-y-2">
-            {/* 🔥 NUEVO: Sección Planes */}
+        <nav className="p-4 space-y-2">
+          <Link
+            href="/planes"
+            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            onClick={closeSidebar}
+          >
+            <CreditCard className="w-5 h-5" />
+            <span>Planes</span>
+          </Link>
+          
+          <Link
+            href="/perfil"
+            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            onClick={closeSidebar}
+          >
+            <UserCog className="w-5 h-5" />
+            <span>Mi Perfil</span>
+          </Link>
+
+          {user?.is_admin && (
             <Link
-              href="/planes"
-              className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-              onClick={closeSidebar}
-            >
-              <CreditCard className="w-5 h-5" />
-              <span>Planes</span>
-            </Link>
-            
-            <Link
-              href="/perfil" // <-- Cambia esto
-              className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              href="/admin/pagos"
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border ${
+                pathname === '/admin/pagos' 
+                  ? 'text-purple-700 bg-purple-50 border-purple-100' 
+                  : 'text-gray-700 hover:bg-gray-100 border-transparent'
+              }`}
               onClick={closeSidebar}
             >
               <UserCog className="w-5 h-5" />
-              <span>Mi Perfil</span>
+              <span className="font-bold text-sm">Validar Pagos</span>
             </Link>
-
-            {/* Solo se muestra si el usuario es Admin */}
-            {user?.is_admin && (
-              <Link
-                href="/admin/pagos"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border ${
-                  pathname === '/admin/pagos' 
-                    ? 'text-purple-700 bg-purple-50 border-purple-100' 
-                    : 'text-gray-700 hover:bg-gray-100 border-transparent'
-                }`}
-                onClick={closeSidebar}
-              >
-                <UserCog className="w-5 h-5" />
-                <span className="font-bold text-sm">Validar Pagos</span>
-              </Link>
-            )}
-            
-            <button
-              onClick={() => {
-                closeSidebar();
-                handleLogout();
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Salir</span>
-            </button>
-          </nav>
+          )}
+          
+          <button
+            onClick={() => {
+              closeSidebar();
+              handleLogout();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Salir</span>
+          </button>
+        </nav>
       </aside>
     </>
   );

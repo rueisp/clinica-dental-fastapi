@@ -18,6 +18,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from services.export_service import generar_historia_clinica_word
 from uuid import UUID
+import csv
+from io import StringIO, BytesIO
 
 router = APIRouter()
 
@@ -297,6 +299,72 @@ async def listar_papelera(
         ]
     }
 
+@router.get("/exportar-excel-backup")
+async def exportar_backup_excel(
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Genera una copia de seguridad completa en Excel/CSV de todos los pacientes del doctor"""
+    
+    # 1. Consultar todos los pacientes activos del odontólogo
+    query = select(Paciente).where(
+        Paciente.odontologo_id == current_user.id,
+        Paciente.is_deleted == False
+    ).order_by(Paciente.nombres.asc())
+    
+    result = await db.execute(query)
+    pacientes = result.scalars().all()
+    
+    # 2. Crear archivo CSV en memoria
+    output = StringIO()
+    # Escribimos el BOM UTF-8 para que Microsoft Excel reconozca tildes y Ñs automáticamente
+    output.write('\ufeff')
+    
+    writer = csv.writer(output, delimiter=';') # Delimitador ';' ideal para Excel en español
+    
+    # Encabezados de la hoja de cálculo
+    writer.writerow([
+        "ID Paciente", "Nombres", "Apellidos", "Tipo Documento", "Documento",
+        "Teléfono", "Email", "Fecha Nacimiento", "Edad", "Sexo", 
+        "Ocupación", "Dirección", "Barrio", "Motivo Consulta", 
+        "Enfermedad Actual", "Alergias", "Observaciones"
+    ])
+    
+    # Filas con los datos
+    for p in pacientes:
+        fecha_nac = p.fecha_nacimiento.strftime('%d/%m/%Y') if p.fecha_nacimiento else ""
+        writer.writerow([
+            str(p.id),
+            p.nombres or "",
+            p.apellidos or "",
+            p.tipo_documento or "",
+            p.documento or "",
+            p.telefono or "",
+            p.email or "",
+            fecha_nac,
+            p.edad or "",
+            p.sexo or "",
+            p.ocupacion or "",
+            p.direccion or "",
+            p.barrio or "",
+            p.motivo_consulta or "",
+            p.enfermedad_actual or "",
+            p.alergias or "",
+            p.observaciones or ""
+        ])
+    
+    # 3. Preparar el buffer de respuesta
+    output.seek(0)
+    bytes_data = BytesIO(output.getvalue().encode('utf-8'))
+    
+    fecha_hoy = datetime.now().strftime('%Y_%m_%d')
+    filename = f"Backup_Pacientes_{fecha_hoy}.csv"
+    
+    return StreamingResponse(
+        bytes_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 @router.get("/{paciente_id}")
 async def get_paciente(
@@ -753,3 +821,5 @@ async def exportar_paciente_word(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+

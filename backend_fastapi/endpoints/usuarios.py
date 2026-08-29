@@ -116,8 +116,17 @@ async def cambiar_plan(
             detail="Ya tienes una solicitud de pago en verificación. Espera la aprobación del administrador."
         )
 
-    # --- NUEVA REGLA DE SEGURIDAD: Bloquear si ya tiene un plan de pago activo (No Trial) ---
-    if suscripcion and suscripcion.status == "active" and suscripcion.plan_type.lower() != "trial":
+    # --- VALIDACIÓN DE SEGURIDAD CON VERIFICACIÓN DE EXPIRACIÓN ---
+    ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    sub_expirada = False
+    
+    if suscripcion and suscripcion.current_period_end:
+        fecha_fin_sub = suscripcion.current_period_end.replace(tzinfo=None) if suscripcion.current_period_end.tzinfo else suscripcion.current_period_end
+        if fecha_fin_sub <= ahora_utc:
+            sub_expirada = True
+
+    # Solo bloqueamos si la suscripción está activa Y NO está vencida
+    if suscripcion and suscripcion.status == "active" and not sub_expirada and suscripcion.plan_type.lower() != "trial":
         raise HTTPException(
             status_code=400,
             detail="Ya tienes un plan de pago activo. Para realizar un cambio o cancelación, por favor contacta a soporte técnico."

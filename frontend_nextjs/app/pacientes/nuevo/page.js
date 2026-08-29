@@ -96,7 +96,7 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
     if (imagenFile) submitData.append('imagen_perfil', imagenFile);
     
     try {
-      const response = await authFetch(`${API_BASE_URL}/api/pacientes`, {
+      const response = await authFetch(`${API_BASE_URL}/api/pacientes/`, {
         method: 'POST',
         body: submitData
       });

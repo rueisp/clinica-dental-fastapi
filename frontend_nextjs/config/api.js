@@ -1,9 +1,8 @@
 // config/api.js
 
-// 1. Lógica de URL: Usa la variable de entorno o la IP local por defecto
-const rawBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-
-export const API_BASE_URL = rawBaseUrl.replace(/\/$/, ""); 
+export const API_BASE_URL = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+  ? 'http://localhost:8001'
+  : 'https://dental-backend-779789369655.us-east1.run.app';
 
 
 
@@ -58,6 +57,7 @@ export const API_ENDPOINTS = {
   OBTENER_PAGO: (id) => `${API_BASE_URL}/api/pagos/${id}`,
   LISTAR_PAGOS: (params = "") => `${API_BASE_URL}/api/pagos/${params}`,
   EXPORTAR_PACIENTE_WORD: (id) => `${API_BASE_URL}/api/pacientes/${id}/exportar-word`,
+  EXPORTAR_BACKUP_EXCEL: `${API_BASE_URL}/api/pacientes/exportar-excel-backup`,
   PLANES: `${API_BASE_URL}/api/planes/`,
   REPORTAR_PAGO: `${API_BASE_URL}/api/pagos/reportar`,
   ACTIVAR_MANUAL: (id) => `${API_BASE_URL}/api/pagos/admin/activar-manual/${id}`,
@@ -68,6 +68,11 @@ export const API_ENDPOINTS = {
   ADMIN_RESUMEN_USUARIOS: `${API_BASE_URL}/api/pagos/admin/usuarios-resumen`,
   ACTUALIZAR_PERFIL: `${API_BASE_URL}/api/usuarios/me`,
   CAMBIAR_PASSWORD: `${API_BASE_URL}/api/usuarios/cambiar-password`,
+  // WhatsApp Evolution API
+  WHATSAPP_ESTADO: `${API_BASE_URL}/api/whatsapp/estado`,
+  WHATSAPP_CONECTAR: `${API_BASE_URL}/api/whatsapp/conectar`,
+  WHATSAPP_DESCONECTAR: `${API_BASE_URL}/api/whatsapp/desconectar`,
+  WHATSAPP_ENVIAR: `${API_BASE_URL}/api/whatsapp/enviar-mensaje`,
 };
 
 /**
@@ -88,4 +93,30 @@ export const optimizarImagen = (url, width = 800) => {
   
   // Insertamos la transformación después de '/upload/'
   return url.replace('/upload/', `/upload/${transformacion}/`);
+};
+
+/**
+ * Parsea de forma segura cualquier respuesta de la API (su éxito o error)
+ * y previene que la UI se congele si la respuesta no es exitosa (ej: 403 Plan Expirado, 401 No Autorizado).
+ */
+export const parseApiResponse = async (response) => {
+  try {
+    const data = await response.json();
+    if (!response.ok) {
+      // Extrae el mensaje 'detail' enviado por FastAPI o un mensaje por defecto
+      const errorMessage = typeof data.detail === 'string' 
+        ? data.detail 
+        : 'Ocurrió un error al procesar la solicitud.';
+      return { ok: false, error: errorMessage, data: null, status: response.status };
+    }
+    return { ok: true, error: null, data, status: response.status };
+  } catch (e) {
+    // Manejo de respuestas vacías o no-JSON
+    return {
+      ok: response.ok,
+      error: response.ok ? null : 'Error imprevisto en la comunicación con el servidor.',
+      data: null,
+      status: response.status
+    };
+  }
 };

@@ -7,6 +7,7 @@ import TarjetaInfoPaciente from '@/app/components/pacientes/TarjetaInfoPaciente'
 import DentigramaEditor from '@/app/components/pacientes/DentigramaEditor';
 import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { Lock } from 'lucide-react'; 
+import { authFetch, parseApiResponse, API_ENDPOINTS } from '@/config/api';
 
 export default function EditarPaciente() {
   const { id } = useParams();
@@ -23,10 +24,8 @@ export default function EditarPaciente() {
   const [modalOdontograma, setModalOdontograma] = useState(false); // <-- AGREGAR ESTA LÍNEA
 
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
-
   useEffect(() => {
-    // 1. CARGAR PERMISOS DESDE LOCALSTORAGE
+    // 1. Cargar permisos de la cuenta
     const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
     const isAdmin = localStorage.getItem('is_admin') === 'true';
     
@@ -36,35 +35,25 @@ export default function EditarPaciente() {
       setCanUseOdontogram(perms.can_use_odontogram);
     }
 
+    // 2. Cargar datos del paciente de forma segura
     const fetchPaciente = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        const response = await authFetch(API_ENDPOINTS.PACIENTE_BY_ID(id));
+        const { ok, error, data } = await parseApiResponse(response);
 
-        if (!token) {
-            const llaves = Object.keys(localStorage);
-            console.log("Nombres de llaves encontradas:", llaves);
-            throw new Error('Sesión no encontrada. Por favor inicie sesión.');
-        }
-
-        const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Paciente no encontrado');
+        if (!ok) {
+          alert(`⚠️ ${error}`);
+          router.push('/pacientes');
+          return;
         }
         
-        const data = await response.json();
         setPaciente(data);
         if (data.imagen_perfil_url) {
           setImagenPreview(data.imagen_perfil_url);
         }
       } catch (err) {
-        console.error("Error fetching:", err);
-        alert(err.message);
+        console.error("Error fetching paciente:", err);
+        alert('Error de conexión al cargar los datos del paciente');
         router.push('/pacientes');
       } finally {
         setLoading(false);
@@ -72,7 +61,7 @@ export default function EditarPaciente() {
     };
 
     if (id) fetchPaciente();
-  }, [id, router, API_URL]);
+  }, [id, router]);
 
   const handleChange = (name, value) => {
     setPaciente(prev => ({ ...prev, [name]: value }));
@@ -95,15 +84,7 @@ export default function EditarPaciente() {
     setSaving(true);
     
     try {
-      const token = localStorage.getItem('auth_token');
-
-      if (!token) {
-          alert("La sesión ha expirado. Por favor, vuelva a iniciar sesión.");
-          router.push('/login');
-          return;
-      }
-
-      // SOLO EXPORTAR DENTIGRAMA SI TIENE PERMISO
+      // Exportar dentigrama si tiene permiso
       let dentigramaBase64 = null;
       if (canUseOdontogram && dentigramaRef.current) {
         dentigramaBase64 = await dentigramaRef.current.exportar();
@@ -121,13 +102,10 @@ export default function EditarPaciente() {
       campos.forEach(campo => {
         if (paciente[campo] !== undefined && paciente[campo] !== null) {
             let valor = paciente[campo];
-            
-            // ✅ PUENTE SEGURO: Convertir DD/MM/YYYY a YYYY-MM-DD para el backend
             if (campo === 'fecha_nacimiento' && typeof valor === 'string' && valor.includes('/')) {
               const [dia, mes, anio] = valor.split('/');
               valor = `${anio}-${mes}-${dia}`;
             }
-            
             formData.append(campo, valor);
         }
       });
@@ -136,23 +114,26 @@ export default function EditarPaciente() {
       if (imagenFile) formData.append('imagen_perfil', imagenFile);
       if (paciente.eliminar_imagen === 'true') formData.append('eliminar_imagen', 'true');
 
-      const response = await fetch(`${API_URL}/api/pacientes/${id}`, {
+      // 🔑 Petición limpia con authFetch a la API
+      const response = await authFetch(API_ENDPOINTS.PACIENTE_BY_ID(id), {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
       
-      if (response.ok) {
-        alert('Paciente actualizado correctamente');
+      // 🔑 Parseo seguro de la respuesta (éxito o error de plan vencido)
+      const { ok, error } = await parseApiResponse(response);
+
+      if (ok) {
+        alert('✅ Paciente actualizado correctamente');
         router.push(`/pacientes/${id}`);
       } else {
-        const errorData = await response.json();
-        alert(errorData.detail || 'Error al actualizar paciente');
+        // 🔔 NOTIFICACIÓN EXPLÍCITA AL ODONTÓLOGO
+        alert(`⚠️ ${error}`);
       }
     } catch (error) {
-      alert('Error al conectar con el servidor');
+      alert('Error de conexión con el servidor');
     } finally {
-      setSaving(false);
+      setSaving(false); // Desbloquea el botón siempre
     }
   };
 

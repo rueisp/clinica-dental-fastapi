@@ -6,7 +6,9 @@ import Navbar from '@/components/landing/Navbar';
 import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import Pricing from '@/components/landing/Pricing';
+import SecurityTrust from '@/components/landing/SecurityTrust';
 import { ShieldAlert, Monitor, Layout, Calendar, Mic, FileText } from 'lucide-react';
+
 
 function LandingContent() {
   const router = useRouter();
@@ -129,6 +131,9 @@ function LandingContent() {
           </div>
         </div>
       </section>
+
+      {/* 🛡️ NUEVA SECCIÓN DE SEGURIDAD Y CONFIANZA AGREGADA AQUÍ */}
+      <SecurityTrust />
 
       <Pricing />
 

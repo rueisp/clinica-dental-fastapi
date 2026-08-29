@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
-import { User, Shield, CreditCard, Save, Lock, Smartphone, Building } from 'lucide-react';
+import { User, Shield, CreditCard, Save, Lock, Smartphone, Building, Database, Download } from 'lucide-react';
 import AuthGuard from '@/components/AuthGuard';
 
 export default function PerfilPage() {
@@ -85,6 +85,37 @@ export default function PerfilPage() {
             alert("Error de conexión");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const [downloadingBackup, setDownloadingBackup] = useState(false);
+
+    const handleDescargarBackup = async () => {
+        setDownloadingBackup(true);
+        try {
+            const res = await authFetch(API_ENDPOINTS.EXPORTAR_BACKUP_EXCEL);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                // Si el error es un objeto/arreglo de Pydantic, lo convertimos a texto plano
+                const detalleError = typeof data.detail === 'string' 
+                    ? data.detail 
+                    : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'Error al generar la copia de respaldo');
+                throw new Error(detalleError);
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fechaHoy = new Date().toISOString().split('T')[0];
+            a.download = `Backup_Pacientes_${fechaHoy}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert(err.message || "No se pudo descargar la copia de respaldo");
+        } finally {
+            setDownloadingBackup(false);
         }
     };
 
@@ -203,6 +234,30 @@ export default function PerfilPage() {
                                 </button>
                             </form>
                         </section>
+
+                        {/* SECCIÓN RESPALDO Y PORTABILIDAD */}
+                        <section className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 bg-green-50 text-green-600 rounded-xl">
+                                    <Database size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold">Respaldo y Portabilidad de Datos</h2>
+                                    <p className="text-xs text-gray-400 font-medium">Descarga una copia completa de la lista y fichas de tus pacientes en formato Excel en cualquier momento (Ley 1581 / Habeas Data).</p>
+                                </div>
+                            </div>
+
+                            <button 
+                                type="button"
+                                onClick={handleDescargarBackup}
+                                disabled={downloadingBackup}
+                                className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg disabled:opacity-50 cursor-pointer"
+                            >
+                                <Download size={20} /> 
+                                {downloadingBackup ? 'Generando Copia de Seguridad...' : 'Descargar Copia de Respaldo (Excel)'}
+                            </button>
+                        </section>
+
                     </div>
 
                     {/* COLUMNA DERECHA: SUSCRIPCIÓN */}

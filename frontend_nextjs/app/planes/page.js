@@ -187,7 +187,9 @@ export default function PlanesPage() {
         {planes.map((plan) => {
           const esPlanActual = planActual?.plan_nombre === plan.nombre;
           const estaPendiente = planActual?.status === 'pending_payment' && esPlanActual;
-          
+          // Evaluación para saber si el plan está vencido
+          const planVencido = !planActual?.dias_restantes || planActual?.dias_restantes <= 0 || planActual?.status !== 'active';
+
           return (
             <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
               <h3 className="text-xl font-bold text-gray-800 mb-2 capitalize">
@@ -205,71 +207,64 @@ export default function PlanesPage() {
                   {plan.duracion_dias === 365 ? '/año' : plan.duracion_dias === 7 ? '/7 días' : '/mes'}
                 </span>
               </p>
-              {/* Reemplaza la lista <ul> dentro del map de planes */}
-                <ul className="space-y-3 mb-8 flex-grow text-sm">
-                  {/* 1. Límite de pacientes (Dinámico) */}
-                  <li className="flex items-center gap-2 text-gray-700">
-                    <span className="text-green-500 text-xs">✅</span> 
-                    <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
-                  </li>
 
-                  {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Incluido en todos) */}
-                  <li className="flex items-center gap-2 text-gray-700">
-                    <span>🧾</span> Generar recibos rápidos
-                  </li>
+              <ul className="space-y-3 mb-8 flex-grow text-sm">
+                <li className="flex items-center gap-2 text-gray-700">
+                  <span className="text-green-500 text-xs">✅</span> 
+                  <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
+                </li>
+                <li className="flex items-center gap-2 text-gray-700">
+                  <span>🧾</span> Generar recibos rápidos
+                </li>
+                <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                  <span>{plan.can_export_history ? '📝' : '❌'}</span> 
+                  Exportar historia a Word
+                </li>
+                <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                  <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
+                  Odontograma digital {plan.can_use_odontogram ? '' : '(PRO)'}
+                </li>
+                <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                  <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
+                  Evolución por voz {plan.can_use_voice ? '' : '(PRO)'}
+                </li>
+                <li className="flex items-center gap-2 text-gray-700">
+                  <span className="text-green-500 text-xs">✅</span> Agenda de citas
+                </li>
+              </ul>
 
-                  {/* 3. FUNCIÓN RESALTADA: Exportar Word */}
-                  <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                    <span>{plan.can_export_history ? '📝' : '❌'}</span> 
-                    Exportar historia a Word
-                  </li>
-
-                  {/* 4. Odontograma (Solo Pro/Trial) */}
-                  <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                    <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
-                    Odontograma digital {plan.can_use_odontogram ? '' : '(PRO)'}
-                  </li>
-
-                  {/* 5. Evolución por voz (Solo Pro/Trial) */}
-                  <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                    <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
-                    Evolución por voz {plan.can_use_voice ? '' : '(PRO)'}
-                  </li>
-
-                  {/* 6. Agenda (Incluido en todos) */}
-                  <li className="flex items-center gap-2 text-gray-700">
-                    <span className="text-green-500 text-xs">✅</span> Agenda de citas
-                  </li>
-                </ul>
-              {/* REEMPLAZA DESDE AQUÍ EL BLOQUE DE BOTONES: */}
+              {/* 🔘 LÓGICA DE BOTONES INTELIGENTE Y REGENERATIVA */}
               {estaPendiente ? (
-                <button disabled className="w-full bg-yellow-100 text-yellow-700 py-2 rounded-lg font-bold cursor-default flex items-center justify-center gap-2">
+                <button disabled className="w-full bg-yellow-100 text-yellow-700 py-2.5 rounded-lg font-bold cursor-default flex items-center justify-center gap-2">
                   ⏳ Pago en verificación
                 </button>
-              ) : esPlanActual ? (
-                <button disabled className="w-full bg-green-100 text-green-600 py-2 rounded-lg font-bold cursor-not-allowed">
-                  ✅ Plan actual
+              ) : esPlanActual && !planVencido ? (
+                <button disabled className="w-full bg-green-100 text-green-600 py-2.5 rounded-lg font-bold cursor-not-allowed">
+                  ✅ Plan actual (Activo)
+                </button>
+              ) : esPlanActual && planVencido ? (
+                <button
+                  onClick={() => handleCambiarPlan(plan)}
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 transition shadow-md cursor-pointer"
+                >
+                  🔄 Renovar este plan
+                </button>
+              ) : !esPlanActual && !planVencido && planActual?.plan_nombre?.toLowerCase() !== 'trial' ? (
+                <button 
+                  disabled 
+                  className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-bold cursor-not-allowed text-xs"
+                  title="Para cambiar de plan mientras tu suscripción está activa, contacta a soporte."
+                >
+                  🔒 Suscripción Activa
                 </button>
               ) : (
-                // Si el usuario tiene un plan de pago activo (no trial) y este no es su plan actual, bloqueamos el botón
-                planActual?.tiene_plan && planActual?.plan_nombre?.toLowerCase() !== 'trial' ? (
-                  <button 
-                    disabled 
-                    className="w-full bg-gray-100 text-gray-400 py-2 rounded-lg font-bold cursor-not-allowed text-xs"
-                    title="Para cambiar tu plan de pago activo, contacta a soporte."
-                  >
-                    🔒 Suscripción Activa
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleCambiarPlan(plan)}
-                    className="w-full bg-black text-white py-2 rounded-lg font-bold hover:bg-gray-800 transition"
-                  >
-                    {plan.precio_cop === 0 ? 'Activar plan' : 'Cambiar a este plan'}
-                  </button>
-                )
+                <button
+                  onClick={() => handleCambiarPlan(plan)}
+                  className="w-full bg-black text-white py-2.5 rounded-lg font-bold hover:bg-gray-800 transition cursor-pointer"
+                >
+                  {plan.precio_cop === 0 ? 'Activar plan' : 'Seleccionar este plan'}
+                </button>
               )}
-              {/* HASTA AQUÍ */}
             </div>
           );
         })}

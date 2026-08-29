@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
+from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios, whatsapp
 
 # 1. Cargar el entorno al puro inicio
 load_dotenv()
@@ -16,10 +17,17 @@ from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, us
 
 app = FastAPI(title="Clínica Dental API", version="1.0.0")
 
-# Configuración de CORS limpia
+# Configuración de CORS Restringida (Soporta IPs locales dinámicas para pruebas en móvil)
+origins = [
+    "https://frontend-nextjs-779789369655.us-east1.run.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"http://192\.168\.\d+\.\d+:3000", # Permite cualquier IP local (ej. 192.168.1.8, 192.168.1.10, etc.)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +41,7 @@ app.include_router(pacientes.router, prefix="/api/pacientes", tags=["Pacientes"]
 app.include_router(evoluciones.router, prefix="/api/evoluciones", tags=["Evoluciones"])
 app.include_router(pagos.router, prefix="/api", tags=["Pagos"])
 app.include_router(usuarios.router, prefix="/api/usuarios", tags=["Usuarios"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["WhatsApp Evolution"])
 
 @app.get("/")
 async def root():

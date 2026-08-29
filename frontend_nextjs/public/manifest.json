@@ -1,0 +1,21 @@
+{
+  "name": "CloudentApp Dental",
+  "short_name": "CloudentApp",
+  "description": "Plataforma Odontológica y Bandeja de WhatsApp",
+  "start_url": "/chat",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
