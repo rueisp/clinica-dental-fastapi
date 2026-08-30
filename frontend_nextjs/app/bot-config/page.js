@@ -6,7 +6,7 @@ import AuthGuard from '@/components/AuthGuard';
 import { 
   Bot, Clock, DollarSign, Image as ImageIcon, Save, Plus, 
   Trash2, RotateCcw, Check, Sparkles, Building, MapPin, 
-  Phone, MessageSquare, AlertCircle, RefreshCw, X
+  Phone, MessageSquare, AlertCircle, RefreshCw, X, HelpCircle, AlertTriangle
 } from 'lucide-react';
 
 export default function BotConfigPage() {
@@ -25,6 +25,10 @@ export default function BotConfigPage() {
   const [nuevoServicio, setNuevoServicio] = useState({
     servicio: '', categoria: 'General', precio: 'COP ', descripcion: '', palabras_clave: ''
   });
+
+  // Modal de advertencia para restaurar plantilla
+  const [modalRestaurar, setModalRestaurar] = useState(false);
+  const [palabraConfirmar, setPalabraConfirmar] = useState('');
 
   // Modal para agregar FAQ / Promo
   const [modalChatbot, setModalChatbot] = useState(false);
@@ -278,25 +282,23 @@ export default function BotConfigPage() {
     }
   };
 
-  // 5. Restaurar plantilla oficial de fábrica
-  const handleRestaurarPlantilla = async () => {
-    const confirmacion = confirm(
-      '⚠️ ¿Estás seguro de restablecer tu bot a los valores iniciales de fábrica?\n\n' +
-      'Esto reescribirá tus servicios y horarios con la plantilla odontológica recomendada.'
-    );
-    if (!confirmacion) return;
+  // 5. Ejecutar restauración oficial tras confirmación de seguridad
+  const ejecutarRestauracionSegura = async () => {
+    if (palabraConfirmar.trim().toUpperCase() !== 'RESTAURAR') return;
 
+    setModalRestaurar(false);
     setCargando(true);
     try {
       const res = await authFetch(API_ENDPOINTS.BOT_CONFIG_RESTAURAR, { method: 'POST' });
       if (res.ok) {
-        alert('✅ ¡Tu bot ha sido restaurado con la plantilla base oficial!');
+        notificarExito('✅ ¡Tu bot ha sido restablecido a los valores iniciales recomendados!');
+        setPalabraConfirmar('');
         cargarDatos();
       } else {
-        alert('Error al restaurar');
+        alert('Error al restaurar la plantilla');
       }
     } catch (err) {
-      alert('Error de conexión');
+      alert('Error de conexión al restaurar');
     } finally {
       setCargando(false);
     }
@@ -322,7 +324,7 @@ export default function BotConfigPage() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleRestaurarPlantilla}
+              onClick={() => { setPalabraConfirmar(''); setModalRestaurar(true); }}
               className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
               title="Restablecer plantilla inicial recomendada"
             >
@@ -881,6 +883,66 @@ export default function BotConfigPage() {
                   Guardar Respuesta
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ⚠️ MODAL DE ADVERTENCIA DE RESTAURACIÓN SEGURA */}
+        {modalRestaurar && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 border border-red-100 animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2 text-red-600 font-black text-base">
+                  <AlertTriangle size={20} />
+                  <span>¿Restablecer Bot de Fábrica?</span>
+                </div>
+                <button 
+                  onClick={() => setModalRestaurar(false)} 
+                  className="p-1 text-gray-400 hover:text-black rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
+                <p className="font-bold text-gray-900">
+                  Esta acción es irreversible y reescribirá tu configuración actual:
+                </p>
+                <ul className="space-y-1.5 bg-red-50/60 p-3.5 rounded-2xl border border-red-100 text-red-900">
+                  <li>• Se borrarán tus precios personalizados en el catálogo.</li>
+                  <li>• Se desvincularán los afiches subidos a tus promociones.</li>
+                  <li>• Se reiniciarán horarios y dirección a la plantilla base sugerida.</li>
+                </ul>
+                <p className="pt-1">
+                  Para confirmar que deseas reiniciar todo, escribe la palabra <strong className="text-black font-mono font-black">RESTAURAR</strong> a continuación:
+                </p>
+                <input
+                  type="text"
+                  value={palabraConfirmar}
+                  onChange={(e) => setPalabraConfirmar(e.target.value)}
+                  placeholder="Escribe RESTAURAR"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-mono font-bold text-sm text-center tracking-wider outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalRestaurar(false)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={ejecutarRestauracionSegura}
+                  disabled={palabraConfirmar.trim().toUpperCase() !== 'RESTAURAR' || cargando}
+                  className="flex-1 py-3 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-md shadow-red-100 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw size={14} />
+                  <span>Sí, restablecer todo</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
