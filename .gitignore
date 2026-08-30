@@ -1,4 +1,4 @@
-﻿# Entornos virtuales y dependencias
+# Entornos virtuales y dependencias
 venv_fastapi/
 **/venv_fastapi/
 node_modules/
@@ -8,6 +8,7 @@ node_modules/
 __pycache__/
 **/__pycache__/
 *.pyc
+*.pyo
 
 # Next.js Build
 .next/

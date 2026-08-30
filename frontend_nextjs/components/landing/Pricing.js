@@ -7,7 +7,6 @@ export default function Pricing() {
     const [planes, setPlanes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    // Nuevo estado: 'mensual' o 'anual'
     const [billingCycle, setBillingCycle] = useState('mensual');
     const [moneda, setMoneda] = useState('COP'); 
     const router = useRouter();
@@ -28,7 +27,6 @@ export default function Pricing() {
             });
     }, []);
 
-    // Lógica de filtrado: Trial siempre se muestra, el resto depende del switch
     const planesFiltrados = planes.filter(plan => {
         if (plan.nombre === 'trial') return true;
         if (billingCycle === 'mensual') return plan.duracion_dias === 30;
@@ -38,10 +36,8 @@ export default function Pricing() {
 
     const handlePlanClick = (plan) => {
         if (isLoggedIn) {
-            // Si ya está logueado, lo mandamos a reportar el pago directamente con la moneda seleccionada
             router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         } else {
-            // Si no, lo mandamos a registrarse primero
             router.push(`/registro?plan_id=${plan.id}&moneda=${moneda}`);
         }
     };
@@ -51,9 +47,9 @@ export default function Pricing() {
     return (
         <section id="precios" className="py-20 bg-gray-50">
             <div className="container mx-auto px-4 text-center">
-                <h3 className="text-3xl font-bold mb-8">Planes que se adaptan a ti</h3>
+                <h3 className="text-3xl font-bold mb-8">Planes que se adaptan a tu consultorio</h3>
 
-                {/* --- SWITCH DE MONEDA --- */}
+                {/* Switch de Moneda */}
                 <div className="flex justify-center items-center mb-4">
                     <div className="bg-gray-200 p-1 rounded-full flex items-center shadow-inner inline-flex">
                         <button
@@ -79,7 +75,7 @@ export default function Pricing() {
                     </div>
                 </div>
 
-                {/* Switch de Facturación tipo Google One */}
+                {/* Switch de Facturación Mensual / Anual */}
                 <div className="flex justify-center items-center mb-12">
                     <div className="bg-gray-200 p-1 rounded-full flex items-center shadow-inner inline-flex">
                         <button
@@ -106,15 +102,37 @@ export default function Pricing() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-                    {planesFiltrados.map((plan) => (
-                        <div key={plan.id} className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 hover:border-purple-500 transition-all flex flex-col">
-                            <h4 className="text-xl font-bold uppercase text-purple-600 mb-4">
-                                {plan.nombre.replace('_mensual', '').replace('_anual', '').replace('_', ' ')}
-                            </h4>
-                            {/* --- REEMPLACE ESTE BLOQUE DESDE AQUÍ --- */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-6xl mx-auto">
+                    {planesFiltrados.map((plan) => {
+                        const esProOTrial = plan.nombre === 'trial' || plan.nombre.includes('pro');
+
+                        return (
+                            <div 
+                                key={plan.id} 
+                                className={`bg-white p-8 rounded-3xl shadow-lg border transition-all flex flex-col ${
+                                    esProOTrial && plan.nombre !== 'trial'
+                                        ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-purple-50' 
+                                        : 'border-gray-100'
+                                }`}
+                            >
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="text-xl font-bold uppercase text-purple-600">
+                                        {plan.nombre.replace('_mensual', '').replace('_anual', '').replace('_', ' ')}
+                                    </h4>
+                                    {plan.nombre === 'trial' && (
+                                        <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                                            7 Días Full
+                                        </span>
+                                    )}
+                                    {plan.nombre.includes('pro') && (
+                                        <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                                            Recomendado
+                                        </span>
+                                    )}
+                                </div>
+
                                 <div className="mb-6">
-                                    <span className="text-4xl font-bold">
+                                    <span className="text-4xl font-black text-gray-900">
                                         {plan.precio_cop === 0 
                                             ? 'Gratis' 
                                             : moneda === 'COP' 
@@ -122,57 +140,79 @@ export default function Pricing() {
                                                 : `$${plan.precio_mensual} USD`
                                         }
                                     </span>
-                                    <span className="text-gray-500"> / {plan.duracion_dias === 365 ? 'año' : plan.duracion_dias === 7 ? '7 días' : 'mes'}</span>
+                                    <span className="text-gray-500 text-sm font-medium">
+                                        {' '} / {plan.duracion_dias === 365 ? 'año' : plan.duracion_dias === 7 ? '7 días' : 'mes'}
+                                    </span>
                                     {plan.duracion_dias === 365 && (
-                                        <p className="text-xs text-green-600 mt-1 font-semibold italic">
-                                            Pago único anual
+                                        <p className="text-xs text-green-600 mt-1 font-bold">
+                                            ✓ Facturación única anual con descuento
                                         </p>
                                     )}
                                 </div>
-                                {/* --- HASTA AQUÍ --- */}
-                            
-                            <ul className="space-y-3 mb-8 flex-grow text-sm">
-                                {/* 1. Funciones Administrativas (Para todos los planes) */}
-                                <li className="flex items-center gap-2 text-gray-700">
-                                    <span className="text-green-500">✅</span> <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
-                                </li>
                                 
-                                {/* 2. FUNCIÓN RESALTADA: Recibos Rápidos (Para todos los planes) */}
-                                <li className="flex items-center gap-2 text-gray-700">
-                                    <span className="text-blue-500">🧾</span> Generar recibos de cobro rápido
-                                </li>
+                                <ul className="space-y-3 mb-8 flex-grow text-sm">
+                                    {/* 🤖 FUNCIÓN ESTRELLA: Bot de WhatsApp con IA */}
+                                    <li className={`flex items-center gap-2 font-bold ${esProOTrial ? 'text-green-700 bg-green-50/50 p-2 rounded-xl border border-green-100' : 'text-gray-400 italic'}`}>
+                                        <span>{esProOTrial ? '🤖' : '🔒'}</span> 
+                                        <span>Asistente WhatsApp IA 24/7 {!esProOTrial && '(PRO)'}</span>
+                                    </li>
 
-                                {/* 3. FUNCIÓN RESALTADA: Exportar Word (Básico, Pro y Trial) */}
-                                <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_export_history ? '📝' : '❌'}</span> 
-                                    Exportar historia a Word {!plan.can_export_history && "(PRO)"}
-                                </li>
+                                    {/* ⚙️ FUNCIÓN ESTRELLA: Personalización de Tarifas y Horarios */}
+                                    <li className={`flex items-center gap-2 ${esProOTrial ? 'text-gray-800 font-semibold' : 'text-gray-400 italic'}`}>
+                                        <span>{esProOTrial ? '⚙️' : '🔒'}</span> 
+                                        <span>Catálogo de tarifas COP y horarios propios {!esProOTrial && '(PRO)'}</span>
+                                    </li>
 
-                                {/* 4. Funciones Clínicas Avanzadas (Solo Pro y Trial) */}
-                                <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
-                                    Odontograma Digital {!plan.can_use_odontogram && "(PRO)"}
-                                </li>
+                                    {/* Límite de Pacientes */}
+                                    <li className="flex items-center gap-2 text-gray-700">
+                                        <span className="text-green-500">✅</span> 
+                                        <span><strong>{plan.limite_pacientes_diario}</strong> pacientes / día</span>
+                                    </li>
+                                    
+                                    {/* Recibos Rápidos */}
+                                    <li className="flex items-center gap-2 text-gray-700">
+                                        <span className="text-blue-500">🧾</span> 
+                                        <span>Generar recibos rápidos para WhatsApp</span>
+                                    </li>
 
-                                <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
-                                    Evolución por voz {!plan.can_use_voice && "(PRO)"}
-                                </li>
+                                    {/* Exportar Word */}
+                                    <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                        <span>{plan.can_export_history ? '📝' : '❌'}</span> 
+                                        <span>Exportar historia a Word</span>
+                                    </li>
 
-                                <li className={`flex items-center gap-2 ${plan.can_use_multimedia ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                                    <span>{plan.can_use_multimedia ? '📸' : '🔒'}</span> 
-                                    Multimedia (Fotos y RX) {!plan.can_use_multimedia && "(PRO)"}
-                                </li>
-                            </ul>
+                                    {/* Odontograma */}
+                                    <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
+                                        <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
+                                        <span>Odontograma Digital {!plan.can_use_odontogram && '(PRO)'}</span>
+                                    </li>
 
-                            <button 
-                                onClick={() => handlePlanClick(plan)}
-                                className="w-full text-center bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors mt-auto"
-                            >
-                                {plan.precio_cop === 0 ? 'Probar Gratis' : (isLoggedIn ? 'Ver Plan' : 'Elegir Plan')}
-                            </button>
-                        </div>
-                    ))}
+                                    {/* Evolución por Voz */}
+                                    <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700 font-medium' : 'text-gray-400 italic'}`}>
+                                        <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
+                                        <span>Evolución por voz {!plan.can_use_voice && '(PRO)'}</span>
+                                    </li>
+
+                                    {/* Multimedia */}
+                                    <li className={`flex items-center gap-2 ${plan.can_use_multimedia ? 'text-gray-700' : 'text-gray-400 italic'}`}>
+                                        <span>{plan.can_use_multimedia ? '📸' : '🔒'}</span> 
+                                        <span>Fotos y Rx en la nube {!plan.can_use_multimedia && '(PRO)'}</span>
+                                    </li>
+                                </ul>
+
+                                <button 
+                                    onClick={() => handlePlanClick(plan)}
+                                    className={`w-full text-center py-3.5 rounded-2xl font-bold transition-all shadow-md mt-auto cursor-pointer ${
+                                        esProOTrial && plan.nombre !== 'trial'
+                                            ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-200' 
+                                            : 'bg-black hover:bg-gray-800 text-white'
+                                    }`}
+                                >
+                                    {plan.precio_cop === 0 ? 'Comenzar Prueba Gratis (7 Días)' : (isLoggedIn ? 'Solicitar Plan' : 'Elegir Plan')}
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </section>

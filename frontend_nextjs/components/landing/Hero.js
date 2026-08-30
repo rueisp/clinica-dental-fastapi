@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Bot, MessageSquare } from 'lucide-react';
 
 export default function Hero() {
   return (
@@ -11,18 +11,18 @@ export default function Hero() {
       </div>
 
       <div className="container mx-auto px-6 text-center">
-        <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest mb-8 border border-blue-100">
-          <CheckCircle2 size={14} /> Diseñado por dentistas para dentistas
+        <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest mb-8 border border-green-200 shadow-sm">
+          <Bot size={16} className="text-green-600" /> Nuevo: Asistente Virtual WhatsApp con Inteligencia Artificial 24/7
         </div>
         
         <h1 className="text-5xl md:text-7xl font-black text-zinc-900 mb-8 tracking-tighter leading-[0.9]">
           Software dental que <br />
-          <span className="text-blue-600">organiza tu consulta</span>
+          <span className="text-blue-600">atiende por WhatsApp</span> y organiza tu clínica
         </h1>
         
         <p className="text-xl text-zinc-500 max-w-2xl mx-auto mb-10 font-medium leading-relaxed">
-          Gestiona pacientes, agenda, historias clínicas y pagos desde un solo lugar. 
-          Menos papeleo, más tiempo con tus pacientes.
+          Responde a tus pacientes 24/7 con tus propios precios y horarios mediante IA, 
+          mientras gestionas historias clínicas, odontograma, agenda y cobros desde un solo lugar.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

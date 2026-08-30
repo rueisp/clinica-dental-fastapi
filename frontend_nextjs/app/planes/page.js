@@ -209,27 +209,41 @@ export default function PlanesPage() {
               </p>
 
               <ul className="space-y-3 mb-8 flex-grow text-sm">
+                {/* 🤖 Bot de WhatsApp con IA */}
+                <li className={`flex items-center gap-2 font-bold ${(plan.nombre === 'trial' || plan.nombre.includes('pro')) ? 'text-green-700 bg-green-50 p-2 rounded-xl border border-green-100' : 'text-gray-400 italic'}`}>
+                  <span>{(plan.nombre === 'trial' || plan.nombre.includes('pro')) ? '🤖' : '🔒'}</span> 
+                  <span>Asistente WhatsApp IA 24/7 {!(plan.nombre === 'trial' || plan.nombre.includes('pro')) && '(PRO)'}</span>
+                </li>
+
+                {/* ⚙️ Personalización del Bot */}
+                <li className={`flex items-center gap-2 ${(plan.nombre === 'trial' || plan.nombre.includes('pro')) ? 'text-gray-800 font-semibold' : 'text-gray-400 italic'}`}>
+                  <span>{(plan.nombre === 'trial' || plan.nombre.includes('pro')) ? '⚙️' : '🔒'}</span> 
+                  <span>Catálogo de tarifas COP y horarios propios</span>
+                </li>
+
                 <li className="flex items-center gap-2 text-gray-700">
                   <span className="text-green-500 text-xs">✅</span> 
-                  <strong>{plan.limite_pacientes_diario}</strong> pacientes / día
+                  <span><strong>{plan.limite_pacientes_diario}</strong> pacientes / día</span>
                 </li>
                 <li className="flex items-center gap-2 text-gray-700">
-                  <span>🧾</span> Generar recibos rápidos
+                  <span>🧾</span> 
+                  <span>Generar recibos rápidos para WhatsApp</span>
                 </li>
                 <li className={`flex items-center gap-2 ${plan.can_export_history ? 'text-gray-700' : 'text-gray-400 italic'}`}>
                   <span>{plan.can_export_history ? '📝' : '❌'}</span> 
-                  Exportar historia a Word
+                  <span>Exportar historia a Word</span>
                 </li>
                 <li className={`flex items-center gap-2 ${plan.can_use_odontogram ? 'text-gray-700' : 'text-gray-400 italic'}`}>
                   <span>{plan.can_use_odontogram ? '🦷' : '🔒'}</span> 
-                  Odontograma digital {plan.can_use_odontogram ? '' : '(PRO)'}
+                  <span>Odontograma digital {plan.can_use_odontogram ? '' : '(PRO)'}</span>
                 </li>
                 <li className={`flex items-center gap-2 ${plan.can_use_voice ? 'text-gray-700' : 'text-gray-400 italic'}`}>
                   <span>{plan.can_use_voice ? '🎙️' : '🔒'}</span> 
-                  Evolución por voz {plan.can_use_voice ? '' : '(PRO)'}
+                  <span>Evolución por voz {plan.can_use_voice ? '' : '(PRO)'}</span>
                 </li>
                 <li className="flex items-center gap-2 text-gray-700">
-                  <span className="text-green-500 text-xs">✅</span> Agenda de citas
+                  <span className="text-green-500 text-xs">✅</span> 
+                  <span>Agenda y recordatorios de citas</span>
                 </li>
               </ul>
 

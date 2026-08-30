@@ -151,18 +151,18 @@ PLANTILLA_SERVICIOS_BASE = [
 ]
 
 def obtener_plantilla_configuracion(doctor_nombre: str = "", consultorio_nombre: str = "", telefono: str = "") -> dict:
-    nombre_clinica = consultorio_nombre or f"Odontología Dr. {doctor_nombre}".strip() or "Consultorio Odontológico"
-    tel = telefono or "3000000000"
+    nombre_clinica = consultorio_nombre or (f"Consultorio Dr. {doctor_nombre}".strip() if doctor_nombre else "Consultorio Odontológico")
+    tel = telefono or "[Tu Número de WhatsApp]"
     return {
         "nombre_consultorio": nombre_clinica,
-        "ciudad": "Medellín",
-        "barrio": "Simón Bolívar",
-        "direccion": "Cra 84 # 42C-19, Local 2, Barrio Simón Bolívar, La América",
+        "ciudad": "[Tu Ciudad, Ej: Bogotá / Medellín]",
+        "barrio": "[Tu Barrio / Sector]",
+        "direccion": "[Dirección de tu Consultorio, Ej: Calle 123 # 45-67, Consultorio 201]",
         "telefono": tel,
         "telefonos": tel,
         "whatsapp": tel,
-        "email": "contacto@consultorio.com",
-        "horarios": "Lunes a Viernes: 9:00 AM - 12:00 PM y 2:00 PM - 6:00 PM | Sábados: 9:00 AM - 12:00 PM y 2:00 PM - 5:00 PM",
+        "email": "contacto@tuconsultorio.com",
+        "horarios": "Lunes a Viernes: 9:00 AM - 12:00 PM y 2:00 PM - 6:00 PM | Sábados: 9:00 AM - 5:00 PM",
         "horario_lunes_viernes": "9:00 AM - 12:00 M / 2:00 PM - 6:00 PM",
         "horario_sabado": "9:00 AM - 12:00 M / 2:00 PM - 5:00 PM",
         "horario_domingo": "Cerrado",
@@ -194,8 +194,8 @@ PLANTILLA_CHATBOT_BASE = [
     },
     {
         "intencion": "ubicacion",
-        "palabras_clave": "direccion, ubicacion, ubicados, donde estan, donde quedan, sede, local, barrio, medellin, en que parte estan",
-        "respuesta": "📍 *NUESTRA UBICACIÓN:*\nCra 84 # 42C-19, Local 2, Barrio Simón Bolívar, La América, Medellín.\n\n¡Te esperamos!",
+        "palabras_clave": "direccion, ubicacion, ubicados, donde estan, donde quedan, sede, local, barrio, ciudad, en que parte estan, como llego, direccion del consultorio",
+        "respuesta": "📍 *NUESTRA UBICACIÓN:*\nNos encontramos ubicados en [Dirección de tu Consultorio, Ej: Calle 123 # 45-67].\n\n¡Será un gusto atenderte! 🦷",
         "link_imagen": None,
         "estado": "ACTIVO"
     },
