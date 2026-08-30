@@ -170,25 +170,84 @@ export default function BotConfigPage() {
     }
   };
 
+  const handleSubirAficheACard = async (id, file) => {
+    if (!file) return;
+    setSubiendoImagen(true);
+    const formData = new FormData();
+    formData.append('archivo', file);
+
+    try {
+      const res = await authFetch(API_ENDPOINTS.BOT_CONFIG_UPLOAD_AFICHE, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        await handleActualizarChatbotCampo(id, 'link_imagen', data.url);
+        notificarExito('¡Afiche adjuntado con éxito!');
+      } else {
+        alert('Error al subir la imagen');
+      }
+    } catch (err) {
+      alert('Error de conexión subiendo afiche');
+    } finally {
+      setSubiendoImagen(false);
+    }
+  };
+
+  const handleSubirAficheAServicio = async (id, file) => {
+    if (!file) return;
+    setSubiendoImagen(true);
+    const formData = new FormData();
+    formData.append('archivo', file);
+
+    try {
+      const res = await authFetch(API_ENDPOINTS.BOT_CONFIG_UPLOAD_AFICHE, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        await handleActualizarServicioCampo(id, 'link_imagen', data.url);
+        notificarExito('¡Afiche de tratamiento adjuntado con éxito!');
+      } else {
+        alert('Error al subir la imagen');
+      }
+    } catch (err) {
+      alert('Error de conexión subiendo afiche');
+    } finally {
+      setSubiendoImagen(false);
+    }
+  };
+
   const handleCrearChatbotItem = async (e) => {
     e.preventDefault();
     if (!nuevoChatbot.intencion.trim() || !nuevoChatbot.respuesta.trim()) {
-      return alert('Completa los campos obligatorios');
+      return alert('Por favor ingresa el identificador y el mensaje de respuesta');
     }
 
     try {
+      const payload = {
+        ...nuevoChatbot,
+        link_imagen: nuevoChatbot.link_imagen?.trim() || null
+      };
+
       const res = await authFetch(API_ENDPOINTS.BOT_CONFIG_CHATBOT, {
         method: 'POST',
-        body: JSON.stringify(nuevoChatbot)
+        body: JSON.stringify(payload)
       });
+      
       if (res.ok) {
         setModalChatbot(false);
         setNuevoChatbot({ intencion: '', palabras_clave: '', respuesta: '', link_imagen: '' });
-        notificarExito('Respuesta automática creada');
+        notificarExito('¡Respuesta automática creada con éxito!');
         cargarDatos();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Error al guardar: ${errData.detail || res.statusText}`);
       }
     } catch (err) {
-      alert('Error creando respuesta');
+      alert(`Error de conexión: ${err.message}`);
     }
   };
 
@@ -338,45 +397,86 @@ export default function BotConfigPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {servicios.map((srv) => (
                 <div key={srv.id} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:border-gray-300 transition-all flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                          {srv.categoria || 'General'}
-                        </span>
-                        <h3 className="text-base font-black text-gray-900 mt-2">{srv.servicio}</h3>
+                  <div className="flex flex-col md:flex-row gap-4 items-start justify-between">
+                    <div className="flex-1 space-y-3 w-full">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                            {srv.categoria || 'General'}
+                          </span>
+                          <h3 className="text-base font-black text-gray-900 mt-2">{srv.servicio}</h3>
+                        </div>
+                        <button
+                          onClick={() => handleEliminarServicio(srv.id)}
+                          className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                          title="Eliminar tratamiento"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleEliminarServicio(srv.id)}
-                        className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                        title="Eliminar tratamiento"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio en COP</label>
+                        <input
+                          type="text"
+                          defaultValue={srv.precio}
+                          onBlur={(e) => handleActualizarServicioCampo(srv.id, 'precio', e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm text-green-700 focus:bg-white focus:ring-2 focus:ring-black/10 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Descripción / Qué incluye</label>
+                        <textarea
+                          rows={2}
+                          defaultValue={srv.descripcion}
+                          onBlur={(e) => handleActualizarServicioCampo(srv.id, 'descripcion', e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-medium text-xs text-gray-600 focus:bg-white focus:ring-2 focus:ring-black/10 outline-none resize-none"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio en COP</label>
-                      <input
-                        type="text"
-                        defaultValue={srv.precio}
-                        onBlur={(e) => handleActualizarServicioCampo(srv.id, 'precio', e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm text-green-700 focus:bg-white focus:ring-2 focus:ring-black/10 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Descripción / Qué incluye</label>
-                      <textarea
-                        rows={2}
-                        defaultValue={srv.descripcion}
-                        onBlur={(e) => handleActualizarServicioCampo(srv.id, 'descripcion', e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl font-medium text-xs text-gray-600 focus:bg-white focus:ring-2 focus:ring-black/10 outline-none resize-none"
-                      />
+                    {/* 📸 FOTO DEL TRATAMIENTO */}
+                    <div className="shrink-0 text-center w-full md:w-32 flex flex-col items-center justify-center pt-2 md:pt-0">
+                      {srv.link_imagen ? (
+                        <div>
+                          <img src={srv.link_imagen} alt="Afiche" className="w-28 h-28 object-cover rounded-2xl shadow-md mx-auto mb-1.5 border border-gray-100" />
+                          <div className="flex flex-col gap-0.5">
+                            <label className="text-[10px] text-blue-600 hover:underline font-bold cursor-pointer">
+                              Cambiar
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={(e) => handleSubirAficheAServicio(srv.id, e.target.files[0])} 
+                                className="hidden" 
+                              />
+                            </label>
+                            <button
+                              onClick={() => handleActualizarServicioCampo(srv.id, 'link_imagen', null)}
+                              className="text-[10px] text-red-600 hover:underline font-bold cursor-pointer"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="w-28 h-28 border-2 border-dashed border-gray-200 hover:border-black rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all bg-gray-50/50 p-2 text-center">
+                          <ImageIcon size={18} className="text-gray-400 mb-1" />
+                          <span className="text-[9px] font-bold text-gray-500 leading-tight">
+                            + Afiche
+                          </span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => handleSubirAficheAServicio(srv.id, e.target.files[0])} 
+                            className="hidden" 
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-bold">
+                  <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400 font-bold">
                     <span>Guardado automático al editar</span>
                     <span className="text-green-600 font-black">● Activo en Bot</span>
                   </div>
@@ -596,17 +696,44 @@ export default function BotConfigPage() {
                     </div>
                   </div>
 
-                  {item.link_imagen && (
-                    <div className="shrink-0 text-center">
-                      <img src={item.link_imagen} alt="Afiche" className="w-32 h-32 object-cover rounded-2xl shadow-md mx-auto mb-2" />
-                      <button
-                        onClick={() => handleActualizarChatbotCampo(item.id, 'link_imagen', null)}
-                        className="text-[10px] text-red-600 hover:underline font-bold"
-                      >
-                        Quitar afiche
-                      </button>
-                    </div>
-                  )}
+                  {/* 📸 CUADRO DE AFICHE: Permite ver la foto si existe o el botón de '+ Adjuntar Afiche' si está vacía */}
+                  <div className="shrink-0 text-center w-full md:w-36 flex flex-col items-center justify-center">
+                    {item.link_imagen ? (
+                      <div>
+                        <img src={item.link_imagen} alt="Afiche" className="w-32 h-32 object-cover rounded-2xl shadow-md mx-auto mb-2 border border-gray-100" />
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] text-blue-600 hover:underline font-bold cursor-pointer">
+                            Cambiar imagen
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              onChange={(e) => handleSubirAficheACard(item.id, e.target.files[0])} 
+                              className="hidden" 
+                            />
+                          </label>
+                          <button
+                            onClick={() => handleActualizarChatbotCampo(item.id, 'link_imagen', null)}
+                            className="text-[10px] text-red-600 hover:underline font-bold cursor-pointer"
+                          >
+                            Quitar afiche
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="w-32 h-32 border-2 border-dashed border-gray-200 hover:border-black rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all bg-gray-50/50 p-2 text-center">
+                        <ImageIcon size={20} className="text-gray-400 mb-1" />
+                        <span className="text-[10px] font-bold text-gray-500 leading-tight">
+                          {subiendoImagen ? 'Subiendo...' : '+ Adjuntar Afiche'}
+                        </span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={(e) => handleSubirAficheACard(item.id, e.target.files[0])} 
+                          className="hidden" 
+                        />
+                      </label>
+                    )}
+                  </div>
 
                   <div className="self-end md:self-start">
                     <button

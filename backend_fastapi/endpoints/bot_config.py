@@ -43,6 +43,7 @@ class ServicioCreate(BaseModel):
     precio: str
     descripcion: Optional[str] = ""
     disponible: Optional[bool] = True
+    link_imagen: Optional[str] = None
 
 class ServicioUpdate(BaseModel):
     servicio: Optional[str] = None
@@ -51,10 +52,11 @@ class ServicioUpdate(BaseModel):
     precio: Optional[str] = None
     descripcion: Optional[str] = None
     disponible: Optional[bool] = None
+    link_imagen: Optional[str] = None
 
 class ChatbotItemCreate(BaseModel):
     intencion: str
-    palabras_clave: str
+    palabras_clave: Optional[str] = ""
     respuesta: str
     link_imagen: Optional[str] = None
     estado: Optional[str] = "ACTIVO"
@@ -214,8 +216,14 @@ async def crear_chatbot_item(
 ):
     """Crea una nueva intención o promoción con afiche"""
     user_id = str(current_user.id)
+    datos_dict = datos.model_dump()
+    
+    # Limpiar link_imagen si viene como texto vacío
+    if not datos_dict.get("link_imagen") or str(datos_dict.get("link_imagen")).strip() == "":
+        datos_dict["link_imagen"] = None
+
     payload = {
-        **datos.model_dump(),
+        **datos_dict,
         "odontologo_id": user_id
     }
     url = f"{Config.SUPABASE_URL}/rest/v1/chatbot"

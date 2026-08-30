@@ -453,10 +453,18 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                         f"¿Te gustaría agendar una cita de valoración con el doctor para este tratamiento? 📅"
                     )
 
+                    img_srv = fila.get("link_imagen")
+                    img_srv_limpia = str(img_srv).strip() if img_srv and str(img_srv).strip() and str(img_srv).strip().upper() != "NULL" else None
+
+                    # Si el servicio no tiene imagen directa, pero chatbot tiene un afiche para esta intención, usarlo
+                    if not img_srv_limpia and mejor_resp_bot and mejor_resp_bot.get("imagen"):
+                        img_srv_limpia = mejor_resp_bot.get("imagen")
+
                     mejor_resp_srv = {
                         "texto": texto_formateado,
-                        "imagen": None
+                        "imagen": img_srv_limpia
                     }
+
         except Exception as e:
             print(f"❌ [Supabase Servicios Error]: {e}", flush=True)
 
