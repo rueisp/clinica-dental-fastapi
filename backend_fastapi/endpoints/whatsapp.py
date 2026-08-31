@@ -137,9 +137,29 @@ async def webhook_evolution_receiver(request: Request):
                     MENSAJES_PROCESADOS.clear()
 
             addressing_mode = key.get("addressingMode", "")
-            numero_paciente = remote_jid.split("@")[0]
+            remote_jid_alt = key.get("remoteJidAlt", "")
             
-            # Resolver automáticamente si debe enviarse a @lid o a dígitos estándar
+            # 📞 1. Extraer el número telefónico real legible para la bandeja y base de datos
+            telefono_real = None
+            if "@s.whatsapp.net" in remote_jid_alt:
+                telefono_real = "".join(filter(str.isdigit, remote_jid_alt.split("@")[0]))
+            elif "@s.whatsapp.net" in remote_jid:
+                telefono_real = "".join(filter(str.isdigit, remote_jid.split("@")[0]))
+            else:
+                sender_val = data.get("sender", "") or key.get("participant", "")
+                if "@s.whatsapp.net" in sender_val:
+                    telefono_real = "".join(filter(str.isdigit, sender_val.split("@")[0]))
+
+            # Si viene por @lid, guardamos el mapeo bidireccional en memoria
+            if telefono_real and "@lid" in remote_jid:
+                from services.evolution_service import MAPA_LID_CACHE
+                MAPA_LID_CACHE[telefono_real] = remote_jid
+                MAPA_LID_CACHE[remote_jid.split("@")[0]] = telefono_real
+
+            # El número que verá el doctor en su bandeja web (/chat)
+            numero_paciente = telefono_real or remote_jid.split("@")[0]
+            
+            # El destinatario técnico que necesita Baileys para entregar la respuesta
             destinatario_respuesta = await resolver_destinatario_lid(instance, remote_jid, addressing_mode)
 
             message_obj = data.get("message", {})

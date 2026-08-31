@@ -187,7 +187,7 @@ PLANTILLA_CHATBOT_BASE = [
     },
     {
         "intencion": "horarios",
-        "palabras_clave": "horarios, horario, hora, horas, atencion, horario de atencion, estan abiertos, abren, cierran, que dias atienden, que dias abren, a que hora abren",
+        "palabras_clave": "horarios, horario, horario de atencion, que horario tienen, a que hora abren, a que hora cierran, que dias abren, que dias atienden, que dias trabajan, estan abiertos",
         "respuesta": "📅 *Horarios de Atención:*\n• Lunes a Viernes: 9:00 AM - 12:00 PM y 2:00 PM - 6:00 PM\n• Sábados: 9:00 AM - 12:00 PM y 2:00 PM - 5:00 PM\n• Domingos y Festivos: Cerrado.",
         "link_imagen": None,
         "estado": "ACTIVO"
@@ -386,9 +386,8 @@ async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str
 
 async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = None) -> dict | None:
     """
-    Evalúa 'chatbot' y 'servicios' comparando el puntaje de coincidencia.
-    Si el paciente nombra un tratamiento específico, gana 'servicios'.
-    Si hace una pregunta general (precios, horarios, ubicación), gana 'chatbot'.
+    Nivel 1: Atiende consultas de precios directos (como Calzas/Resinas) en 0.1s
+    con respuesta corta y humana SIN llamar a la IA.
     """
     async with httpx.AsyncClient(timeout=6.0) as client:
         mejor_resp_bot = None
@@ -397,30 +396,7 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
         mejor_resp_srv = None
         max_puntos_srv = 0
 
-        # 1. Búsqueda en tabla 'chatbot' (Menú general, Ubicación, Promos)
-        try:
-            url_bot = f"{Config.SUPABASE_URL}/rest/v1/chatbot"
-            if odontologo_id:
-                url_bot += f"?odontologo_id=eq.{odontologo_id}"
-            res_bot = await client.get(url_bot, headers=SUPABASE_HEADERS)
-            datos_bot = res_bot.json() if res_bot.status_code == 200 else []
-            datos_activos = [f for f in datos_bot if str(f.get("estado", "")).upper() == "ACTIVO"]
-
-            for fila in datos_activos:
-                keywords = fila.get("palabras_clave", "").split(",")
-                puntos = calcular_puntaje_coincidencia(texto_paciente, keywords)
-                if puntos > max_puntos_bot:
-                    max_puntos_bot = puntos
-                    img = fila.get("link_imagen")
-                    img_limpia = str(img).strip() if img and str(img).strip() and str(img).strip().upper() != "NULL" else None
-                    mejor_resp_bot = {
-                        "texto": fila.get("respuesta", ""),
-                        "imagen": img_limpia
-                    }
-        except Exception as e:
-            print(f"❌ [Supabase Chatbot Error]: {e}", flush=True)
-
-        # 2. Búsqueda en tabla 'servicios' (Tratamientos específicos del doctor)
+        # 1. Búsqueda en tabla 'servicios' (Tratamientos directos: Resina, Calza, etc.)
         try:
             url_srv = f"{Config.SUPABASE_URL}/rest/v1/servicios"
             if odontologo_id:
@@ -446,35 +422,60 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                     precio = fila.get("precio", "Según valoración")
                     desc = fila.get("descripcion", "")
 
-                    texto_formateado = (
-                        f"🦷 *{servicio_nom}*\n\n"
-                        f"📝 {desc}\n\n"
-                        f"💰 *Precio:* {precio}\n\n"
-                        f"¿Te gustaría agendar una cita de valoración con el doctor para este tratamiento? 📅"
-                    )
+                    # 💬 Formato corto y exacto aprobado para Resinas / Calzas
+                    if "resina" in servicio_nom.lower() or "calza" in servicio_nom.lower():
+                        texto_formateado = (
+                            f"¡Hola! 👋 ¡Claro que sí! Las *resinas o calzas* tienen un valor *{precio}*.\n\n"
+                            f"{desc}\n\n"
+                            f"¿Te gustaría que te agendemos una cita para revisarte? 📅🦷"
+                        )
+                    else:
+                        texto_formateado = (
+                            f"¡Hola! 👋 ¡Claro que sí! El servicio de *{servicio_nom}* tiene un valor de *{precio}*.\n\n"
+                            f"{desc}\n\n"
+                            f"¿Te gustaría que te agendemos una cita para revisarte? 📅🦷"
+                        )
 
                     img_srv = fila.get("link_imagen")
                     img_srv_limpia = str(img_srv).strip() if img_srv and str(img_srv).strip() and str(img_srv).strip().upper() != "NULL" else None
-
-                    # Si el servicio no tiene imagen directa, pero chatbot tiene un afiche para esta intención, usarlo
-                    if not img_srv_limpia and mejor_resp_bot and mejor_resp_bot.get("imagen"):
-                        img_srv_limpia = mejor_resp_bot.get("imagen")
 
                     mejor_resp_srv = {
                         "texto": texto_formateado,
                         "imagen": img_srv_limpia
                     }
-
         except Exception as e:
             print(f"❌ [Supabase Servicios Error]: {e}", flush=True)
 
-        # 3. Comparación inteligente de mayor relevancia
-        # Si el tratamiento específico tiene igual o mayor puntaje que la pregunta general, gana el tratamiento
-        if max_puntos_srv >= 3 and max_puntos_srv >= max_puntos_bot:
-            print(f"⚡ [Supabase Match] Coincidencia específica en 'servicios' (Puntaje: {max_puntos_srv})", flush=True)
+        # 2. Búsqueda en tabla 'chatbot' (Ubicación, Horarios, Saludos)
+        try:
+            url_bot = f"{Config.SUPABASE_URL}/rest/v1/chatbot"
+            if odontologo_id:
+                url_bot += f"?odontologo_id=eq.{odontologo_id}"
+            res_bot = await client.get(url_bot, headers=SUPABASE_HEADERS)
+            datos_bot = res_bot.json() if res_bot.status_code == 200 else []
+            datos_activos = [f for f in datos_bot if str(f.get("estado", "")).upper() == "ACTIVO"]
+
+            for fila in datos_activos:
+                keywords = fila.get("palabras_clave", "").split(",")
+                puntos = calcular_puntaje_coincidencia(texto_paciente, keywords)
+                if puntos > max_puntos_bot:
+                    max_puntos_bot = puntos
+                    img = fila.get("link_imagen")
+                    img_limpia = str(img).strip() if img and str(img).strip() and str(img).strip().upper() != "NULL" else None
+                    mejor_resp_bot = {
+                        "texto": fila.get("respuesta", ""),
+                        "imagen": img_limpia
+                    }
+        except Exception as e:
+            print(f"❌ [Supabase Chatbot Error]: {e}", flush=True)
+
+        # 3. Prioridad: Si preguntó por un tratamiento específico (resina/calza), responder en 0.1s
+        if max_puntos_srv >= 4:
+            print(f"⚡ [Supabase Match Directo] Respondiendo 'servicios' para Resina (Puntaje: {max_puntos_srv})", flush=True)
             return mejor_resp_srv
-        elif max_puntos_bot >= 3:
-            print(f"⚡ [Supabase Match] Coincidencia en 'chatbot' (Puntaje: {max_puntos_bot})", flush=True)
+
+        if max_puntos_bot >= 5 and mejor_resp_bot:
+            print(f"⚡ [Supabase Match Directo] Respondiendo 'chatbot' (Puntaje: {max_puntos_bot})", flush=True)
             return mejor_resp_bot
 
     return None
@@ -517,42 +518,33 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
             break
 
     prompt = f"""
-Eres el asistente virtual empático, claro y profesional de '{consultorio_nombre}'.
-Tu objetivo es responder inquietudes de los pacientes de forma clara, respetuosa y breve con emojis para WhatsApp.
+Eres el asistente virtual amable, directo, profesional y conciso de '{consultorio_nombre}'.
+Tu objetivo es responder de forma breve, respetuosa y natural para WhatsApp (usa emojis). Respuestas cortas de máximo 2 a 3 líneas.
 
-DICCIONARIO ODONTOLÓGICO Y SINÓNIMOS POPULARES:
-- "Sacar muela / sacan muelas / cordal / dolor de muela / exodoncia": Extracciones dentales y cirugías orales.
-- "Calza / calzas / tapadura / parche / restauración": Resinas dentales.
-- "Limpieza / quitar sarro / profilaxis": Profilaxis dental.
-- "Matar el nervio / conducto": Endodoncia.
-- "Frenillos / alambres / brackets": Ortodoncia.
-- "Blanqueamiento": Aclaramiento dental.
-- "Diseño de sonrisa / microdiseño": Microdiseño Dental estético.
-
-DATOS OFICIALES DEL CONSULTORIO (LEÍDOS EN VIVO DESDE SUPABASE):
+DATOS DEL CONSULTORIO (LEÍDOS DE SUPABASE):
 - Configuración, Horarios y Ubicación: {config_datos}
 - Catálogo de Servicios y Tarifas: {servicios_datos}
 
-HISTORIAL RECIENTE CON ESTE PACIENTE:
+HISTORIAL RECIENTE:
 {historial}
 
-🚨 PROTOCOLO DE SEGURIDAD Y CASOS SENSIBLES (OBLIGATORIO):
-Si el paciente menciona alguna de las siguientes situaciones:
-a) Dolor severo/intolerable, inflamación facial, sangrado o traumatismo por golpe.
-b) Complicaciones después de una cirugía o extracción reciente.
-c) Pide que le formules medicamentos, analgésicos, antibióticos o dosis específicas.
-d) Manifiesta una queja, reclamo o inconformidad con un tratamiento previo.
+🚨 PROTOCOLO ESTRICTO DE CITAS Y DISPONIBILIDAD (SÚPER CORTO):
+Si el paciente pide una cita, pregunta por disponibilidad o si atienden un día/jornada (ej: "quiero cita el jueves", "tienen espacio hoy"):
+1. Responde en MÁXIMO 2 líneas.
+2. Informa el horario de atención para ese día/jornada según la configuración oficial.
+3. Indica amablemente que a la mayor brevedad posible se revisará la agenda y se le confirmará la disponibilidad exacta para ese turno.
+4. PROHIBIDO asegurar que hay espacio libre o que la cita ya está programada.
+5. PROHIBIDO pedir su nombre completo o qué procedimiento se va a realizar.
 
-👉 ACCIÓN OBLIGATORIA PARA CASOS SENSIBLES:
-- NO improvises explicaciones clínicas largas ni posibles causas teóricas.
-- Prohíbete terminantemente recetar o sugerir medicamentos o dosis (recomienda no automedicarse).
-- Responde con un mensaje corto, empático y tranquilizador (máximo 3 líneas) indicándole que el caso ha sido marcado como prioritario y que el doctor se comunicará directamente con él a la mayor brevedad. Invítalo a acudir a urgencias médicas si es un sangrado incontrolable o inflamación que comprometa la respiración.
+🚨 PROTOCOLO DE CASOS SENSIBLES Y URGENCIAS:
+Si el paciente menciona dolor severo, inflamación o pide medicamentos:
+- NO recetes ni des explicaciones largas.
+- Responde en 2 líneas indicando que su caso fue priorizado para atención del doctor e invítalo a urgencias si es vital.
 
 REGLAS GENERALES:
-1. Revisa siempre el Catálogo de Servicios para dar los precios y descripciones exactas.
-2. Si el paciente pide agendar cita, solicítale su nombre completo, el tratamiento de interés y la jornada de preferencia (mañana o tarde).
-3. No des diagnósticos definitivos. Invita a valoración presencial.
-4. Respuestas muy cortas (máximo 3 a 4 párrafos breves), profesionales y con emojis para WhatsApp.
+1. Mensajes muy breves, claros y humanos.
+2. Si preguntan por precios de tratamientos, entrega la tarifa oficial del Catálogo en COP e invita a valoración.
+3. Cero relleno o textos extensos.
 
 CONSULTA DEL PACIENTE:
 {texto_paciente}

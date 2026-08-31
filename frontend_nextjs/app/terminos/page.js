@@ -51,7 +51,7 @@ export default function TerminosPage() {
               </ul>
             </section>
 
-            {/* 🔥 NUEVA SECCIÓN DE SEGURIDAD Y BLINDAJE LEGAL */}
+            {/* SECCIÓN DE SEGURIDAD Y BLINDAJE LEGAL */}
             <section className="bg-red-50/50 p-6 rounded-2xl border border-red-100">
               <h3 className="text-lg font-black text-red-950 uppercase flex items-center gap-2">
                 ⚠️ 3. Política de Uso Aceptable y Suspensión de Servicio
@@ -78,8 +78,21 @@ export default function TerminosPage() {
               <p>Ofrecemos una prueba gratuita de 7 días. Los planes profesionales se activan mediante reporte de pago manual. CloudentApp se reserva el derecho de suspender el acceso ante la falta de pago o uso indebido.</p>
             </section>
 
+            {/* 📱 NUEVA SECCIÓN DE INTEGRACIÓN WHATSAPP */}
+            <section className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+              <h3 className="text-lg font-black text-blue-950 uppercase flex items-center gap-2">
+                📱 5. Integración del Asistente de WhatsApp y Dispositivos Vinculados
+              </h3>
+              <p className="text-blue-900 text-sm mt-2 leading-relaxed">
+                El módulo de atención automatizada y mensajería opera como una extensión autorizada de la cuenta de WhatsApp del Usuario a través del protocolo oficial de dispositivos vinculados. El Usuario conserva el control total de su línea y puede vincular o revocar el acceso en cualquier momento directamente desde la plataforma o desde su aplicación móvil de WhatsApp.
+              </p>
+              <p className="text-blue-900 text-sm mt-2 leading-relaxed">
+                Por protocolos de seguridad y sincronización propios de WhatsApp, las sesiones pueden requerir una renovación periódica mediante escaneo de código QR (por ejemplo, ante inactividad prolongada del dispositivo principal o actualizaciones de seguridad de la red). CloudentApp emitirá una alerta visual en el panel del Usuario para facilitar su reconexión inmediata en 1 solo clic. El Usuario es el único responsable por la gestión y contenido de las comunicaciones dirigidas a sus pacientes.
+              </p>
+            </section>
+
             <section>
-              <h3 className="text-lg font-black text-zinc-900 uppercase">5. Limitación de Responsabilidad</h3>
+              <h3 className="text-lg font-black text-zinc-900 uppercase">6. Limitación de Responsabilidad</h3>
               <p>CloudentApp no se hace responsable por pérdida de datos ajena a nuestra voluntad, ni por reclamaciones de terceros derivadas del ejercicio profesional del Usuario.</p>
             </section>
 

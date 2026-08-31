@@ -1,5 +1,5 @@
 'use client';
-import { ShieldCheck, Lock, Mic, Server, FileSpreadsheet } from 'lucide-react';
+import { ShieldCheck, Lock, Mic, Server, FileSpreadsheet, Smartphone } from 'lucide-react';
 
 export default function SecurityTrust() {
   const pilares = [
@@ -9,7 +9,12 @@ export default function SecurityTrust() {
       desc: "Los registros son exclusivamente tuyos. Actuamos como Encargados Tecnológicos bajo la Ley 1581 (Habeas Data). Nunca comercializamos, analizamos ni cederemos tu información a terceros."
     },
     {
-      icon: <FileSpreadsheet className="w-7 h-7 text-green-400" />,
+      icon: <Smartphone className="w-7 h-7 text-green-400" />,
+      title: "Conexión WhatsApp Segura & Transparente",
+      desc: "CloudentApp opera como una extensión segura de tu propio WhatsApp mediante dispositivos vinculados. Tus datos clínicos permanecen protegidos y bajo tu control total. Si la sesión requiere renovación periódica por seguridad de WhatsApp, verás una alerta en tu panel para reconectarla en 1 solo clic."
+    },
+    {
+      icon: <FileSpreadsheet className="w-7 h-7 text-emerald-400" />,
       title: "Portabilidad Garantizada (Backup Excel)",
       desc: "Descarga una copia de seguridad completa de tus pacientes e historias clínicas a Excel en 1 clic. Tu información nunca queda retenida, incluso si tu plan llega a vencer."
     },
@@ -40,12 +45,12 @@ export default function SecurityTrust() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {pilares.map((p, i) => (
-            <div key={i} className="bg-zinc-900/80 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/40 transition-all shadow-xl">
+            <div key={i} className="bg-zinc-900/80 p-8 rounded-3xl border border-zinc-800 hover:border-blue-500/40 transition-all shadow-xl flex flex-col">
               <div className="p-3 bg-zinc-950 w-fit rounded-2xl mb-5 border border-zinc-800/80">{p.icon}</div>
               <h3 className="text-xl font-bold mb-2 text-white">{p.title}</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">{p.desc}</p>
+              <p className="text-zinc-400 text-sm leading-relaxed flex-1">{p.desc}</p>
             </div>
           ))}
         </div>
