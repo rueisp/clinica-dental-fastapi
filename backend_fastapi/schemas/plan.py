@@ -20,6 +20,7 @@ class PlanRead(BaseModel):
     can_use_multimedia: bool = False
     can_use_voice: bool = False
     can_export_history: bool = False
+    can_use_bot: bool = False # <--- AGREGAR ESTA LÍNEA
 
     class Config:
         from_attributes = True

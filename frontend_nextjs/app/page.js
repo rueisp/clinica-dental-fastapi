@@ -9,15 +9,49 @@ import Pricing from '@/components/landing/Pricing';
 import SecurityTrust from '@/components/landing/SecurityTrust';
 import { 
   ShieldAlert, Monitor, Layout, Calendar, Mic, FileText, 
-  Bot, MessageSquare, Sparkles, CheckCircle2, Zap, Clock, DollarSign 
+  Bot, MessageSquare, Sparkles, CheckCircle2, Zap, Clock, DollarSign,
+  ClipboardList // <--- AGREGAR ESTA LÍNEA 
 } from 'lucide-react';
 
 function LandingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isChecking, setIsChecking] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
 
   const queryString = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
+  // Datos para el Showcase Interactivo
+  const showcaseItems = [
+    {
+      id: 0,
+      titulo: 'Agenda Inteligente',
+      subtitulo: 'Gestiona citas del día, tiempos de atención y estado de tus pacientes en una sola vista.',
+      icono: Calendar,
+      imagen: '/agenda.png',
+    },
+    {
+      id: 1,
+      titulo: 'Asistente WhatsApp & Chat',
+      subtitulo: 'Respuestas automáticas de tarifas en COP, horarios e intervención directa del doctor.',
+      icono: MessageSquare,
+      imagen: '/chat_wa.png',
+    },
+    {
+      id: 2,
+      titulo: 'Odontograma Interactivo',
+      subtitulo: 'Registro visual detallado de piezas dentales, procedimientos y soporte para radiografías.',
+      icono: Layout,
+      imagen: '/odontograma_imagen.png',
+    },
+    {
+      id: 3,
+      titulo: 'Recibos y Cobro Rápido',
+      subtitulo: 'Genera comprobantes de pago al instante para tus pacientes de forma clara y organizada.',
+      icono: FileText,
+      imagen: '/recibo_pago.png',
+    },
+  ];
 
   useEffect(() => {
     const session = localStorage.getItem('auth_token');
@@ -58,7 +92,6 @@ function LandingContent() {
 
       {/* --- SECCIÓN 2: SPOTLIGHT ESTRELLA: ASISTENTE WHATSAPP IA 24/7 --- */}
       <section className="py-24 bg-zinc-950 text-white overflow-hidden relative">
-        {/* Resplandor decorativo */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-green-500/10 blur-[140px] rounded-full pointer-events-none" />
 
         <div className="container mx-auto px-6 relative z-10">
@@ -142,7 +175,6 @@ function LandingContent() {
 
               {/* Mensajes Simulados */}
               <div className="space-y-4 text-xs">
-                {/* 1. Mensaje del Paciente */}
                 <div className="flex justify-start">
                   <div className="max-w-[85%] bg-zinc-800 text-zinc-200 p-3.5 rounded-2xl rounded-tl-sm border border-zinc-700/50">
                     <p className="text-[10px] text-zinc-400 font-bold mb-1">Paciente</p>
@@ -153,7 +185,6 @@ function LandingContent() {
                   </div>
                 </div>
 
-                {/* 2. Respuesta Automática del Bot */}
                 <div className="flex justify-end">
                   <div className="max-w-[90%] bg-green-950/80 border border-green-800/60 text-green-100 p-4 rounded-2xl rounded-tr-sm shadow-lg">
                     <div className="flex items-center justify-between gap-2 mb-1.5 border-b border-green-800/40 pb-1">
@@ -173,7 +204,6 @@ function LandingContent() {
                   </div>
                 </div>
 
-                {/* 3. Intervención en vivo del Doctor */}
                 <div className="flex justify-end">
                   <div className="max-w-[90%] bg-blue-950/80 border border-blue-800/60 text-blue-100 p-3.5 rounded-2xl rounded-tr-sm shadow-lg">
                     <div className="flex items-center justify-between gap-2 mb-1 border-b border-blue-800/40 pb-1">
@@ -193,66 +223,79 @@ function LandingContent() {
         </div>
       </section>
 
-      {/* --- SECCIÓN 3: GESTIÓN SIN COMPLICACIONES (Capturas de Software) --- */}
-      <section className="py-24 bg-zinc-50">
-        <div className="container mx-auto px-6">
+      {/* --- SECCIÓN 3: SHOWCASE INTERACTIVO (1 Solo Teléfono Grande que Cambia) --- */}
+      <section className="py-24 bg-zinc-50 border-y border-zinc-200/60 overflow-hidden">
+        <div className="container mx-auto px-6 max-w-6xl">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black tracking-tighter uppercase mb-4">Un vistazo por dentro</h2>
+            <h2 className="text-4xl font-black tracking-tighter uppercase mb-4 text-zinc-900">
+              Un vistazo por dentro
+            </h2>
             <p className="text-zinc-500 font-medium max-w-2xl mx-auto">
-              Interfaz minimalista diseñada para que te enfoques en lo que importa: tus pacientes.
+              Haz clic en cada módulo para explorar cómo funciona la interfaz en tu consultorio.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 justify-items-center">
-            {/* Agenda Inteligente */}
-            <div className="group flex flex-col items-center">
-              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
-                <img src="/agenda.png" alt="Agenda de citas" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
-              </div>
-              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
-                <Calendar size={20} className="text-blue-600" /> Agenda Inteligente
-              </h4>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Pestañas interactivas a la izquierda */}
+            <div className="lg:col-span-7 space-y-4">
+              {showcaseItems.map((item, index) => {
+                const IconComponent = item.icono;
+                const isActive = activeTab === index;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(index)}
+                    className={`w-full text-left p-6 rounded-3xl transition-all duration-300 flex items-start gap-5 border ${
+                      isActive
+                        ? 'bg-white border-blue-600/30 shadow-xl shadow-blue-500/5 ring-2 ring-blue-600/10'
+                        : 'bg-white/60 border-zinc-200 hover:bg-white hover:border-zinc-300'
+                    }`}
+                  >
+                    <div
+                      className={`p-3.5 rounded-2xl shrink-0 transition-colors ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                          : 'bg-zinc-100 text-zinc-600'
+                      }`}
+                    >
+                      <IconComponent size={24} />
+                    </div>
+                    <div>
+                      <h4
+                        className={`text-lg font-bold transition-colors ${
+                          isActive ? 'text-blue-950' : 'text-zinc-800'
+                        }`}
+                      >
+                        {item.titulo}
+                      </h4>
+                      <p className="text-zinc-500 text-sm mt-1 leading-relaxed">
+                        {item.subtitulo}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Evolución por Voz */}
-            <div className="group flex flex-col items-center">
-              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
-                <img src="/evolucion.png" alt="Evolución por voz" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
-              </div>
-              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
-                <Mic size={20} className="text-blue-600" /> Evolución por Voz
-              </h4>
-            </div>
+            {/* Teléfono grande a la derecha */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="relative w-[320px] sm:w-[350px] aspect-[9/19] bg-zinc-950 rounded-[3rem] border-[10px] border-zinc-900 shadow-2xl overflow-hidden ring-1 ring-zinc-800">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-5 bg-zinc-900 rounded-full z-20 pointer-events-none" />
 
-            {/* Odontograma Interactivo */}
-            <div className="group flex flex-col items-center">
-              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
-                <img src="/odontograma.png" alt="Odontograma Digital" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
+                <img
+                  key={activeTab}
+                  src={showcaseItems[activeTab].imagen}
+                  alt={showcaseItems[activeTab].titulo}
+                  className="w-full h-full object-cover object-top select-none"
+                />
               </div>
-              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
-                <Layout size={20} className="text-blue-600" /> Odontograma Interactivo
-              </h4>
-            </div>
-
-            {/* Recibo de Pago Rápido */}
-            <div className="group flex flex-col items-center">
-              <div className="relative w-[240px] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-2xl overflow-hidden transition-all duration-500 group-hover:scale-105 group-hover:shadow-blue-100/50">
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-full z-10" />
-                <img src="/recibo.png" alt="Recibo de Pago Rápido" className="w-full h-full object-cover" style={{ imageRendering: '-webkit-optimize-contrast', transform: 'translateZ(0)' }} />
-              </div>
-              <h4 className="font-bold flex items-center gap-2 mt-6 text-zinc-800 text-lg">
-                <FileText size={20} className="text-blue-600" /> Recibo de Pago Rápido
-              </h4>
             </div>
           </div>
-          
-          <div className="mt-12 text-center">
-             <p className="text-zinc-400 text-sm font-medium flex items-center justify-center gap-2">
-               <Monitor size={16} /> Optimizada para PC, Tablet y Celular
-             </p>
+
+          <div className="mt-16 text-center">
+            <p className="text-zinc-400 text-sm font-medium flex items-center justify-center gap-2">
+              <Monitor size={16} /> Optimizada para PC, Tablet y Celular
+            </p>
           </div>
         </div>
       </section>
@@ -298,7 +341,7 @@ function LandingContent() {
 
 export default function LandingPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
       <LandingContent />
     </Suspense>
   );

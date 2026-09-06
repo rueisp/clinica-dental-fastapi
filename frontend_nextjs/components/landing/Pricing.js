@@ -15,7 +15,7 @@ export default function Pricing() {
         const token = getAuthToken();
         setIsLoggedIn(!!token && token !== 'test_token_123');
 
-        fetch(API_ENDPOINTS.PLANES)
+        fetch(API_ENDPOINTS.PLANES, { cache: 'no-store' }) // <--- AGREGAR { cache: 'no-store' }
             .then(res => res.json())
             .then(data => {
                 setPlanes(Array.isArray(data) ? data : []);
@@ -102,37 +102,39 @@ export default function Pricing() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-6xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left max-w-7xl mx-auto">
                     {planesFiltrados.map((plan) => {
-                        const esProOTrial = plan.nombre === 'trial' || plan.nombre.includes('pro');
+                        const esUltra = plan.nombre.includes('ultra');
+                        const esTrial = plan.nombre === 'trial';
+                        const tieneBot = esUltra || esTrial;
 
                         return (
                             <div 
                                 key={plan.id} 
-                                className={`bg-white p-8 rounded-3xl shadow-lg border transition-all flex flex-col ${
-                                    esProOTrial && plan.nombre !== 'trial'
+                                className={`bg-white p-6 sm:p-7 rounded-3xl shadow-lg border transition-all flex flex-col ${
+                                    esUltra
                                         ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-purple-50' 
                                         : 'border-gray-100'
                                 }`}
                             >
                                 <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-xl font-bold uppercase text-purple-600">
+                                    <h4 className="text-lg font-bold uppercase text-purple-600">
                                         {plan.nombre.replace('_mensual', '').replace('_anual', '').replace('_', ' ')}
                                     </h4>
-                                    {plan.nombre === 'trial' && (
-                                        <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                                    {esTrial && (
+                                        <span className="bg-green-100 text-green-700 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
                                             7 Días Full
                                         </span>
                                     )}
-                                    {plan.nombre.includes('pro') && (
-                                        <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase px-3 py-1 rounded-full">
+                                    {esUltra && (
+                                        <span className="bg-purple-100 text-purple-700 text-[10px] font-black uppercase px-2.5 py-1 rounded-full">
                                             Recomendado
                                         </span>
                                     )}
                                 </div>
 
                                 <div className="mb-6">
-                                    <span className="text-4xl font-black text-gray-900">
+                                    <span className="text-3xl font-black text-gray-900">
                                         {plan.precio_cop === 0 
                                             ? 'Gratis' 
                                             : moneda === 'COP' 
@@ -140,27 +142,27 @@ export default function Pricing() {
                                                 : `$${plan.precio_mensual} USD`
                                         }
                                     </span>
-                                    <span className="text-gray-500 text-sm font-medium">
+                                    <span className="text-gray-500 text-xs font-medium">
                                         {' '} / {plan.duracion_dias === 365 ? 'año' : plan.duracion_dias === 7 ? '7 días' : 'mes'}
                                     </span>
                                     {plan.duracion_dias === 365 && (
-                                        <p className="text-xs text-green-600 mt-1 font-bold">
-                                            ✓ Facturación única anual con descuento
+                                        <p className="text-[11px] text-green-600 mt-1 font-bold">
+                                            ✓ Facturación única anual
                                         </p>
                                     )}
                                 </div>
                                 
-                                <ul className="space-y-3 mb-8 flex-grow text-sm">
-                                    {/* 🤖 FUNCIÓN ESTRELLA: Bot de WhatsApp con IA */}
-                                    <li className={`flex items-center gap-2 font-bold ${esProOTrial ? 'text-green-700 bg-green-50/50 p-2 rounded-xl border border-green-100' : 'text-gray-400 italic'}`}>
-                                        <span>{esProOTrial ? '🤖' : '🔒'}</span> 
-                                        <span>Asistente WhatsApp IA 24/7 {!esProOTrial && '(PRO)'}</span>
+                                <ul className="space-y-3 mb-8 flex-grow text-xs sm:text-sm">
+                                    {/* 🤖 Asistente de WhatsApp IA 24/7 (Exclusivo Ultra y Trial) */}
+                                    <li className={`flex items-center gap-2 font-bold ${tieneBot ? 'text-green-700 bg-green-50/60 p-2 rounded-xl border border-green-100' : 'text-gray-400 italic'}`}>
+                                        <span>{tieneBot ? '🤖' : '🔒'}</span> 
+                                        <span>Asistente WhatsApp IA 24/7 {!tieneBot && '(ULTRA)'}</span>
                                     </li>
 
-                                    {/* ⚙️ FUNCIÓN ESTRELLA: Personalización de Tarifas y Horarios */}
-                                    <li className={`flex items-center gap-2 ${esProOTrial ? 'text-gray-800 font-semibold' : 'text-gray-400 italic'}`}>
-                                        <span>{esProOTrial ? '⚙️' : '🔒'}</span> 
-                                        <span>Catálogo de tarifas COP y horarios propios {!esProOTrial && '(PRO)'}</span>
+                                    {/* ⚙️ Catálogo de Tarifas y Horarios (Exclusivo Ultra y Trial) */}
+                                    <li className={`flex items-center gap-2 ${tieneBot ? 'text-gray-800 font-semibold' : 'text-gray-400 italic'}`}>
+                                        <span>{tieneBot ? '⚙️' : '🔒'}</span> 
+                                        <span>Personaliza respuestas automáticas del Bot WhatsApp {!tieneBot && '(ULTRA)'}</span>
                                     </li>
 
                                     {/* Límite de Pacientes */}
@@ -172,7 +174,7 @@ export default function Pricing() {
                                     {/* Recibos Rápidos */}
                                     <li className="flex items-center gap-2 text-gray-700">
                                         <span className="text-blue-500">🧾</span> 
-                                        <span>Generar recibos rápidos para WhatsApp</span>
+                                        <span>Generar recibos rápidos WhatsApp</span>
                                     </li>
 
                                     {/* Exportar Word */}
@@ -202,13 +204,13 @@ export default function Pricing() {
 
                                 <button 
                                     onClick={() => handlePlanClick(plan)}
-                                    className={`w-full text-center py-3.5 rounded-2xl font-bold transition-all shadow-md mt-auto cursor-pointer ${
-                                        esProOTrial && plan.nombre !== 'trial'
+                                    className={`w-full text-center py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-md mt-auto cursor-pointer ${
+                                        esUltra
                                             ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-200' 
                                             : 'bg-black hover:bg-gray-800 text-white'
                                     }`}
                                 >
-                                    {plan.precio_cop === 0 ? 'Comenzar Prueba Gratis (7 Días)' : (isLoggedIn ? 'Solicitar Plan' : 'Elegir Plan')}
+                                    {plan.precio_cop === 0 ? 'Comenzar Prueba Gratis' : (isLoggedIn ? 'Solicitar Plan' : 'Elegir Plan')}
                                 </button>
                             </div>
                         );

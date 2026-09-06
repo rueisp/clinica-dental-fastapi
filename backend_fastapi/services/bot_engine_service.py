@@ -565,8 +565,8 @@ CONSULTA DEL PACIENTE:
         ]
     }
 
-    # Jerarquía de modelos activos oficiales con fallback automático
-    modelos = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+    # Modelo oficial activo en tu cuenta de Google
+    modelos = ["gemini-3.6-flash"]
 
     for modelo in modelos:
         gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={Config.GEMINI_API_KEY}"
@@ -579,8 +579,12 @@ CONSULTA DEL PACIENTE:
                     candidates = data.get("candidates", [])
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts and "text" in parts[0]:
-                            texto_ia = parts[0]["text"].strip()
+                        # Extraer el texto real omitiendo tokens de pensamiento interno
+                        texto_ia = "".join(p["text"] for p in parts if "text" in p and not p.get("thought")).strip()
+                        if not texto_ia and parts and "text" in parts[-1]:
+                            texto_ia = parts[-1]["text"].strip()
+
+                        if texto_ia:
                             print(f"✅ [Gemini IA Respuesta ({modelo})]: {texto_ia[:60]}...", flush=True)
                             return {"texto": texto_ia, "imagen": None}
                 else:

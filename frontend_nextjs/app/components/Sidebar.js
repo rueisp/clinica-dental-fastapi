@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare, Bot } from 'lucide-react';
+import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare, Bot, Lock } from 'lucide-react';
 import { setAuthToken } from '@/config/api';
 import { useUser } from '@/context/UserContext';
 
@@ -28,12 +28,18 @@ export default function Sidebar() {
     if (planNombre.includes('basic') || planNombre.includes('basico')) {
       return { nombre: 'Plan Básico', color: 'text-blue-600' };
     }
+    if (planNombre.includes('ultra')) {
+      return { nombre: 'Plan Ultra', color: 'text-purple-600' }; // <--- AGREGAR ULTRA
+    }
     if (planNombre.includes('pro')) {
       return { nombre: 'Plan Pro', color: 'text-purple-600' };
     }
     
     return { nombre: 'Plan Activo', color: 'text-gray-600' };
   })();
+
+  // <--- AQUÍ LO PEGAS:
+  const puedeUsarBot = user?.is_admin || user?.permissions?.can_use_bot;
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -127,31 +133,46 @@ export default function Sidebar() {
             <span>Pacientes</span>
           </Link>
 
-          {/* 💬 NUEVO ACCESO: Chat WhatsApp */}
+          {/* 💬 ACCESO: Chat WhatsApp */}
           <Link
-            href="/chat"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            href={puedeUsarBot ? "/chat" : "/planes"}
+            className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
               pathname === '/chat'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
             onClick={closeSidebar}
           >
-            <MessageSquare className="w-5 h-5" />
-            <span>Chat WhatsApp</span>
+            <div className="flex items-center gap-3">
+              <MessageSquare className="w-5 h-5" />
+              <span>Chat WhatsApp</span>
+            </div>
+            {!puedeUsarBot && (
+              <span className="flex items-center gap-1 text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                <Lock size={10} /> Ultra
+              </span>
+            )}
           </Link>
 
+          {/* 🤖 ACCESO: Configurar Bot */}
           <Link
-            href="/bot-config"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            href={puedeUsarBot ? "/bot-config" : "/planes"}
+            className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
               pathname === '/bot-config'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
             onClick={closeSidebar}
           >
-            <Bot className="w-5 h-5" />
-            <span>Configurar Bot</span>
+            <div className="flex items-center gap-3">
+              <Bot className="w-5 h-5" />
+              <span>Configurar Bot</span>
+            </div>
+            {!puedeUsarBot && (
+              <span className="flex items-center gap-1 text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                <Lock size={10} /> Ultra
+              </span>
+            )}
           </Link>
 
           <Link

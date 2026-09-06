@@ -212,6 +212,8 @@ class Plan(Base):
     can_use_multimedia = Column(Boolean, default=False)
     can_use_voice = Column(Boolean, default=False)
     can_export_history = Column(Boolean, default=False)
+    can_use_bot = Column(Boolean, default=False) # <--- AGREGAR ESTA LÍNEA
+
     ## ------------------------------------
     
     # Esta relación conecta el nombre del plan con la suscripción

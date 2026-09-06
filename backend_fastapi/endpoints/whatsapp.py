@@ -1,4 +1,7 @@
 # backend_fastapi/endpoints/whatsapp.py
+from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from dependencies.limites import verificar_permiso
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
@@ -36,15 +39,24 @@ def obtener_nombre_instancia(usuario: Usuario) -> str:
     return f"doctor_{str(usuario.id).replace('-', '_')}"
 
 @router.get("/estado")
-async def consultar_estado_whatsapp(current_user: Usuario = Depends(get_current_user)):
+async def consultar_estado_whatsapp(
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. Validar que el plan del usuario tenga habilitado el bot
+    await verificar_permiso("can_use_bot", current_user, db)
+
     instance_name = obtener_nombre_instancia(current_user)
-    # Auto-asegurar que este doctor tenga su plantilla base inicializada
+    
+    # 2. Auto-asegurar que este doctor tenga su plantilla base inicializada
     await poblar_plantilla_bot_doctor(
         user_id=str(current_user.id),
         doctor_nombre=f"{current_user.nombres} {current_user.apellidos or ''}".strip(),
         consultorio_nombre=current_user.nombre_consultorio,
         telefono=current_user.telefono
     )
+    
+    # 3. Consultar conexión con Evolution API
     resultado = await obtener_estado_conexion(instance_name)
     return {
         "instancia": instance_name,
@@ -53,7 +65,12 @@ async def consultar_estado_whatsapp(current_user: Usuario = Depends(get_current_
     }
 
 @router.post("/conectar")
-async def conectar_whatsapp(request: Request, current_user: Usuario = Depends(get_current_user)):
+async def conectar_whatsapp(
+    request: Request, 
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await verificar_permiso("can_use_bot", current_user, db)
     instance_name = obtener_nombre_instancia(current_user)
     
     # Auto-asegurar plantilla base
@@ -64,13 +81,7 @@ async def conectar_whatsapp(request: Request, current_user: Usuario = Depends(ge
         telefono=current_user.telefono
     )
 
-    host = request.headers.get("host", "")
-    if "localhost" in host or "127.0.0.1" in host:
-        base_url = "https://dental-backend-779789369655.us-east1.run.app"
-    else:
-        base_url = str(request.base_url).rstrip("/")
-
-    webhook_url = f"{base_url}/api/whatsapp/webhook/evolution"
+    webhook_url = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
 
     resultado = await crear_o_obtener_qr(instance_name, webhook_url=webhook_url)
     if not resultado.get("success"):
@@ -90,8 +101,13 @@ async def desconectar_whatsapp(current_user: Usuario = Depends(get_current_user)
     return {"success": resultado.get("success", False)}
 
 @router.post("/enviar-mensaje")
-async def enviar_mensaje_manual(datos: EnviarMensajeRequest, current_user: Usuario = Depends(get_current_user)):
+async def enviar_mensaje_manual(
+    datos: EnviarMensajeRequest, 
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Despacho manual del Doctor desde Next.js y activación de silencio humano"""
+    await verificar_permiso("can_use_bot", current_user, db)
     instance_name = obtener_nombre_instancia(current_user)
     destinatario_real = await resolver_destinatario_lid(instance_name, datos.numero)
     
@@ -193,7 +209,7 @@ async def webhook_evolution_receiver(request: Request):
 
             if not respuesta:
                 respuesta = {
-                    "texto": "Hola! 👋 No logré entender tu consulta, pero pronto un doctor te atenderá personalmente. 🦷",
+                    "texto": "¡Hola! 👋 Con mucho gusto. En este momento el doctor o un especialista de nuestro equipo revisará tu mensaje para brindarte una atención personalizada y confirmarte la información. 🦷✨",
                     "imagen": None
                 }
 

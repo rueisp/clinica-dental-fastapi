@@ -1,3 +1,4 @@
+import math
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, extract
@@ -256,7 +257,7 @@ async def reportar_pago(
             detail="Esta referencia de pago ya fue reportada. Si crees que es un error, contacta a soporte."
         )
 
-    # 2. Guardar el reporte en la base de datos
+    # 2. Guardar el reporte en la tabla de pagos_suscripcion
     nuevo_pago = PagoSuscripcion(
         user_id=current_user.id,
         plan_id=pago_data.plan_id, 
@@ -265,16 +266,10 @@ async def reportar_pago(
         referencia_pago=pago_data.referencia_pago,
         estado="pendiente"
     )
-    
     db.add(nuevo_pago)
     
-    # 3. Actualizar la suscripción a 'pending_payment'
-    result_sub = await db.execute(select(Subscription).where(Subscription.user_id == current_user.id))
-    suscripcion = result_sub.scalar_one_or_none()
-    if suscripcion:
-        suscripcion.status = "pending_payment"
-        suscripcion.plan_type = pago_data.plan_nombre
-
+    # 3. Guardar cambios sin alterar el acceso actual del doctor
+    # (El doctor mantiene su consultorio activo mientras tú apruebas el comprobante)
     await db.commit()
 
     # 4. Enviar la alerta a Telegram
@@ -284,7 +279,6 @@ async def reportar_pago(
             plan_nombre=pago_data.plan_nombre,
             referencia=pago_data.referencia_pago
         )
-        print("✅ Alerta de Telegram enviada con éxito")
     except Exception as e:
         print(f"❌ Error enviando Telegram: {str(e)}")
 
@@ -297,7 +291,7 @@ async def aprobar_pago_admin(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    # 1. Validación de Admin
+    # 1. Validación de Administrador
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
 
@@ -313,46 +307,77 @@ async def aprobar_pago_admin(
     if not pago or pago.estado == "aprobado":
         raise HTTPException(status_code=404, detail="Pago no encontrado o ya aprobado")
 
-    # 3. Buscar el plan y la suscripción
+    # 3. Buscar el nuevo plan solicitado y la suscripción actual
     result_plan = await db.execute(select(Plan).where(Plan.id == pago.plan_id))
-    plan = result_plan.scalar_one_or_none()
+    plan_nuevo = result_plan.scalar_one_or_none()
     
     result_sub = await db.execute(select(Subscription).where(Subscription.user_id == pago.user_id))
     suscripcion = result_sub.scalar_one_or_none()
 
-    if not plan:
+    if not plan_nuevo:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
-    # 4. Lógica de fechas
+    # 4. Cálculo inteligente de fechas y prorrateo
     ahora_con_tz = datetime.now(COLOMBIA_TZ)
     ahora = ahora_con_tz.replace(tzinfo=None)
-    dias_a_sumar = plan.duracion_dias if plan.duracion_dias else 30
+    dias_base_nuevo_plan = plan_nuevo.duracion_dias if plan_nuevo.duracion_dias else 30
 
-    fecha_fin_actual = suscripcion.current_period_end
+    fecha_fin_actual = suscripcion.current_period_end if suscripcion else None
     if fecha_fin_actual and fecha_fin_actual.tzinfo is not None:
         fecha_fin_actual = fecha_fin_actual.replace(tzinfo=None)
 
-    if fecha_fin_actual and fecha_fin_actual > ahora:
-        nueva_fecha_fin = fecha_fin_actual + timedelta(days=dias_a_sumar)
-    else:
-        nueva_fecha_fin = ahora + timedelta(days=dias_a_sumar)
+    # Verificamos si tiene días vigentes
+    tiene_dias_vigentes = fecha_fin_actual and fecha_fin_actual > ahora
+    es_mismo_plan = suscripcion and suscripcion.plan_type == plan_nuevo.nombre
 
-    # 5. ACTUALIZAR MODELOS (Sincronizando plan_id y plan_type)
+    if not tiene_dias_vigentes or not suscripcion or suscripcion.plan_type.lower() == "trial":
+        # Caso A: Plan vencido, usuario nuevo o venía de Trial -> Inicia desde hoy
+        nueva_fecha_fin = ahora + timedelta(days=dias_base_nuevo_plan)
+
+    elif es_mismo_plan:
+        # Caso B: Renovación normal del mismo plan -> Se suman los días al final de su ciclo
+        nueva_fecha_fin = fecha_fin_actual + timedelta(days=dias_base_nuevo_plan)
+
+    else:
+        # Caso C: UPGRADE (Mejora de plan) con días restantes del plan viejo
+        dias_restantes_viejos = (fecha_fin_actual - ahora).days
+
+        # Buscar precio del plan anterior para calcular el saldo a favor
+        res_plan_viejo = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
+        plan_viejo = res_plan_viejo.scalar_one_or_none()
+
+        dias_extra_prorrateo = 0
+        if plan_viejo and plan_viejo.precio_cop > 0 and dias_restantes_viejos > 0:
+            duracion_vieja = plan_viejo.duracion_dias or 30
+            valor_diario_viejo = plan_viejo.precio_cop / duracion_vieja
+            saldo_a_favor = dias_restantes_viejos * valor_diario_viejo
+
+            valor_diario_nuevo = plan_nuevo.precio_cop / dias_base_nuevo_plan
+            # Redondeo estricto hacia abajo (a favor de CloudentApp)
+            dias_extra_prorrateo = math.floor(saldo_a_favor / valor_diario_nuevo)
+
+        # La nueva fecha arranca hoy con la duración pagada + los días equivalentes ganados
+        dias_totales = dias_base_nuevo_plan + dias_extra_prorrateo
+        nueva_fecha_fin = ahora + timedelta(days=dias_totales)
+
+    # 5. Actualizar registros en base de datos
     pago.estado = "aprobado"
     pago.fecha_aprobacion = ahora
 
     if suscripcion:
-        suscripcion.plan_id = plan.id  # <--- Sincronización agregada
-        suscripcion.plan_type = plan.nombre
+        suscripcion.plan_id = plan_nuevo.id
+        suscripcion.plan_type = plan_nuevo.nombre
         suscripcion.status = "active"
         suscripcion.current_period_end = nueva_fecha_fin
+        suscripcion.updated_at = ahora
     else:
         nueva_sub = Subscription(
             user_id=pago.user_id,
-            plan_id=plan.id,  # <--- Sincronización agregada
-            plan_type=plan.nombre,
+            plan_id=plan_nuevo.id,
+            plan_type=plan_nuevo.nombre,
             status="active",
-            current_period_end=nueva_fecha_fin
+            current_period_end=nueva_fecha_fin,
+            updated_at=ahora
         )
         db.add(nueva_sub)
 
@@ -360,7 +385,7 @@ async def aprobar_pago_admin(
     
     return {
         "success": True, 
-        "message": f"¡Plan {plan.nombre} activado! Vence el {nueva_fecha_fin.strftime('%Y-%m-%d')}"
+        "message": f"¡Plan {plan_nuevo.nombre} activado! Vence el {nueva_fecha_fin.strftime('%Y-%m-%d')}"
     }
 
 

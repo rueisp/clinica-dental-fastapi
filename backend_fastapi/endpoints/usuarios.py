@@ -78,6 +78,7 @@ async def get_usuario_actual(
             "can_use_multimedia": plan.can_use_multimedia if row else False,
             "can_use_voice": plan.can_use_voice if row else False,
             "can_export_history": plan.can_export_history if row else False,
+            "can_use_bot": plan.can_use_bot if row else False, # <--- AGREGAR
         }
     }
 
@@ -87,22 +88,20 @@ async def cambiar_plan(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscar el plan en el catálogo
+    # 1. Buscar el plan destino en el catálogo
     result = await db.execute(select(Plan).where(Plan.nombre == request.plan_nombre))
-    plan = result.scalar_one_or_none()
+    plan_destino = result.scalar_one_or_none()
     
-    if not plan:
+    if not plan_destino:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
     
-    # 2. Buscar suscripción actual
+    # 2. Buscar suscripción actual del doctor
     result_sub = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
     suscripcion = result_sub.scalar_one_or_none()
 
-    # --- NUEVA REGLA DE SEGURIDAD: Bloquear si ya tiene un pago pendiente ---
-    # Esto evita que el doctor reporte un pago y luego intente cambiar a otro plan 
-    # antes de que tú lo apruebes.
+    # 3. Candado de seguridad: Bloquear si ya tiene un pago pendiente de aprobación
     from models import PagoSuscripcion
     result_pago = await db.execute(
         select(PagoSuscripcion).where(
@@ -116,60 +115,61 @@ async def cambiar_plan(
             detail="Ya tienes una solicitud de pago en verificación. Espera la aprobación del administrador."
         )
 
-    # --- VALIDACIÓN DE SEGURIDAD CON VERIFICACIÓN DE EXPIRACIÓN ---
-    ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-    sub_expirada = False
-    
-    if suscripcion and suscripcion.current_period_end:
-        fecha_fin_sub = suscripcion.current_period_end.replace(tzinfo=None) if suscripcion.current_period_end.tzinfo else suscripcion.current_period_end
-        if fecha_fin_sub <= ahora_utc:
-            sub_expirada = True
-
-    # Solo bloqueamos si la suscripción está activa Y NO está vencida
-    if suscripcion and suscripcion.status == "active" and not sub_expirada and suscripcion.plan_type.lower() != "trial":
-        raise HTTPException(
-            status_code=400,
-            detail="Ya tienes un plan de pago activo. Para realizar un cambio o cancelación, por favor contacta a soporte técnico."
-        )
-
-    # --- REGLA 1: No repetir Trial (Tu regla original mantenida) ---
-    if plan.nombre.lower() == "trial":
+    # 4. Regla Trial: Solo se puede usar una vez
+    if plan_destino.nombre.lower() == "trial":
         if suscripcion and suscripcion.plan_type == "trial":
             raise HTTPException(
                 status_code=400, 
                 detail="Ya utilizaste tu periodo de prueba. Por favor elige un plan profesional."
             )
-
-    # --- REGLA 2: Determinar estado (Activo para Trial, Informativo para otros) ---
-    es_trial = plan.nombre.lower() == "trial"
-    
-    if es_trial:
-        # El Trial es el único que se activa de inmediato en esta función
+        
+        # Activación inmediata del Trial
+        ahora = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
         if suscripcion:
-            suscripcion.plan_type = plan.nombre
+            suscripcion.plan_id = plan_destino.id
+            suscripcion.plan_type = plan_destino.nombre
             suscripcion.status = "active"
-            suscripcion.current_period_end = datetime.now() + timedelta(days=plan.duracion_dias)
+            suscripcion.current_period_end = ahora + timedelta(days=plan_destino.duracion_dias)
+            suscripcion.updated_at = ahora
         else:
             nueva_sub = Subscription(
                 user_id=current_user.id,
-                plan_type=plan.nombre,
+                plan_id=plan_destino.id,
+                plan_type=plan_destino.nombre,
                 status="active",
-                current_period_end=datetime.now() + timedelta(days=plan.duracion_dias)
+                current_period_end=ahora + timedelta(days=plan_destino.duracion_dias),
+                updated_at=ahora
             )
             db.add(nueva_sub)
         
         await db.commit()
         return {"success": True, "message": "Plan Trial activado", "status": "active"}
 
-    else:
-        # SI ES UN PLAN DE PAGO: 
-        # No actualizamos la suscripción todavía (para que no gane los permisos Pro gratis).
-        # Solo le decimos al frontend que debe ir a la pantalla de reporte.
-        return {
-            "success": True, 
-            "message": "Solicitud recibida. Por favor adjunta tu comprobante de pago.", 
-            "status": "pending_payment"
-        }
+    # 5. Validación de suscripciones activas existentes (Reglas de Upgrade)
+    if suscripcion and suscripcion.status == "active":
+        ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        fecha_fin = suscripcion.current_period_end.replace(tzinfo=None) if suscripcion.current_period_end and suscripcion.current_period_end.tzinfo else suscripcion.current_period_end
+
+        # Si el plan NO ha vencido y no es trial, validamos jerarquía (Upgrade estricto)
+        if fecha_fin and fecha_fin > ahora_utc and suscripcion.plan_type.lower() != "trial":
+            # Buscar el plan actual para comparar precios
+            res_plan_actual = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
+            plan_actual = res_plan_actual.scalar_one_or_none()
+
+            if plan_actual:
+                # Solo se permite si el plan destino tiene un precio superior (Upgrade)
+                if plan_destino.precio_cop <= plan_actual.precio_cop:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Solo puedes solicitar una mejora hacia un plan de mayor valor. Para reducir tu plan, debes esperar a que venza tu ciclo actual."
+                    )
+
+    # 6. Si es un plan de pago válido, enviar a reportar
+    return {
+        "success": True, 
+        "message": "Solicitud de mejora recibida. Por favor adjunta tu comprobante de pago.", 
+        "status": "pending_payment"
+    }
 
 @router.get("/mi-plan-detalle")
 async def get_mi_plan_detalle(
@@ -250,7 +250,8 @@ async def get_mi_plan_detalle(
             "can_use_odontogram": plan.can_use_odontogram,
             "can_use_multimedia": plan.can_use_multimedia,
             "can_use_voice": plan.can_use_voice,
-            "can_export_history": plan.can_export_history
+            "can_export_history": plan.can_export_history,
+            "can_use_bot": plan.can_use_bot # <--- AGREGAR
         }
     }
 

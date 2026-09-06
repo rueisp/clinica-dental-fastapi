@@ -57,6 +57,7 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
             "can_use_multimedia": True if user.is_admin else (plan.can_use_multimedia if plan else False),
             "can_use_voice": True if user.is_admin else (plan.can_use_voice if plan else False),
             "can_export_history": True if user.is_admin else (plan.can_export_history if plan else False),
+            "can_use_bot": True if user.is_admin else (plan.can_use_bot if plan else False), # <--- AGREGAR
         }
     )
 
@@ -120,6 +121,7 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
                 "can_use_multimedia": True if nuevo_usuario.is_admin else (plan.can_use_multimedia if plan else False),
                 "can_use_voice": True if nuevo_usuario.is_admin else (plan.can_use_voice if plan else False),
                 "can_export_history": True if nuevo_usuario.is_admin else (plan.can_export_history if plan else False),
+                "can_use_bot": True if nuevo_usuario.is_admin else (plan.can_use_bot if plan else False), # <--- AGREGAR
             }
         )
     except Exception as e:

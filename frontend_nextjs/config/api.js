@@ -1,6 +1,6 @@
 // frontend_nextjs/config/api.js
 
-export const API_BASE_URL = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+export const API_BASE_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
   ? 'http://localhost:8001'
   : 'https://dental-backend-779789369655.us-east1.run.app';
 

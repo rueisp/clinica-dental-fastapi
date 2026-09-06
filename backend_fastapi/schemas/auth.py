@@ -7,8 +7,9 @@ class UserPermissions(BaseModel):
     can_use_odontogram: bool
     can_use_multimedia: bool
     can_use_voice: bool
-    can_export_history: bool 
-
+    can_export_history: bool
+    can_use_bot: bool # <--- AGREGAR ESTA LÍNEA
+ 
 class LoginRequest(BaseModel):
     username: str
     password: str

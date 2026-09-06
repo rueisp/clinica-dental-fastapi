@@ -19,12 +19,30 @@ function ReportarPagoForm() {
 
     // --- ESTADOS PARA MONEDA Y PAYPAL ---
     const moneda = searchParams.get('moneda') || 'COP';
-    const [copiadoPaypal, setCopiadoPaypal] = useState(false);
 
     // --- CONSTANTES DE DATOS DE PAGO ---
     const correoPaypal = "cloudentapp.cliente@gmail.com";
-    const linkBold = "https://bold.co/p/cloudentapp"; // <-- Reemplace con su link único de Bold cuando esté activo
+    const cuentaColombia = "3147953756";
+    const [copiadoPaypal, setCopiadoPaypal] = useState(false);
+    const [copiadoColombia, setCopiadoColombia] = useState(false);
 
+    const handleCopiarColombia = () => {
+        // Fallback robusto para entornos HTTP locales y dispositivos móviles
+        const textArea = document.createElement("textarea");
+        textArea.value = cuentaColombia;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopiadoColombia(true);
+            setTimeout(() => setCopiadoColombia(false), 2000);
+        } catch (err) {
+            console.error('Error al copiar número de pago', err);
+        }
+        document.body.removeChild(textArea);
+    };
 
     const handleCopiarPaypal = () => {
         // Fallback robusto para entornos HTTP locales y dispositivos móviles
@@ -161,48 +179,56 @@ function ReportarPagoForm() {
                                             </button>
                                         </div>
 
-                                        {/* 2. Bold (Segundo si es USD) */}
+                                        {/* 2. Colombia (Segundo si es USD) */}
                                         <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
                                             <div className="space-y-1">
                                                 <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    💳 Pago en Línea (PSE, Nequi, Bancolombia, Tarjetas)
+                                                    📲 Llave Bre-B / Nequi / Bancolombia (Colombia)
                                                 </h3>
                                                 <p className="text-xs text-gray-500">
-                                                    Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
+                                                    Transfiere desde cualquier banco o billetera mediante Llave Bre-B o Nequi al número:
                                                 </p>
-                                                <p className="text-sm text-blue-600 font-semibold pt-1">Disponible para cuentas en Colombia</p>
+                                                <p className="text-sm text-green-700 font-mono font-bold pt-1">{cuentaColombia}</p>
                                             </div>
-                                            <a
-                                                href={linkBold}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="sm:self-center px-5 py-2.5 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0 min-w-[140px] text-center"
+                                            <button
+                                                type="button"
+                                                onClick={handleCopiarColombia}
+                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                                                    copiadoColombia 
+                                                        ? 'bg-green-50 border-green-200 text-green-600' 
+                                                        : 'bg-black hover:bg-gray-800 text-white shadow-md active:scale-95'
+                                                }`}
                                             >
-                                                PAGAR EN LÍNEA
-                                            </a>
+                                                {copiadoColombia ? <Check size={14} /> : <Copy size={14} />}
+                                                {copiadoColombia ? '¡COPIADO!' : 'COPIAR NÚMERO'}
+                                            </button>
                                         </div>
                                     </>
                                 ) : (
                                     <>
-                                        {/* 1. Bold (Primero si es COP) */}
+                                        {/* 1. Colombia (Primero si es COP) */}
                                         <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
                                             <div className="space-y-1">
                                                 <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    💳 Pago en Línea (PSE, Nequi, Bancolombia, Tarjetas)
+                                                    📲 Llave Bre-B / Nequi / Bancolombia (Colombia)
                                                 </h3>
                                                 <p className="text-xs text-gray-500">
-                                                    Paga de forma segura al instante usando PSE, tarjetas de crédito o débito a través de Bold.
+                                                    Transfiere desde cualquier banco o billetera mediante Llave Bre-B o Nequi al número:
                                                 </p>
-                                                <p className="text-sm text-blue-600 font-semibold pt-1">Recomendado para Colombia</p>
+                                                <p className="text-sm text-green-700 font-mono font-bold pt-1">{cuentaColombia}</p>
                                             </div>
-                                            <a
-                                                href={linkBold}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="sm:self-center px-5 py-2.5 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0 min-w-[140px] text-center"
+                                            <button
+                                                type="button"
+                                                onClick={handleCopiarColombia}
+                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                                                    copiadoColombia 
+                                                        ? 'bg-green-50 border-green-200 text-green-600' 
+                                                        : 'bg-black hover:bg-gray-800 text-white shadow-md active:scale-95'
+                                                }`}
                                             >
-                                                PAGAR EN LÍNEA
-                                            </a>
+                                                {copiadoColombia ? <Check size={14} /> : <Copy size={14} />}
+                                                {copiadoColombia ? '¡COPIADO!' : 'COPIAR NÚMERO'}
+                                            </button>
                                         </div>
 
                                         {/* 2. PayPal (Segundo si es COP) */}
