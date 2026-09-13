@@ -1,4 +1,5 @@
 # backend_fastapi/endpoints/whatsapp.py
+import time
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from dependencies.limites import verificar_permiso
@@ -8,13 +9,15 @@ from typing import Optional
 from dependencies.auth import get_current_user
 from models import Usuario
 
+
 from services.evolution_service import (
     crear_o_obtener_qr,
     obtener_estado_conexion,
     desconectar_instancia,
     enviar_mensaje_evolution,
     configurar_webhook_instancia,
-    resolver_destinatario_lid
+    resolver_destinatario_lid,
+    MAPA_LID_CACHE
 )
 from services.bot_engine_service import (
     verificar_silencio_humano,
@@ -27,8 +30,11 @@ from services.bot_engine_service import (
 
 router = APIRouter()
 
-# 🛡️ MEMORIA DE DEDUPLICACIÓN (Evita que el bot responda dos veces)
-MENSAJES_PROCESADOS = set()
+# 🌐 URL OFICIAL DEL WEBHOOK EN CLOUD RUN
+WEBHOOK_URL = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
+
+# 🛡️ MEMORIA DE DEDUPLICACIÓN CON EXPIRACIÓN (Evita respuestas duplicadas sin borrados abruptos)
+MENSAJES_PROCESADOS: dict[str, float] = {}
 
 class EnviarMensajeRequest(BaseModel):
     numero: str
@@ -43,20 +49,13 @@ async def consultar_estado_whatsapp(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """Consulta rápida de conexión con Evolution API (Ultra-ligero para soportar polling continuo)"""
     # 1. Validar que el plan del usuario tenga habilitado el bot
     await verificar_permiso("can_use_bot", current_user, db)
 
     instance_name = obtener_nombre_instancia(current_user)
     
-    # 2. Auto-asegurar que este doctor tenga su plantilla base inicializada
-    await poblar_plantilla_bot_doctor(
-        user_id=str(current_user.id),
-        doctor_nombre=f"{current_user.nombres} {current_user.apellidos or ''}".strip(),
-        consultorio_nombre=current_user.nombre_consultorio,
-        telefono=current_user.telefono
-    )
-    
-    # 3. Consultar conexión con Evolution API
+    # 2. Consultar conexión directamente con Evolution API en Hetzner (sin sobrecargar a Supabase)
     resultado = await obtener_estado_conexion(instance_name)
     return {
         "instancia": instance_name,
@@ -81,9 +80,8 @@ async def conectar_whatsapp(
         telefono=current_user.telefono
     )
 
-    webhook_url = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
 
-    resultado = await crear_o_obtener_qr(instance_name, webhook_url=webhook_url)
+    resultado = await crear_o_obtener_qr(instance_name, webhook_url=WEBHOOK_URL)
     if not resultado.get("success"):
         raise HTTPException(status_code=500, detail=f"Error al conectar WhatsApp: {resultado.get('error')}")
         
@@ -142,15 +140,21 @@ async def webhook_evolution_receiver(request: Request):
             if "@g.us" in remote_jid or "status@broadcast" in remote_jid:
                 return {"status": "ignored_group_or_status"}
 
-            # 🛡️ FILTRO ANTI-DUPLICADOS (DEDUPLICACIÓN)
+            # 🛡️ FILTRO ANTI-DUPLICADOS (DEDUPLICACIÓN INTELIGENTE: TTL 5 MINUTOS)
             message_id = key.get("id")
             if message_id:
+                ahora_ts = time.time()
+                # Si acumula más de 300 IDs, purgamos únicamente los que tengan más de 5 minutos
+                if len(MENSAJES_PROCESADOS) > 300:
+                    expirados = [k for k, ts in MENSAJES_PROCESADOS.items() if ahora_ts - ts > 300]
+                    for k in expirados:
+                        MENSAJES_PROCESADOS.pop(k, None)
+
                 if message_id in MENSAJES_PROCESADOS:
                     print(f"⏭ [Webhook Evolution] Ignorando evento duplicado para mensaje ID: {message_id}", flush=True)
                     return {"status": "ignored_duplicate"}
-                MENSAJES_PROCESADOS.add(message_id)
-                if len(MENSAJES_PROCESADOS) > 1000:
-                    MENSAJES_PROCESADOS.clear()
+
+                MENSAJES_PROCESADOS[message_id] = ahora_ts
 
             addressing_mode = key.get("addressingMode", "")
             remote_jid_alt = key.get("remoteJidAlt", "")
@@ -168,7 +172,7 @@ async def webhook_evolution_receiver(request: Request):
 
             # Si viene por @lid, guardamos el mapeo bidireccional en memoria
             if telefono_real and "@lid" in remote_jid:
-                from services.evolution_service import MAPA_LID_CACHE
+                
                 MAPA_LID_CACHE[telefono_real] = remote_jid
                 MAPA_LID_CACHE[remote_jid.split("@")[0]] = telefono_real
 
@@ -180,6 +184,9 @@ async def webhook_evolution_receiver(request: Request):
 
             message_obj = data.get("message", {})
             
+            # 🎙️ Detectar si el mensaje es una nota de voz o audio
+            es_audio = bool(message_obj.get("audioMessage"))
+
             texto_paciente = (
                 message_obj.get("conversation")
                 or message_obj.get("extendedTextMessage", {}).get("text")
@@ -188,8 +195,11 @@ async def webhook_evolution_receiver(request: Request):
                 or ""
             ).strip()
 
-            if not texto_paciente:
+            if not texto_paciente and not es_audio:
                 return {"status": "ignored_no_text"}
+
+            if es_audio:
+                texto_paciente = "[Nota de voz / Audio]"
 
             # 🆔 Obtener el odontologo_id a partir del nombre de instancia
             odontologo_id = extraer_user_id_de_instancia(instance)
@@ -202,16 +212,23 @@ async def webhook_evolution_receiver(request: Request):
                 await registrar_historial_db(numero_paciente, texto_paciente, "", instance=instance)
                 return {"status": "silence_active"}
 
-            # 2. Jerarquía de Respuestas Multi-Tenant
-            respuesta = await obtener_respuesta_faq_db(texto_paciente, odontologo_id=odontologo_id)
-            if not respuesta:
-                respuesta = await consultar_gemini_ia(texto_paciente, numero_paciente, instance=instance, odontologo_id=odontologo_id)
-
-            if not respuesta:
+            # 2. Si es nota de voz, responder de inmediato con el mensaje oficial de triaje
+            if es_audio:
                 respuesta = {
-                    "texto": "¡Hola! 👋 Con mucho gusto. En este momento el doctor o un especialista de nuestro equipo revisará tu mensaje para brindarte una atención personalizada y confirmarte la información. 🦷✨",
+                    "texto": "¡Hola! 👋 Danos un momento, por favor.\nLos doctores revisarán tu caso para darte una solución personalizada a la brevedad. ¡Ya te escribimos! 🦷✨",
                     "imagen": None
                 }
+            else:
+                # Jerarquía de Respuestas Multi-Tenant (Texto normal)
+                respuesta = await obtener_respuesta_faq_db(texto_paciente, odontologo_id=odontologo_id)
+                if not respuesta:
+                    respuesta = await consultar_gemini_ia(texto_paciente, numero_paciente, instance=instance, odontologo_id=odontologo_id)
+
+                if not respuesta:
+                    respuesta = {
+                        "texto": "¡Hola! 👋 Danos un momento, por favor.\nLos doctores revisarán tu caso para darte una solución personalizada a la brevedad. ¡Ya te escribimos! 🦷✨",
+                        "imagen": None
+                    }
 
             print(f"📤 [Webhook Evolution] Despachando respuesta a {destinatario_respuesta}: '{respuesta['texto'][:50]}...'", flush=True)
 
@@ -236,11 +253,10 @@ async def webhook_evolution_receiver(request: Request):
 async def activar_webhook_manual(current_user: Usuario = Depends(get_current_user)):
     """Fuerza la activación del Webhook público en Evolution API"""
     instance_name = obtener_nombre_instancia(current_user)
-    webhook_url = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
     
-    exito = await configurar_webhook_instancia(instance_name, webhook_url)
+    exito = await configurar_webhook_instancia(instance_name, WEBHOOK_URL)
     return {
         "instancia": instance_name,
-        "webhook_url": webhook_url,
+        "webhook_url": WEBHOOK_URL,
         "configurado": exito
     }

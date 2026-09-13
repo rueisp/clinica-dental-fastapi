@@ -14,7 +14,7 @@ HEADERS = {
 MAPA_LID_CACHE: dict = {}
 
 async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addressing_mode: str = None) -> str:
-    """Resuelve el JID correcto (@lid o número estándar) para garantizar la entrega en WhatsApp"""
+    """Resuelve el destinatario (@lid o número estándar) con caché de alta velocidad para evitar sobrecargar Hetzner"""
     jid_str = str(numero_o_jid).strip()
     
     # 1. Si ya es un @lid, lo usamos directamente
@@ -23,19 +23,18 @@ async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addre
 
     numero_limpio = "".join(filter(str.isdigit, jid_str))
 
-    # 2. Si ya lo tenemos en caché, devolverlo
+    # 2. Si ya lo tenemos en caché (positivo o normal), devolverlo de inmediato sin llamadas de red
     if numero_limpio in MAPA_LID_CACHE:
         return MAPA_LID_CACHE[numero_limpio]
 
-    # 3. Si el addressingMode es "lid", consultar findChats en Evolution API para encontrar su LID
-    if addressing_mode == "lid" or "@" not in jid_str:
+    # 3. Solo si viene marcado explícitamente como 'lid' o no tiene formato, consultar Hetzner una sola vez
+    if addressing_mode == "lid" or ("@" not in jid_str and len(numero_limpio) > 12):
         try:
             url_chats = f"{Config.EVOLUTION_API_URL}/chat/findChats/{instance_name}"
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            async with httpx.AsyncClient(timeout=4.0) as client:
                 res = await client.post(url_chats, json={}, headers=HEADERS)
                 if res.status_code == 200:
                     chats = res.json()
-                    # Soporte si viene como lista o diccionario con clave 'value'
                     lista_chats = chats if isinstance(chats, list) else chats.get("value", [])
                     for chat in lista_chats:
                         remote_jid = chat.get("remoteJid", "")
@@ -49,8 +48,10 @@ async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addre
         except Exception as e:
             print(f"⚠️ [LID Resolver Error]: {e}", flush=True)
 
-    # 4. Si es número estándar normal, retornar dígitos limpios
-    return numero_limpio or jid_str
+    # 4. Guardar en caché como número estándar para evitar futuras consultas HTTP a Hetzner
+    resultado_final = numero_limpio or jid_str
+    MAPA_LID_CACHE[numero_limpio] = resultado_final
+    return resultado_final
 
 async def configurar_webhook_instancia(instance_name: str, webhook_url: str) -> bool:
     """Configura la URL de Webhook en la instancia de Evolution API v2"""
@@ -203,7 +204,10 @@ async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, 
     async with httpx.AsyncClient(timeout=25.0) as client:
         try:
             res = await client.post(url, json=payload, headers=HEADERS)
-            print(f"📡 [Evolution API Respuesta ({res.status_code})]: {res.text}\n", flush=True)
+            
+            # Registro limpio en consola: trunca respuestas largas para no saturar Cloud Logging con buffers binarios de fotos
+            resumen_log = (res.text[:120] + "...") if len(res.text) > 120 else res.text
+            print(f"📡 [Evolution API Respuesta ({res.status_code})]: {resumen_log}\n", flush=True)
 
             if res.status_code in (200, 201):
                 return True

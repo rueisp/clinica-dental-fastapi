@@ -9,63 +9,67 @@ from models import LimiteDiario, Usuario, Plan, Subscription
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
-    """Valida que la suscripción esté activa y no haya expirado."""
-    # 1. BYPASS PARA EL ADMINISTRADOR: El administrador no tiene fecha de expiración
+    """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado)"""
+    # 1. BYPASS PARA EL ADMINISTRADOR
     if current_user.is_admin:
-        return Subscription(status="active", plan_type="pro")
+        sub_admin = Subscription(status="active", plan_type="pro")
+        sub_admin.plan_cargado = Plan(
+            can_use_odontogram=True, can_use_multimedia=True,
+            can_use_voice=True, can_export_history=True,
+            can_use_bot=True, limite_pacientes_diario=9999
+        )
+        return sub_admin
 
-    # Realizamos la consulta única de la suscripción (con indexación rápida)
-    result = await db.execute(
-        select(Subscription).where(Subscription.user_id == current_user.id)
+    # 2. CONSULTA ÚNICA UNIFICADA: Subscription + Plan en una sola llamada SQL
+    query = (
+        select(Subscription, Plan)
+        .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
+        .where(Subscription.user_id == current_user.id)
     )
-    sub = result.scalar_one_or_none()
+    result = await db.execute(query)
+    row = result.first()
     
-    # 2. Validación de estado básico en base de datos
-    if not sub or sub.status != "active":
-        detail = "Tu pago está pendiente de aprobación." if sub and sub.status == "pending_payment" else "Tu suscripción no está activa."
+    if not row:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu suscripción no está activa.")
+
+    sub, plan = row
+
+    # 3. Validación de estado básico
+    if sub.status != "active":
+        detail = "Tu pago está pendiente de aprobación." if sub.status == "pending_payment" else "Tu suscripción no está activa."
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
-    # 3. Validación de fecha de expiración en memoria (Sin consultas adicionales a la DB)
+    # 4. Validación de fecha de expiración en memoria
     if sub.current_period_end:
         ahora = datetime.now(COLOMBIA_TZ)
-        
-        # Sincronizamos la fecha de la base de datos con la zona horaria local de Colombia
         db_fecha_fin = sub.current_period_end
         fecha_fin = db_fecha_fin.replace(tzinfo=None) if db_fecha_fin.tzinfo else db_fecha_fin
         fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
         
-        # Si la fecha de finalización ya pasó el momento actual, bloqueamos la escritura
         if fecha_fin < ahora:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agregando o editando información."
             )
 
+    # Inyectamos el plan ya cargado en memoria para que las demás funciones no vuelvan a consultar la DB
+    sub.plan_cargado = plan
     return sub
 
 async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSession):
+    """Verifica si el plan permite una función sin consultas SQL redundantes"""
     if current_user.is_admin:
         return True
-    """
-    Verifica si el plan permite una función. 
-    REGLA: Si es 'trial', permite TODO.
-    """
-    # 1. Primero ver que la suscripción esté activa
+
+    # 1. Valida la suscripción activa (que ya nos trae el plan adjunto)
     sub = await verificar_suscripcion_activa(current_user, db)
     
     # 2. REGLA DE ORO: Si es trial, tiene permiso para todo
     if sub.plan_type and sub.plan_type.lower() == "trial":
         return True
     
-    # 3. Si no es trial, buscamos los permisos específicos del plan en la tabla 'planes'
-    # Priorizamos la búsqueda por plan_id (UUID). Si no existe, usamos plan_type de forma segura.
-    if sub.plan_id:
-        result = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
-    else:
-        result = await db.execute(
-            select(Plan).where(func.lower(Plan.nombre) == func.lower(sub.plan_type))
-        )
-    plan = result.scalar_one_or_none()
+    # 3. Leemos el plan directamente de memoria sin hacer SELECT adicional a la base de datos
+    plan = getattr(sub, "plan_cargado", None)
     
     if not plan or not getattr(plan, feature, False):
         raise HTTPException(

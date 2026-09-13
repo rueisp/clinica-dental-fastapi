@@ -94,21 +94,25 @@ function ChatContent() {
     }
   };
 
-  // 3. Cargar historial filtrado por la instancia del doctor
+  // 3. Cargar historial reciente filtrado por la instancia del doctor (Límite operativo: 250 mensajes)
   const cargarHistorial = async () => {
     if (!miInstancia) return;
     try {
-      let query = supabase
+      // Traemos únicamente los últimos 250 mensajes para máxima velocidad
+      const { data, error } = await supabase
         .from('historial')
         .select('*')
         .eq('instance', miInstancia)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(250);
 
-      const { data, error } = await query;
       if (error) throw error;
 
+      // Invertimos el orden para que dentro de cada chat se lean de arriba hacia abajo (cronológico)
+      const mensajesOrdenados = (data || []).reverse();
+
       const agrupados = {};
-      (data || []).forEach(row => {
+      mensajesOrdenados.forEach(row => {
         const num = row.numero;
         if (!agrupados[num]) {
           agrupados[num] = [];

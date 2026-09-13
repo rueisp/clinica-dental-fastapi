@@ -183,8 +183,22 @@ PLANTILLA_CHATBOT_BASE = [
         "estado": "ACTIVO"
     },
     {
+        "intencion": "agendar_cita_disponibilidad",
+        "palabras_clave": "cita hoy, citas hoy, cita para hoy, citas para hoy, tienen cita, tienen citas, hay cita, hay citas, tienen espacio, tienen espacios, tienen cupo, tienen cupos, agendar cita, agendar una cita, apartar cita, apartar una cita, pedir cita, pedir una cita, sacar cita, sacar una cita, quiero una cita, quiero cita, me pueden agendar, me regalan una cita, espacio para hoy, cupo para hoy, disponibilidad, tienen disponibilidad, espacio hoy, cupo hoy",
+        "respuesta": "¡Hola! 🦷 Con mucho gusto. En este momento el doctor revisará la agenda para confirmarte los espacios disponibles para tu atención a la brevedad posible. ¡Un momento por favor! ✨",
+        "link_imagen": None,
+        "estado": "ACTIVO"
+    },
+    {
+        "intencion": "costo_valoracion",
+        "palabras_clave": "valoracion, valoraciones, revision, revisiones, cita de valoracion, cita de revision, consulta de valoracion, consulta de revision, cuanto vale la valoracion, cuanto cuesta la valoracion, precio de la valoracion, valor de la valoracion, costo de la valoracion, que vale la valoracion, que cuesta la valoracion, cobran la valoracion, cuanto cobran por la valoracion, cobran la revision, cuanto vale la revision, cuanto cuesta la revision, precio de la revision, valor de la revision, costo de la revision, la valoracion tiene costo, tiene costo la valoracion, tiene costo la revision, cobran por revisar, valoracion gratis, valoracion gratuita",
+        "respuesta": "¡Hola! 🦷 En nuestro consultorio la cita de *valoración y diagnóstico inicial es totalmente gratuita (sin costo)*. Te revisamos, evaluamos tu caso y te entregamos tu presupuesto sin compromiso. ¿Te gustaría que te agendemos un espacio? 📅✨",
+        "link_imagen": None,
+        "estado": "ACTIVO"
+    },
+    {
         "intencion": "precios",
-        "palabras_clave": "precios, precio, lista de precios, listas de precios, precios generales, catalogo de precios, catalogo de servicios, lista de tarifas, tarifas, tarifa, valores de servicios, valor de tratamientos, costo de tratamientos, cotizacion general, cotizacion, cotizaciones, cotizar, presupuesto general, presupuesto, presupuestos, cuanto vale, que vale, cuanto cuesta, que cuesta, cuanto cobran, cuanto es, cuanto sale, que precios tienen, que precios manejan, que tarifas manejan, costo, costos, valor, valores, precio de la consulta, cuanto vale la consulta, cuanto cuesta la consulta, valor de la consulta, precio de la valoracion, cuanto vale la valoracion, cuanto cuesta la valoracion, valor de la valoracion",
+        "palabras_clave": "precios, precio, lista de precios, listas de precios, precios generales, catalogo de precios, catalogo de servicios, lista de tarifas, tarifas, tarifa, valores de servicios, valor de tratamientos, costo de tratamientos, cotizacion general, cotizacion, cotizaciones, cotizar, presupuesto general, presupuesto, presupuestos, cuanto vale, que vale, cuanto cuesta, que cuesta, cuanto cobran, cuanto es, cuanto sale, que precios tienen, que precios manejan, que tarifas manejan, costo, costos, valor, valores, precio de la consulta, cuanto vale la consulta, cuanto cuesta la consulta, valor de la consulta",
         "respuesta": "Nuestros Precios Principales: ✨ Limpieza: COP 50.000 | 💎 Resinas: Desde COP 100.000 | 🌟 Blanqueamiento: COP 200.000 | 🦷 Extracciones: Desde COP 120.000 | 📐 Ortodoncia: Inicial COP 150.000.\n\n¿Te gustaría agendar una cita de valoración?",
         "link_imagen": None,
         "estado": "ACTIVO"
@@ -221,6 +235,13 @@ PLANTILLA_CHATBOT_BASE = [
         "intencion": "Referencias para llegar al consultorio",
         "palabras_clave": "como llego, como llegar, como hago para llegar, como se llega, por donde llego, punto de referencia, puntos de referencia, referencia para llegar, referencias para llegar, alguna referencia, que queda cerca, cerca de que queda, cerca a que queda, que hay cerca, al lado de que queda, frente a que queda, diagonal a que queda, por donde es la entrada, por donde se entra, donde queda la entrada, como es la fachada, foto de la fachada, como es el consultorio por fuera, foto del consultorio, croquis, mapa para llegar, no doy con la direccion, no encuentro el consultorio",
         "respuesta": "📍 *PUNTOS DE REFERENCIA PARA LLEGAR:*\nEstamos ubicados [Describe tus puntos de referencia: diagonal a..., frente a...].\n\n¡Te adjuntamos una imagen de referencia para que nos encuentres fácilmente! 🏢🦷",
+        "link_imagen": None,
+        "estado": "ACTIVO"
+    },
+    {
+        "intencion": "incidencia_bracket_despegado",
+        "palabras_clave": "se me despegaron, se me despego, se me despego un bracket, se me despego el bracket, se me despegaron los brackets, se me despegaron varios brackets, despegaron brackets, despego brackets, bracket despegado, brackets despegados, se me cayeron, se me cayo, se me cayo un bracket, se me cayo el bracket, se me cayeron los brackets, bracket caido, brackets caidos, se me soltaron, se me solto, se me solto un bracket, se me solto el bracket, bracket suelto, brackets sueltos, bracket flojo, brackets flojos, me los pueden pegar, me lo pueden pegar, que me los peguen, que me lo peguen, pegar bracket, pegar brackets, pegarme el bracket, pegarme un bracket, pegar de nuevo, volver a pegar, se me partio un bracket, bracket roto, me chusa el alambre, me pulla el alambre, se me salio el alambre, se me solto el alambre",
+        "respuesta": "¡Hola! 🦷 Danos un momento, por favor.\nLos doctores revisarán tu caso para darte una solución a la brevedad. ¡Ya te escribimos! ✨",
         "link_imagen": None,
         "estado": "ACTIVO"
     },
@@ -540,7 +561,7 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
     ahora_ts = datetime.now(timezone.utc).timestamp()
     config_datos, servicios_datos = [], []
 
-    # 1. 🚀 Lectura ultra-rápida desde memoria RAM (Caché 60s)
+    # 1. Lectura desde memoria RAM (Caché 60s)
     cache_srv = CACHE_SERVICIOS_DOCTOR.get(odontologo_id)
     if cache_srv and (ahora_ts - cache_srv["timestamp"] < 60):
         servicios_datos = [
@@ -552,7 +573,6 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
     if cache_cfg and (ahora_ts - cache_cfg["timestamp"] < 60):
         config_datos = cache_cfg["datos"]
 
-    # 📡 Consulta rápida a Supabase (debe ser corto: 5.0 segundos)
     if not config_datos or not servicios_datos:
         async with httpx.AsyncClient(timeout=5.0) as client:
             try:
@@ -584,17 +604,38 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
 
     historial = await obtener_historial_reciente(numero_paciente, instance=instance)
 
-    # 2. Destilar datos del consultorio
+    # 2. Contexto temporal exacto en Colombia
+    import pytz
+    tz_col = pytz.timezone('America/Bogota')
+    ahora_col = datetime.now(tz_col)
+    dias_semana_map = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
+    dia_actual_nombre = dias_semana_map[ahora_col.weekday()]
+    hora_actual_str = ahora_col.strftime("%I:%M %p")
+
+    # 3. Destilar datos del consultorio
     cfg_map = {item.get("clave"): item.get("valor") for item in config_datos if item.get("clave")}
     consultorio_nombre = cfg_map.get("nombre_consultorio") or "Consultorio Odontológico"
     
+    h_semana = cfg_map.get('horario_lunes_viernes') or cfg_map.get('horarios') or "9:00 AM - 12:00 M y 2:00 PM - 6:00 PM"
+    h_sabado = cfg_map.get('horario_sabado') or "9:00 AM - 12:00 M y 2:00 PM - 5:00 PM"
+    h_domingo = cfg_map.get('horario_domingo') or "Cerrado"
+
+    if ahora_col.weekday() < 5:
+        horario_hoy = h_semana
+    elif ahora_col.weekday() == 5:
+        horario_hoy = h_sabado
+    else:
+        horario_hoy = h_domingo
+
     info_sede = f"""- Consultorio: {consultorio_nombre}
 - Ubicación: {cfg_map.get('ciudad', '')}, {cfg_map.get('barrio', '')} - {cfg_map.get('direccion', '')}
 - Teléfono: {cfg_map.get('telefono', '')}
-- Horarios de Atención:
-  * Lunes a Viernes: {cfg_map.get('horario_lunes_viernes', cfg_map.get('horarios', 'Consulte'))}
-  * Sábados: {cfg_map.get('horario_sabado', 'Consulte')}
-  * Domingos y Festivos: {cfg_map.get('horario_domingo', 'Cerrado')}"""
+- FECHA Y HORA ACTUAL: {dia_actual_nombre}, {hora_actual_str} (Hora Colombia)
+- HORARIO OFICIAL DE HOY ({dia_actual_nombre}): {horario_hoy}
+- Horarios Generales:
+  * Lunes a Viernes: {h_semana}
+  * Sábados: {h_sabado}
+  * Domingos y Festivos: {h_domingo}"""
 
     lineas_servicios = []
     for s in servicios_datos:
@@ -604,10 +645,10 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
             lineas_servicios.append(f"- {nom}: {precio}")
     info_servicios = "\n".join(lineas_servicios) or "Consulte tarifas en valoración."
 
-    # 3. Instrucción del sistema (Afinada para consultas múltiples)
+    # 4. Instrucción del sistema estricta
     system_instruction_text = f"""
 Eres el asistente virtual amable, profesional y muy conciso de '{consultorio_nombre}'.
-Tu objetivo es responder para WhatsApp en MÁXIMO 2 o 3 líneas, usando emojis amables.
+Tu objetivo es responder para WhatsApp en MÁXIMO 2 líneas, usando emojis amables.
 
 DATOS DEL CONSULTORIO:
 {info_sede}
@@ -615,46 +656,30 @@ DATOS DEL CONSULTORIO:
 TARIFAS OFICIALES EN COP:
 {info_servicios}
 
-🚨 PROTOCOLO ESTRICTO DE TARIFAS Y MÚLTIPLES SERVICIOS:
-- Si el paciente pregunta por UN solo tratamiento, menciona su precio oficial en COP e invita a valoración.
-- Si el paciente pregunta por VARIOS tratamientos en el mismo mensaje (ej: limpieza, calzas y sacar muelas):
-  1. Responde de forma consolidada, amable y unificada en MÁXIMO 2 o 3 líneas.
-  2. Menciona claramente el precio oficial en COP de CADA UNO de los tratamientos consultados según las Tarifas Oficiales.
-  3. Invita amablemente a una cita de valoración para evaluar todas las piezas dentales en conjunto.
-
 🚨 PROTOCOLO ESTRICTO DE CITAS Y DISPONIBILIDAD:
-Si el paciente pide cita o pregunta disponibilidad para un día/jornada:
-1. Responde en MÁXIMO 2 líneas.
-2. Informa el horario oficial de atención para ese día según los datos del consultorio.
+Si el paciente pide cita o pregunta disponibilidad para hoy o cualquier día:
+1. Responde en MÁXIMO 2 líneas informando textualmente el horario oficial registrado para ese día (para hoy es: {horario_hoy}).
+2. PROHIBIDO inventar términos como "jornada continua" o modificar las franjas horarias. Si hay descanso al mediodía, indícalo tal como aparece en los datos.
 3. Indica amablemente que el doctor o recepcionista confirmará el turno exacto a la brevedad.
-4. PROHIBIDO confirmar citas en firme o decir que hay cupo libre.
+4. PROHIBIDO confirmar citas en firme o decir que hay cupos libres.
 5. PROHIBIDO pedir datos personales o qué procedimiento se va a hacer.
 
-🚨 CASOS DE DOLOR O URGENCIAS:
-- PROHIBIDO recetar o recomendar medicamentos.
-- Indica en 2 líneas que el caso fue priorizado para revisión del doctor e invita a urgencias si es vital.
+🚨 CASOS PARTICULARES, DOLOR, URGENCIAS O CONSULTAS SIN RESPUESTA FIJA:
+Si el paciente menciona dolor, molestias, inflamación, brackets rotos, caídos o sueltos, alambre que chusa, cauchitos, gomitas, elásticos o ligas intermaxilares (dudas sobre cómo ponérselos, reposición o si se le acabaron), o plantea cualquier situación clínica particular que requiera evaluación del odontólogo:
+PROHIBIDO recetar medicamentos, improvisar diagnósticos o dar instrucciones de colocación de elásticos.
+Responde EXACTAMENTE:
+"¡Hola! 👋 Danos un momento, por favor.
+Los doctores revisarán tu caso para darte una solución personalizada a la brevedad. ¡Ya te escribimos! 🦷✨"
 
 REGLAS GENERALES:
-- Mensajes cortísimos, humanos y directos. Cero relleno.
-- Precios siempre en COP según las tarifas oficiales.
+- Mensajes cortísimos (máximo 2 líneas), humanos y directos.
+- Tarifas siempre en COP según los datos oficiales.
 """
 
     payload = {
-        "systemInstruction": {
-            "parts": [{"text": system_instruction_text}]
-        },
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{
-                    "text": f"HISTORIAL PREVIO:\n{historial}\n\nMENSAJE DEL PACIENTE:\n{texto_paciente}"
-                }]
-            }
-        ],
-        "generationConfig": {
-            "maxOutputTokens": 150,
-            "temperature": 0.2
-        },
+        "systemInstruction": {"parts": [{"text": system_instruction_text}]},
+        "contents": [{"role": "user", "parts": [{"text": f"HISTORIAL PREVIO:\n{historial}\n\nMENSAJE DEL PACIENTE:\n{texto_paciente}"}]}],
+        "generationConfig": {"maxOutputTokens": 150, "temperature": 0.2},
         "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -663,15 +688,13 @@ REGLAS GENERALES:
         ]
     }
 
-    # 🧠 Consulta a Gemini IA (AQUÍ ES DONDE VA EL TIMEOUT DE 30 SEGUNDOS)
     modelo = "gemini-3.5-flash-lite"
     gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={Config.GEMINI_API_KEY}"
     
-    async with httpx.AsyncClient(timeout=30.0) as client:  # <--- AQUÍ VA 30.0
+    async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             print(f"🤖 [Gemini] Consultando {modelo} (Doctor: {odontologo_id})...", flush=True)
             res = await client.post(gemini_url, json=payload)
-            
             if res.status_code == 200:
                 data = res.json()
                 candidates = data.get("candidates", [])
