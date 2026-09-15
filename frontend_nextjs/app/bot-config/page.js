@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@/context/UserContext';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
 import AuthGuard from '@/components/AuthGuard';
 import { 
@@ -9,8 +11,27 @@ import {
   Phone, MessageSquare, AlertCircle, RefreshCw, X, HelpCircle, AlertTriangle
 } from 'lucide-react';
 
+// Ubicación: frontend_nextjs/app/bot-config/page.js (al inicio de BotConfigPage)
 export default function BotConfigPage() {
-  const [tabActiva, setTabActiva] = useState('servicios'); // 'servicios', 'horarios', 'promos'
+  const router = useRouter();
+  const { user } = useUser();
+
+  // Bloqueo estricto si el plan expiró o no tiene permiso del Bot (Ultra)
+  useEffect(() => {
+    const planInvalido = user && !user?.is_admin && (
+      !user?.plan_info || 
+      user?.plan_info?.status !== 'active' || 
+      user?.plan_info?.dias_restantes <= 0 ||
+      !user?.permissions?.can_use_bot
+    );
+
+    if (planInvalido) {
+      alert('⚠️ La configuración del Asistente Virtual requiere una suscripción activa con módulo Ultra.');
+      router.push('/planes');
+    }
+  }, [user, router]);
+
+  const [tabActiva, setTabActiva] = useState('servicios');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState(null);

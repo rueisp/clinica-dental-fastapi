@@ -9,7 +9,7 @@ export default function PlanesPage() {
   const [planes, setPlanes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moneda, setMoneda] = useState('COP'); 
-  const [billingCycle, setBillingCycle] = useState('mensual'); // <--- AGREGAR ESTA LÍNEA
+  const [billingCycle, setBillingCycle] = useState('mensual');
   const router = useRouter();
 
   useEffect(() => {
@@ -40,16 +40,15 @@ export default function PlanesPage() {
   };
 
   const handleCambiarPlan = async (plan) => {
-    // --- ASEGÚRESE DE QUE ESTA DEFINICIÓN ESTÉ AQUÍ ---
     const precioMostrar = moneda === 'COP'
       ? `$${plan.precio_cop.toLocaleString('es-CO')} COP`
       : `$${plan.precio_mensual} USD`;
-    // Alerta de confirmación detallada para evitar errores
+
     const mensajeConfirmar = plan.precio_cop > 0 
       ? `⚠️ ATENCIÓN: Estás a punto de solicitar el plan "${plan.nombre.replace('_', ' ').toUpperCase()}".\n\n` +
         `• Valor: ${precioMostrar}\n` +
         `• Duración: ${plan.duracion_dias === 365 ? '1 Año' : '1 Mes'}\n\n` +
-        `Para activar este plan, el sistema te redirigirá para que realices tu pago en línea (Bold/PayPal).\n\n` +
+        `Para activar este plan, el sistema te redirigirá para que reportes tu pago.\n\n` +
         `¿Estás seguro de que deseas continuar con esta solicitud?`
       : `¿Confirmas que deseas activar el plan gratuito "${plan.nombre.toUpperCase()}"?`;
 
@@ -65,11 +64,10 @@ export default function PlanesPage() {
 
       if (res.ok) {
         if (data.status === 'pending_payment') {
-          // AQUÍ ESTÁ EL CAMBIO: Si está pendiente, obligamos a ir a reportar
           alert('Solicitud registrada. Por favor, procede a adjuntar el comprobante de pago.');
           router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         } else {
-          alert('✅ Plan Trial activado correctamente');
+          alert('✅ Plan activado correctamente');
           router.push('/dashboard');
         }
       } else {
@@ -81,7 +79,7 @@ export default function PlanesPage() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center">Cargando...</div>;
+    return <div className="p-8 text-center">Cargando planes...</div>;
   }
 
   const getColorByDias = (dias) => {
@@ -90,25 +88,35 @@ export default function PlanesPage() {
     return 'text-green-600';
   };
 
-  // Filtrar planes según el ciclo seleccionado (Mensual o Anual)
+  // Filtrar planes según el ciclo seleccionado (Mensual o Anual) excluyendo el Trial
   const planesFiltrados = planes.filter(plan => {
-    if (plan.nombre === 'trial') return true;
+    if (plan.nombre === 'trial') return false;
     if (billingCycle === 'mensual') return plan.duracion_dias === 30;
     if (billingCycle === 'anual') return plan.duracion_dias === 365;
     return false;
   }).sort((a, b) => a.orden - b.orden);
+
+  const planVencidoActual = !planActual?.dias_restantes || planActual?.dias_restantes <= 0 || planActual?.status !== 'active';
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       {/* Tarjeta del plan actual */}
       {planActual && planActual.tiene_plan && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-          <div className="border-l-4 border-blue-500 pl-4 mb-4">
-            <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Tu plan actual</p>
-            {/* CAMBIO 1: Nombre limpio y con formato elegante */}
-            <h3 className="text-2xl font-black text-gray-900 capitalize">
-              {planActual.plan_nombre?.replace('_', ' ')}
-            </h3>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+            <div className={`border-l-4 ${planVencidoActual ? 'border-red-500' : 'border-blue-500'} pl-4`}>
+              <p className={`text-xs font-bold uppercase tracking-wider ${planVencidoActual ? 'text-red-600' : 'text-blue-600'}`}>
+                {planVencidoActual ? 'Tu plan ha vencido' : 'Tu plan actual'}
+              </p>
+              <h3 className="text-2xl font-black text-gray-900 capitalize">
+                {planActual.plan_nombre?.replace('_', ' ')}
+              </h3>
+            </div>
+            {planVencidoActual && (
+              <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-black uppercase rounded-full tracking-wider">
+                Vencido
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -153,10 +161,15 @@ export default function PlanesPage() {
           <div className="mt-3">
             <div className="flex justify-between text-xs mb-1">
               <span className="text-gray-500">Progreso</span>
-              <span className="text-blue-600 font-bold">{planActual.porcentaje_progreso}%</span>
+              <span className={`font-bold ${planVencidoActual ? 'text-red-600' : 'text-blue-600'}`}>
+                {planActual.porcentaje_progreso}%
+              </span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-2">
-              <div className="bg-blue-500 rounded-full h-2" style={{ width: `${planActual.porcentaje_progreso}%` }} />
+              <div 
+                className={`rounded-full h-2 ${planVencidoActual ? 'bg-red-500' : 'bg-blue-500'}`} 
+                style={{ width: `${planActual.porcentaje_progreso}%` }} 
+              />
             </div>
           </div>
         </div>
@@ -166,7 +179,7 @@ export default function PlanesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-black text-gray-900 tracking-tight">Planes disponibles</h2>
-          <p className="text-xs text-gray-500 font-medium">Elige el plan ideal o mejora tu suscripción actual.</p>
+          <p className="text-xs text-gray-500 font-medium">Elige el plan ideal o renueva tu suscripción.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -223,14 +236,15 @@ export default function PlanesPage() {
           </div>
         </div>
       </div>
-      {/* Cuadrícula adaptada a 4 columnas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+      {/* Cuadrícula de planes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {planesFiltrados.map((plan) => {
           const esPlanActual = planActual?.plan_nombre === plan.nombre;
           const estaPendiente = planActual?.status === 'pending_payment' && esPlanActual;
           const planVencido = !planActual?.dias_restantes || planActual?.dias_restantes <= 0 || planActual?.status !== 'active';
           
-          // Es un upgrade si el plan destino cuesta más que el plan actual del doctor
+          // Solo es 'Mejora' si el plan está vigente y el destino cuesta más
           const esMejora = !esPlanActual && !planVencido && plan.precio_cop > (planActual?.plan_precio || 0);
 
           return (
@@ -297,44 +311,44 @@ export default function PlanesPage() {
                 </ul>
               </div>
 
-              {/* 🔘 LÓGICA DE BOTONES DINÁMICOS */}
+              {/* 🔘 LÓGICA DE BOTONES DINÁMICOS CORREGIDA */}
               <div className="pt-2">
                 {estaPendiente ? (
                   <button disabled className="w-full bg-yellow-100 text-yellow-700 py-2.5 rounded-xl font-bold text-xs cursor-default flex items-center justify-center gap-2">
                     ⏳ Pago en verificación
                   </button>
-                ) : esPlanActual && !planVencido ? (
+                ) : planVencido ? (
+                  /* SI EL PLAN ESTÁ VENCIDO: LIBERTAD TOTAL DE ELECCIÓN */
+                  <button
+                    onClick={() => handleCambiarPlan(plan)}
+                    className={`w-full py-2.5 rounded-xl font-bold text-xs transition shadow-md cursor-pointer flex items-center justify-center gap-1.5 ${
+                      esPlanActual 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'bg-black hover:bg-gray-800 text-white'
+                    }`}
+                  >
+                    {esPlanActual ? '🔄 Renovar este plan' : 'Seleccionar este plan'}
+                  </button>
+                ) : esPlanActual ? (
+                  /* PLAN ACTIVO ACTUAL */
                   <button disabled className="w-full bg-green-100 text-green-700 py-2.5 rounded-xl font-bold text-xs cursor-not-allowed">
                     ✅ Plan actual (Activo)
                   </button>
-                ) : esPlanActual && planVencido ? (
-                  <button
-                    onClick={() => handleCambiarPlan(plan)}
-                    className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-blue-700 transition shadow-md cursor-pointer"
-                  >
-                    🔄 Renovar este plan
-                  </button>
                 ) : esMejora ? (
-                  /* BOTÓN DE UPGRADE ACTIVO */
+                  /* MEJORA EN PLAN VIGENTE */
                   <button
                     onClick={() => handleCambiarPlan(plan)}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold text-xs transition shadow-md shadow-purple-100 cursor-pointer flex items-center justify-center gap-1.5"
                   >
                     <span>🚀 Mejorar a este plan</span>
                   </button>
-                ) : !esPlanActual && !planVencido && planActual?.plan_nombre?.toLowerCase() !== 'trial' ? (
+                ) : (
+                  /* BLOQUEADO SOLO SI TIENE OTRO PLAN ACTIVO DE MAYOR VALOR */
                   <button 
                     disabled 
                     className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-xl font-bold text-xs cursor-not-allowed"
                   >
                     🔒 Suscripción Activa
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleCambiarPlan(plan)}
-                    className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-gray-800 transition cursor-pointer"
-                  >
-                    {plan.precio_cop === 0 ? 'Activar plan' : 'Seleccionar este plan'}
                   </button>
                 )}
               </div>

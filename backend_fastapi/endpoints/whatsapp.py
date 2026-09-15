@@ -25,7 +25,8 @@ from services.bot_engine_service import (
     obtener_respuesta_faq_db,
     consultar_gemini_ia,
     extraer_user_id_de_instancia,
-    poblar_plantilla_bot_doctor
+    poblar_plantilla_bot_doctor,
+    verificar_suscripcion_activa_bot
 )
 
 router = APIRouter()
@@ -203,6 +204,10 @@ async def webhook_evolution_receiver(request: Request):
 
             # 🆔 Obtener el odontologo_id a partir del nombre de instancia
             odontologo_id = extraer_user_id_de_instancia(instance)
+            # 0. Candado de vigencia del plan con memoria RAM (0 ms de latencia)
+            if not odontologo_id or not await verificar_suscripcion_activa_bot(odontologo_id):
+                print(f"🔒 [Webhook Evolution] Doctor ID {odontologo_id} con plan vencido. Bot no responde.", flush=True)
+                return {"status": "subscription_expired_bot_ignored"}
 
             print(f"📩 [Webhook Evolution] Mensaje recibido de {numero_paciente} en {instance} (Doctor ID: {odontologo_id}): '{texto_paciente}'", flush=True)
 

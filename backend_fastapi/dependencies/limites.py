@@ -9,7 +9,7 @@ from models import LimiteDiario, Usuario, Plan, Subscription
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
-    """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado)"""
+    """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado y Blindado)"""
     # 1. BYPASS PARA EL ADMINISTRADOR
     if current_user.is_admin:
         sub_admin = Subscription(status="active", plan_type="pro")
@@ -30,7 +30,7 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
     row = result.first()
     
     if not row:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu suscripción no está activa.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tu cuenta no tiene una suscripción registrada.")
 
     sub, plan = row
 
@@ -39,20 +39,28 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
         detail = "Tu pago está pendiente de aprobación." if sub.status == "pending_payment" else "Tu suscripción no está activa."
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
-    # 4. Validación de fecha de expiración en memoria
-    if sub.current_period_end:
-        ahora = datetime.now(COLOMBIA_TZ)
-        db_fecha_fin = sub.current_period_end
-        fecha_fin = db_fecha_fin.replace(tzinfo=None) if db_fecha_fin.tzinfo else db_fecha_fin
-        fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
-        
-        if fecha_fin < ahora:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agregando o editando información."
-            )
+    # 4. Validación estricta de fecha de vigencia (Blindaje contra nulos y expirados)
+    if not sub.current_period_end:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu plan ha expirado o no tiene fecha de vigencia válida. Renueva tu suscripción para continuar."
+        )
 
-    # Inyectamos el plan ya cargado en memoria para que las demás funciones no vuelvan a consultar la DB
+    ahora = datetime.now(COLOMBIA_TZ)
+    db_fecha_fin = sub.current_period_end
+    
+    # Normalización segura con zona horaria de Colombia
+    if hasattr(db_fecha_fin, "tzinfo") and db_fecha_fin.tzinfo is not None:
+        fecha_fin = db_fecha_fin.astimezone(COLOMBIA_TZ)
+    else:
+        fecha_fin = COLOMBIA_TZ.localize(db_fecha_fin)
+
+    if fecha_fin <= ahora:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agregando o editando información."
+        )
+
     sub.plan_cargado = plan
     return sub
 

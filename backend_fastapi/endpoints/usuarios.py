@@ -27,7 +27,7 @@ async def get_usuario_actual(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscamos el plan y la suscripción en una sola consulta usando plan_type para máxima compatibilidad
+    # 1. Buscamos el plan y la suscripción en una sola consulta
     result = await db.execute(
         select(Subscription, Plan)
         .join(Plan, Subscription.plan_type == Plan.nombre)
@@ -35,8 +35,7 @@ async def get_usuario_actual(
     )
     row = result.first()
     
-    # 2. Cálculos de tiempo básicos
-    hoy = datetime.now(timezone.utc).replace(tzinfo=None)
+    ahora_colombia = datetime.now(COLOMBIA_TZ)
     dias_restantes = 0
     fecha_fin_str = "Vencido"
     status = "inactive"
@@ -44,19 +43,27 @@ async def get_usuario_actual(
     
     if row:
         sub, plan = row
-        status = sub.status
         es_anual = plan.duracion_dias == 365
+        
         if sub.current_period_end:
-            # Extraemos una copia limpia del valor para evitar mutar el objeto de la DB
             db_date = sub.current_period_end
-            fecha_fin = db_date.replace(tzinfo=None) if db_date.tzinfo else db_date
-            
-            # Cálculo preciso de días restantes redondeando hacia arriba (evita marcar como expirado antes de tiempo)
-            diferencia = fecha_fin - hoy
-            segundos_restantes = diferencia.total_seconds()
-            dias_restantes = max(0, int(segundos_restantes / 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+            if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
+                fecha_fin = db_date.astimezone(COLOMBIA_TZ)
+            else:
+                fecha_fin = COLOMBIA_TZ.localize(db_date)
             
             fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
+            
+            # Condición binaria estricta de corte
+            if fecha_fin <= ahora_colombia:
+                dias_restantes = 0
+                status = "expired"
+            else:
+                status = sub.status
+                segundos_restantes = (fecha_fin - ahora_colombia).total_seconds()
+                dias_restantes = max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+        else:
+            status = "expired"
 
     return {
         "id": str(current_user.id),
@@ -74,11 +81,11 @@ async def get_usuario_actual(
             "es_anual": es_anual
         },
         "permissions": {
-            "can_use_odontogram": plan.can_use_odontogram if row else False,
-            "can_use_multimedia": plan.can_use_multimedia if row else False,
-            "can_use_voice": plan.can_use_voice if row else False,
-            "can_export_history": plan.can_export_history if row else False,
-            "can_use_bot": plan.can_use_bot if row else False, # <--- AGREGAR
+            "can_use_odontogram": plan.can_use_odontogram if (row and status == "active") else (True if current_user.is_admin else False),
+            "can_use_multimedia": plan.can_use_multimedia if (row and status == "active") else (True if current_user.is_admin else False),
+            "can_use_voice": plan.can_use_voice if (row and status == "active") else (True if current_user.is_admin else False),
+            "can_export_history": plan.can_export_history if (row and status == "active") else (True if current_user.is_admin else False),
+            "can_use_bot": plan.can_use_bot if (row and status == "active") else (True if current_user.is_admin else False),
         }
     }
 
@@ -95,13 +102,20 @@ async def cambiar_plan(
     if not plan_destino:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
     
-    # 2. Buscar suscripción actual del doctor
+    # 2. 🚫 BLOQUEO ABSOLUTO: El Trial solo se otorga al registrarse, nunca al cambiar de plan
+    if plan_destino.nombre.lower() == "trial":
+        raise HTTPException(
+            status_code=400, 
+            detail="El periodo de prueba gratuito solo está disponible una única vez al registrar la cuenta. Para continuar utilizando CloudentApp debes suscribirte a un plan profesional."
+        )
+
+    # 3. Buscar suscripción actual del doctor
     result_sub = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
     suscripcion = result_sub.scalar_one_or_none()
 
-    # 3. Candado de seguridad: Bloquear si ya tiene un pago pendiente de aprobación
+    # 4. Candado de seguridad: Bloquear si ya tiene un pago pendiente de aprobación
     from models import PagoSuscripcion
     result_pago = await db.execute(
         select(PagoSuscripcion).where(
@@ -115,54 +129,26 @@ async def cambiar_plan(
             detail="Ya tienes una solicitud de pago en verificación. Espera la aprobación del administrador."
         )
 
-    # 4. Regla Trial: Solo se puede usar una vez
-    if plan_destino.nombre.lower() == "trial":
-        if suscripcion and suscripcion.plan_type == "trial":
-            raise HTTPException(
-                status_code=400, 
-                detail="Ya utilizaste tu periodo de prueba. Por favor elige un plan profesional."
-            )
-        
-        # Activación inmediata del Trial
-        ahora = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
-        if suscripcion:
-            suscripcion.plan_id = plan_destino.id
-            suscripcion.plan_type = plan_destino.nombre
-            suscripcion.status = "active"
-            suscripcion.current_period_end = ahora + timedelta(days=plan_destino.duracion_dias)
-            suscripcion.updated_at = ahora
-        else:
-            nueva_sub = Subscription(
-                user_id=current_user.id,
-                plan_id=plan_destino.id,
-                plan_type=plan_destino.nombre,
-                status="active",
-                current_period_end=ahora + timedelta(days=plan_destino.duracion_dias),
-                updated_at=ahora
-            )
-            db.add(nueva_sub)
-        
-        await db.commit()
-        return {"success": True, "message": "Plan Trial activado", "status": "active"}
-
     # 5. Validación de suscripciones activas existentes (Reglas de Upgrade)
-    if suscripcion and suscripcion.status == "active":
-        ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-        fecha_fin = suscripcion.current_period_end.replace(tzinfo=None) if suscripcion.current_period_end and suscripcion.current_period_end.tzinfo else suscripcion.current_period_end
+    if suscripcion and suscripcion.status == "active" and suscripcion.current_period_end:
+        ahora_colombia = datetime.now(COLOMBIA_TZ)
+        db_fin = suscripcion.current_period_end
+        
+        if hasattr(db_fin, "tzinfo") and db_fin.tzinfo is not None:
+            fecha_fin = db_fin.astimezone(COLOMBIA_TZ)
+        else:
+            fecha_fin = COLOMBIA_TZ.localize(db_fin)
 
-        # Si el plan NO ha vencido y no es trial, validamos jerarquía (Upgrade estricto)
-        if fecha_fin and fecha_fin > ahora_utc and suscripcion.plan_type.lower() != "trial":
-            # Buscar el plan actual para comparar precios
+        # Solo aplicamos restricción de upgrade si el plan está REALMENTE VIGENTE
+        if fecha_fin > ahora_colombia and suscripcion.plan_type.lower() != "trial":
             res_plan_actual = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
             plan_actual = res_plan_actual.scalar_one_or_none()
 
-            if plan_actual:
-                # Solo se permite si el plan destino tiene un precio superior (Upgrade)
-                if plan_destino.precio_cop <= plan_actual.precio_cop:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Solo puedes solicitar una mejora hacia un plan de mayor valor. Para reducir tu plan, debes esperar a que venza tu ciclo actual."
-                    )
+            if plan_actual and plan_destino.precio_cop <= plan_actual.precio_cop:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tu plan actual sigue vigente. Para cambiar a un plan de menor valor, debes esperar a que termine tu ciclo."
+                )
 
     # 6. Si es un plan de pago válido, enviar a reportar
     return {
@@ -176,7 +162,6 @@ async def get_mi_plan_detalle(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Traer suscripción y datos del plan (Unión de tablas)
     result = await db.execute(
         select(Subscription, Plan)
         .join(Plan, Subscription.plan_type == Plan.nombre)
@@ -188,51 +173,48 @@ async def get_mi_plan_detalle(
         return {"tiene_plan": False, "mensaje": "Sin suscripción activa"}
     
     sub, plan = row
-    
-    # 2. SINCRONIZACIÓN BOGOTÁ (Evitando mutar los objetos de la DB)
     ahora = datetime.now(COLOMBIA_TZ)
     
-    # Extraemos copias limpias de las fechas de la DB
     db_fecha_fin = sub.current_period_end
-    fecha_fin = db_fecha_fin.replace(tzinfo=None) if db_fecha_fin.tzinfo else db_fecha_fin
-    fecha_fin = COLOMBIA_TZ.localize(fecha_fin)
+    if not db_fecha_fin:
+        return {
+            "tiene_plan": True,
+            "plan_nombre": plan.nombre,
+            "status": "expired",
+            "dias_restantes": 0,
+            "porcentaje_progreso": 100
+        }
 
-    # 3. CÁLCULO DE DÍAS REALES (Sin pánico de '0 días')
-    diferencia = fecha_fin - ahora
-    segundos_restantes = diferencia.total_seconds()
-    dias_restantes = max(0, int(segundos_restantes / 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
-    
-    # 4. CÁLCULO DE PROGRESO (Barra Visual)
-    # Sincronizamos el inicio del ciclo restando la duración exacta del plan
-    fecha_inicio = fecha_fin - timedelta(days=plan.duracion_dias)
-        
-    duracion_total_segundos = (fecha_fin - fecha_inicio).total_seconds()
-    tiempo_transcurrido_segundos = (ahora - fecha_inicio).total_seconds()
-    
-    # Porcentaje de 0 a 100
-    if duracion_total_segundos > 0:
-        porcentaje = int((tiempo_transcurrido_segundos / duracion_total_segundos) * 100)
+    if hasattr(db_fecha_fin, "tzinfo") and db_fecha_fin.tzinfo is not None:
+        fecha_fin = db_fecha_fin.astimezone(COLOMBIA_TZ)
     else:
-        porcentaje = 0
-        
-    # Asegurar que el porcentaje no se salga de los límites
-    porcentaje = min(100, max(0, porcentaje)) 
+        fecha_fin = COLOMBIA_TZ.localize(db_fecha_fin)
 
-    # Diccionario de meses cortos en español para evitar problemas con la región en servidores de la nube
+    # 1. EVALUACIÓN BINARIA DE EXPIRACIÓN
+    if fecha_fin <= ahora:
+        dias_restantes = 0
+        status_final = "expired"
+        porcentaje = 100
+    else:
+        status_final = sub.status
+        segundos_restantes = (fecha_fin - ahora).total_seconds()
+        dias_restantes = max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+        
+        # Cálculo de progreso visual
+        fecha_inicio = fecha_fin - timedelta(days=plan.duracion_dias)
+        duracion_total = (fecha_fin - fecha_inicio).total_seconds()
+        tiempo_transcurrido = (ahora - fecha_inicio).total_seconds()
+        porcentaje = min(100, max(0, int((tiempo_transcurrido / duracion_total) * 100))) if duracion_total > 0 else 0
+
     meses_es = {
         1: 'ene', 2: 'feb', 3: 'mar', 4: 'abr',
         5: 'may', 6: 'jun', 7: 'jul', 8: 'ago',
         9: 'sep', 10: 'oct', 11: 'nov', 12: 'dic'
     }
     
-    # Si el inicio y fin ocurren en el mismo año (planes mensuales)
-    if fecha_inicio.year == fecha_fin.year:
-        fecha_inicio_str = meses_es[fecha_inicio.month]
-        fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
-    # Si el ciclo transcurre entre años diferentes (planes anuales)
-    else:
-        fecha_inicio_str = f"{meses_es[fecha_inicio.month]} {fecha_inicio.year}"
-        fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
+    fecha_inicio_calc = fecha_fin - timedelta(days=plan.duracion_dias)
+    fecha_inicio_str = f"{meses_es[fecha_inicio_calc.month]} {fecha_inicio_calc.year}"
+    fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
     
     return {
         "tiene_plan": True,
@@ -244,14 +226,14 @@ async def get_mi_plan_detalle(
         "fecha_fin": fecha_fin_str,
         "dias_restantes": dias_restantes,
         "porcentaje_progreso": porcentaje,
-        "status": sub.status,
+        "status": status_final,
         "es_anual": plan.duracion_dias == 365,
         "permissions": {
-            "can_use_odontogram": plan.can_use_odontogram,
-            "can_use_multimedia": plan.can_use_multimedia,
-            "can_use_voice": plan.can_use_voice,
-            "can_export_history": plan.can_export_history,
-            "can_use_bot": plan.can_use_bot # <--- AGREGAR
+            "can_use_odontogram": plan.can_use_odontogram if status_final == "active" else False,
+            "can_use_multimedia": plan.can_use_multimedia if status_final == "active" else False,
+            "can_use_voice": plan.can_use_voice if status_final == "active" else False,
+            "can_export_history": plan.can_export_history if status_final == "active" else False,
+            "can_use_bot": plan.can_use_bot if status_final == "active" else False,
         }
     }
 

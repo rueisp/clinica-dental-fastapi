@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/config/supabase';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
 import AuthGuard from '@/components/AuthGuard';
@@ -17,6 +17,22 @@ import ModalConexionWhatsapp from '@/components/whatsapp/ModalConexionWhatsapp';
 function ChatContent() {
   const { user } = useUser();
   const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    const planInvalido = user && !user?.is_admin && (
+      !user?.plan_info || 
+      user?.plan_info?.status !== 'active' || 
+      user?.plan_info?.dias_restantes <= 0 ||
+      !user?.permissions?.can_use_bot
+    );
+
+    if (planInvalido) {
+      alert('⚠️ La bandeja de WhatsApp requiere una suscripción activa con módulo Ultra.');
+      router.push('/planes');
+    }
+  }, [user, router]);
+  
   const numeroUrlParam = searchParams.get('numero');
 
   // 🆔 Instancia única de este doctor

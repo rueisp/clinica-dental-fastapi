@@ -18,6 +18,7 @@ SUPABASE_HEADERS = {
 # 🚀 Caché en memoria para evitar consultas duplicadas a Supabase (TTL: 60 segundos)
 CACHE_SERVICIOS_DOCTOR: dict = {}
 CACHE_CONFIG_DOCTOR: dict = {}
+CACHE_SUSCRIPCION_DOCTOR: dict = {}
 
 # ============================================================
 # PLANTILLAS BASE OFICIALES (CLONADAS PARA CADA DOCTOR NUEVO)
@@ -257,6 +258,50 @@ PLANTILLA_CHATBOT_BASE = [
 # ============================================================
 # FUNCIONES DE INICIALIZACIÓN MULTI-TENANT
 # ============================================================
+
+# Ubicación: backend_fastapi/services/bot_engine_service.py (antes de extraer_user_id_de_instancia)
+async def verificar_suscripcion_activa_bot(odontologo_id: str) -> bool:
+    """Verifica la vigencia del plan del doctor con caché en memoria RAM de 10 minutos (0 ms de latencia)"""
+    if not odontologo_id:
+        return False
+
+    ahora_ts = datetime.now(timezone.utc).timestamp()
+    cache_sub = CACHE_SUSCRIPCION_DOCTOR.get(odontologo_id)
+    
+    # Si la verificación en memoria tiene menos de 10 minutos (600s), responder en 0 ms
+    if cache_sub and (ahora_ts - cache_sub["timestamp"] < 600):
+        return cache_sub["activo"]
+
+    url_sub = f"{Config.SUPABASE_URL}/rest/v1/subscriptions?user_id=eq.{odontologo_id}&limit=1"
+    async with httpx.AsyncClient(timeout=4.0) as client:
+        try:
+            res = await client.get(url_sub, headers=SUPABASE_HEADERS)
+            if res.status_code == 200:
+                filas = res.json()
+                if not filas:
+                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
+                    return False
+
+                sub = filas[0]
+                if sub.get("status") != "active":
+                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
+                    return False
+
+                fin_str = sub.get("current_period_end")
+                if not fin_str:
+                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
+                    return False
+
+                fecha_fin = datetime.fromisoformat(fin_str.replace("Z", "+00:00"))
+                esta_activo = fecha_fin > datetime.now(timezone.utc)
+
+                CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": esta_activo, "timestamp": ahora_ts}
+                return esta_activo
+        except Exception as e:
+            print(f"⚠️ [Error Verificando Suscripción Bot]: {e}", flush=True)
+            return True
+
+    return False
 
 def extraer_user_id_de_instancia(instance_name: str) -> str | None:
     """Extrae el UUID del usuario desde el nombre de instancia 'doctor_<uuid_con_guiones_bajos>'"""

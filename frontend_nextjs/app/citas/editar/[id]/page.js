@@ -4,11 +4,26 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
+import { useUser } from '@/context/UserContext';
 
 export default function EditarCita() {
   const params = useParams();
   const router = useRouter();
   const citaId = params.id;
+  // Ubicación: frontend_nextjs/app/citas/editar/[id]/page.js (dentro de EditarCita, justo debajo de const citaId = params.id;)
+  const { user, loading: userLoading } = useUser();
+  const planVencido = !user?.is_admin && (
+    !user?.plan_info || 
+    user?.plan_info?.status !== 'active' || 
+    user?.plan_info?.dias_restantes <= 0
+  );
+
+  useEffect(() => {
+    if (!userLoading && planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para gestionar y editar citas.');
+      router.push('/planes');
+    }
+  }, [planVencido, userLoading, router]);
   
   const [formData, setFormData] = useState({
     fecha: '',
@@ -113,10 +128,16 @@ export default function EditarCita() {
     setMostrarResultados(false);
   };
   
+  // Ubicación: frontend_nextjs/app/citas/editar/[id]/page.js (reemplazar la función handleSubmit)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // --- NUEVO: Validación estricta de horario de atención (08:00 AM a 08:30 PM) ---
+    if (planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para guardar cambios.');
+      router.push('/planes');
+      return;
+    }
+
     if (formData.hora < "08:00" || formData.hora > "20:30") {
       alert("❌ El horario de atención permitido es de 08:00 AM a 08:30 PM. Por favor, verifica la hora seleccionada (asegúrate de haber elegido PM si es por la tarde).");
       return;
@@ -139,7 +160,6 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-      
         router.push(`/?fecha=${formData.fecha}`);
       } else {
         const error = await response.json();
@@ -152,7 +172,14 @@ export default function EditarCita() {
     }
   };
   
+  // Ubicación: frontend_nextjs/app/citas/editar/[id]/page.js (reemplazar la función eliminarCita)
   const eliminarCita = async () => {
+    if (planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para realizar cambios en tus citas.');
+      router.push('/planes');
+      return;
+    }
+
     if (!confirm('¿Eliminar esta cita?')) return;
     
     try {
@@ -161,7 +188,6 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-      
         router.push(`/dashboard?fecha=${formData.fecha}`);
       } else {
         alert('Error al eliminar');

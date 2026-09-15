@@ -8,6 +8,7 @@ import DentigramaEditor from '@/app/components/pacientes/DentigramaEditor';
 import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { API_BASE_URL, authFetch } from '@/config/api';
 import { Lock } from 'lucide-react'; // Importamos icono de bloqueo
+import { useUser } from '@/context/UserContext';
 
 function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaciente()" a "function NuevoPacienteForm()"
   const router = useRouter();
@@ -15,6 +16,19 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
   const dentigramaRef = useRef();
   
   const citaId = searchParams.get('cita_id'); // Extraemos el ID de la cita si viene en la URL
+  const { user, loading: userLoading } = useUser();
+  const planVencido = !user?.is_admin && (
+    !user?.plan_info || 
+    user?.plan_info?.status !== 'active' || 
+    user?.plan_info?.dias_restantes <= 0
+  );
+
+  useEffect(() => {
+    if (!userLoading && planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para registrar nuevos pacientes.');
+      router.push('/planes');
+    }
+  }, [planVencido, userLoading, router]);
   
   // ✅ ESTADO DE PERMISOS
   const [canUseOdontogram, setCanUseOdontogram] = useState(true);
@@ -66,10 +80,18 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
     setImagenFile(null);
   };
 
+  // Ubicación: frontend_nextjs/app/pacientes/nuevo/page.js (reemplazo completo de la función handleSubmit)
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 1. Candado de seguridad para plan vencido
+    if (planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para registrar nuevos pacientes.');
+      router.push('/planes');
+      return;
+    }
     
-    // Solo exportamos dentigrama si tenemos permiso
+    // 2. Solo exportamos dentigrama si tenemos permiso
     let dentigramaBase64 = null;
     if (canUseOdontogram && dentigramaRef.current) {
         dentigramaBase64 = await dentigramaRef.current.exportar();
@@ -105,7 +127,7 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
         const data = await response.json();
         const nuevoPacienteId = data.paciente_id;
 
-        // --- NUEVO: Si venimos de una cita, la vinculamos automáticamente en segundo plano ---
+        // Si venimos de una cita, la vinculamos automáticamente en segundo plano
         if (citaId) {
           try {
             await authFetch(`${API_BASE_URL}/api/citas/${citaId}`, {
@@ -119,7 +141,6 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
 
         router.push(`/pacientes/${nuevoPacienteId}`);
       } else {
-        // Captura el error 403 (o cualquier otro) y lo muestra en pantalla
         const errorData = await response.json();
         alert(errorData.detail || 'No se pudo registrar el paciente');
       }

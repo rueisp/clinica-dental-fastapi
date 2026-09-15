@@ -6,10 +6,18 @@ import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react
 import Link from 'next/link';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
+// Ubicación: frontend_nextjs/app/citas/nueva/page.js (cabecera de imports)
+import { useUser } from '@/context/UserContext';
 
 function NuevaCitaForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useUser();
+  const planVencido = !user?.is_admin && (
+    !user?.plan_info || 
+    user?.plan_info?.status !== 'active' || 
+    user?.plan_info?.dias_restantes <= 0
+  );
   
   const fechaParam = searchParams.get('fecha');
   const horaParam = searchParams.get('hora');
@@ -119,10 +127,19 @@ function NuevaCitaForm() {
     setMostrarResultados(false);
   };
 
+  // Ubicación: frontend_nextjs/app/citas/nueva/page.js (reemplazar la función handleSubmit completa)
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // --- NUEVO: Validación estricta de horario de atención (08:00 AM a 08:30 PM) ---
+    // 1. Verificación preventiva de plan vencido
+    if (planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agendando citas.');
+      router.push('/planes');
+      return;
+    }
+
+    // 2. Validación de horario de atención permitido (08:00 AM a 08:30 PM)
     if (formData.hora < "08:00" || formData.hora > "20:30") {
       alert("❌ El horario de atención permitido es de 08:00 AM a 08:30 PM. Por favor, verifica la hora seleccionada (asegúrate de haber elegido PM si es por la tarde).");
       return;
@@ -292,17 +309,27 @@ function NuevaCitaForm() {
           </div>
 
           <div className="flex gap-4 pt-6">
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400"
-            >
-              {loading ? 'Agendando...' : 'Crear Cita'}
-            </button>
+            {planVencido ? (
+              <button 
+                type="button"
+                onClick={() => router.push('/planes')}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                🔒 Plan Vencido — Renovar para Agendar
+              </button>
+            ) : (
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="flex-1 bg-black text-white py-4 rounded-2xl font-bold hover:bg-gray-800 transition-all shadow-lg disabled:bg-gray-400 cursor-pointer"
+              >
+                {loading ? 'Agendando...' : 'Crear Cita'}
+              </button>
+            )}
             <button 
               type="button"
               onClick={() => router.back()}
-              className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+              className="px-8 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-all cursor-pointer"
             >
               Cancelar
             </button>

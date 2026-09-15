@@ -1,13 +1,21 @@
 'use client';
 
-import { Pencil, Phone, Plus } from 'lucide-react';
+// Ubicación: frontend_nextjs/app/components/dashboard/AgendaDiaria.js (líneas 3-7)
+import { Pencil, Phone, Plus, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-
 import { useMemo, memo } from 'react';
 import { getFechaHoyLocal } from '@/app/utils/fechas'; 
+import { useUser } from '@/context/UserContext';
 
 const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading }) {
   const router = useRouter();
+  const { user } = useUser();
+
+  const planVencido = !user?.is_admin && (
+    !user?.plan_info || 
+    user?.plan_info?.status !== 'active' || 
+    user?.plan_info?.dias_restantes <= 0
+  );
   
   // 1. Usamos las citas que vienen del Dashboard (o un array vacío por defecto)
   const citas = citasExternas || [];
@@ -41,17 +49,26 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
   // Retorna un array con todas las citas de esa hora, o un array vacío si no hay ninguna
   const getCitasEnHora = (hora) => mapaCitas[hora] || [];
 
+  // Ubicación: frontend_nextjs/app/components/dashboard/AgendaDiaria.js (reemplazar la función enviarWhatsApp completa)
+
   const enviarWhatsApp = (telefono, nombre, hora) => {
-    // 1. Obtener fecha de hoy en formato YYYY-MM-DD
+    // 1. Candado de seguridad si el plan está vencido
+    if (planVencido) {
+      alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para enviar recordatorios por WhatsApp.');
+      router.push('/planes');
+      return;
+    }
+
+    // 2. Obtener fecha de hoy en formato YYYY-MM-DD
     const hoyStr = getFechaHoyLocal();
     
-    // 2. Calcular fecha de mañana de forma segura
+    // 3. Calcular fecha de mañana de forma segura
     const [year, month, day] = hoyStr.split('-').map(Number);
     const mananaObj = new Date(year, month - 1, day + 1);
     const mananaStr = `${mananaObj.getFullYear()}-${String(mananaObj.getMonth() + 1).padStart(2, '0')}-${String(mananaObj.getDate()).padStart(2, '0')}`;
 
-    // 3. Determinar el conector temporal dinámico
-    let conectorTemporal = `el día ${fecha.split('-').reverse().join('/')}`; // Fallback por si es otra fecha
+    // 4. Determinar el conector temporal dinámico
+    let conectorTemporal = `el día ${fecha.split('-').reverse().join('/')}`;
     
     if (fecha === hoyStr) {
       conectorTemporal = "el día de hoy";
@@ -59,22 +76,21 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
       conectorTemporal = "mañana";
     }
 
-    // 4. Formatear el nombre del paciente (Capitalize seguro con tildes y ñ)
+    // 5. Formatear el nombre del paciente
     const nombreFormateado = nombre
       .toLowerCase()
       .split(' ')
-      .filter(Boolean) // Evita fallos si hay espacios dobles accidentales
+      .filter(Boolean)
       .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
       .join(' ');
 
-    // 5. Construir el mensaje personalizado
+    // 6. Construir el mensaje personalizado
     const mensaje = `Hola ${nombreFormateado}, te recordamos tu cita odontológica ${conectorTemporal} a las ${hora}. Me confirmas por favor si puedes asistir.`;
     
-    // 6. Lógica inteligente de teléfono (Soporta locales de 10 dígitos e internacionales con "+")
+    // 7. Lógica inteligente de teléfono
     const telLimpio = telefono?.replace(/\D/g, '') || '';
     const telFinal = (telefono?.startsWith('+') || telLimpio.startsWith('57')) ? telLimpio : `57${telLimpio}`;
 
-    // Mantenemos exactamente tu wa.me original
     window.open(`https://wa.me/${telFinal}?text=${encodeURIComponent(mensaje)}`, '_blank');
   };
 
@@ -156,17 +172,33 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {cita.telefono && (
-                          <button onClick={() => enviarWhatsApp(cita.telefono, cita.paciente_nombre, cita.hora)} className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors">
+                          <button 
+                            onClick={() => enviarWhatsApp(cita.telefono, cita.paciente_nombre, cita.hora)} 
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors cursor-pointer"
+                            title="Enviar recordatorio WhatsApp"
+                          >
                             <Phone size={20} />
                           </button>
                         )}
-                        <button onClick={() => router.push(`/citas/editar/${cita.id}`)} className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors">
+                        <button 
+                          onClick={() => {
+                            if (planVencido) {
+                              alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para editar citas.');
+                              router.push('/planes');
+                              return;
+                            }
+                            router.push(`/citas/editar/${cita.id}`);
+                          }} 
+                          className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                          title="Editar cita"
+                        >
                           <Pencil size={20} />
                         </button>
                       </div>
                     </div>
                   ))
                 ) : (
+                  // Ubicación: frontend_nextjs/app/components/dashboard/AgendaDiaria.js (dentro del map de horarios, rama else)
                   <button 
                     type="button"
                     onClick={() => router.push(`/citas/nueva?fecha=${fecha}&hora=${hora}`)}
