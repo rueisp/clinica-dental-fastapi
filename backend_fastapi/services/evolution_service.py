@@ -22,6 +22,8 @@ async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addre
         return jid_str
 
     numero_limpio = "".join(filter(str.isdigit, jid_str))
+    if not numero_limpio:
+        return jid_str
 
     # 2. Si ya lo tenemos en caché (positivo o normal), devolverlo de inmediato sin llamadas de red
     if numero_limpio in MAPA_LID_CACHE:
@@ -84,8 +86,8 @@ async def configurar_webhook_instancia(instance_name: str, webhook_url: str) -> 
 
 async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dict:
     """
-    Obtiene el QR de la instancia. Si la sesión anterior fue cerrada/desconectada,
-    reinicia la instancia para entregar un código QR fresco inmediatamente.
+    Obtiene el QR de la instancia sin desconectar sesiones activas. Si la sesión anterior
+    fue cerrada/desconectada, reinicia la instancia para entregar un código QR fresco inmediatamente.
     """
     url_create = f"{Config.EVOLUTION_API_URL}/instance/create"
     url_connect = f"{Config.EVOLUTION_API_URL}/instance/connect/{instance_name}"
@@ -102,11 +104,30 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
         try:
             res_connect = await client.get(url_connect, headers=HEADERS)
             data_connect = res_connect.json() if res_connect.content else {}
+            
+            # 1. Protección: Si la sesión ya está abierta y conectada, NO borrar la instancia
+            estado_actual = (
+                data_connect.get("instance", {}).get("state") 
+                or data_connect.get("state") 
+                or data_connect.get("status")
+            )
+            if estado_actual == "open":
+                if webhook_url:
+                    await configurar_webhook_instancia(instance_name, webhook_url)
+                return {
+                    "success": True,
+                    "status": "open",
+                    "qrcode": None,
+                    "pairingCode": None
+                }
+
             qr_base64 = (
                 data_connect.get("base64")
                 or data_connect.get("qrcode", {}).get("base64")
             )
+            pairing_code = data_connect.get("pairingCode")
 
+            # 2. Si no hay QR o falló la conexión previa, reiniciar instancia limpiamente
             if not qr_base64 or res_connect.status_code != 200:
                 print(f"[Evolution API] Reiniciando instancia '{instance_name}' para generar QR nuevo...")
                 await client.delete(url_delete, headers=HEADERS)
@@ -118,6 +139,7 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
                     data_create.get("qrcode", {}).get("base64")
                     or data_create.get("base64")
                 )
+                pairing_code = data_create.get("pairingCode") or pairing_code
 
             if webhook_url:
                 await configurar_webhook_instancia(instance_name, webhook_url)
@@ -127,7 +149,7 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
                     "success": True,
                     "status": "connecting",
                     "qrcode": qr_base64,
-                    "pairingCode": data_connect.get("pairingCode")
+                    "pairingCode": pairing_code
                 }
             else:
                 return {"success": False, "error": "No se pudo obtener el QR de Evolution API."}

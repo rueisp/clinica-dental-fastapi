@@ -1,8 +1,7 @@
 import pytz
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 from database import get_db
@@ -10,6 +9,7 @@ from dependencies.auth import get_current_user
 from models import Usuario, Subscription, Plan
 from utils.auth_utils import verificar_password, hash_password
 from schemas.auth import PasswordUpdate, PerfilUpdate
+from services.bot_engine_service import CACHE_CONFIG_DOCTOR
 
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
@@ -27,12 +27,13 @@ async def get_usuario_actual(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscamos el plan y la suscripción en una sola consulta
-    result = await db.execute(
+    # 1. Buscamos el plan y la suscripción en una sola consulta unificada
+    query = (
         select(Subscription, Plan)
-        .join(Plan, Subscription.plan_type == Plan.nombre)
+        .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
         .where(Subscription.user_id == current_user.id)
     )
+    result = await db.execute(query)
     row = result.first()
     
     ahora_colombia = datetime.now(COLOMBIA_TZ)
@@ -41,11 +42,16 @@ async def get_usuario_actual(
     status = "inactive"
     es_anual = False
     
-    if row:
+    if current_user.is_admin:
+        status = "active"
+        dias_restantes = 999
+        fecha_fin_str = "Sin Vencimiento"
+    elif row:
         sub, plan = row
-        es_anual = plan.duracion_dias == 365
+        if plan:
+            es_anual = plan.duracion_dias == 365
         
-        if sub.current_period_end:
+        if sub and sub.current_period_end:
             db_date = sub.current_period_end
             if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
                 fecha_fin = db_date.astimezone(COLOMBIA_TZ)
@@ -54,7 +60,6 @@ async def get_usuario_actual(
             
             fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
             
-            # Condición binaria estricta de corte
             if fecha_fin <= ahora_colombia:
                 dias_restantes = 0
                 status = "expired"
@@ -65,6 +70,8 @@ async def get_usuario_actual(
         else:
             status = "expired"
 
+    sub_obj, plan_obj = row if row else (None, None)
+
     return {
         "id": str(current_user.id),
         "nombres": current_user.nombres,
@@ -74,18 +81,18 @@ async def get_usuario_actual(
         "email": current_user.email,
         "is_admin": current_user.is_admin,
         "plan_info": {
-            "nombre": plan.nombre if row else "Sin Plan",
+            "nombre": "Administrador" if current_user.is_admin else (plan_obj.nombre if plan_obj else "Sin Plan"),
             "dias_restantes": dias_restantes,
             "fecha_fin": fecha_fin_str,
             "status": status,
             "es_anual": es_anual
         },
         "permissions": {
-            "can_use_odontogram": plan.can_use_odontogram if (row and status == "active") else (True if current_user.is_admin else False),
-            "can_use_multimedia": plan.can_use_multimedia if (row and status == "active") else (True if current_user.is_admin else False),
-            "can_use_voice": plan.can_use_voice if (row and status == "active") else (True if current_user.is_admin else False),
-            "can_export_history": plan.can_export_history if (row and status == "active") else (True if current_user.is_admin else False),
-            "can_use_bot": plan.can_use_bot if (row and status == "active") else (True if current_user.is_admin else False),
+            "can_use_odontogram": True if current_user.is_admin else (plan_obj.can_use_odontogram if (plan_obj and status == "active") else False),
+            "can_use_multimedia": True if current_user.is_admin else (plan_obj.can_use_multimedia if (plan_obj and status == "active") else False),
+            "can_use_voice": True if current_user.is_admin else (plan_obj.can_use_voice if (plan_obj and status == "active") else False),
+            "can_export_history": True if current_user.is_admin else (plan_obj.can_export_history if (plan_obj and status == "active") else False),
+            "can_use_bot": True if current_user.is_admin else (plan_obj.can_use_bot if (plan_obj and status == "active") else False),
         }
     }
 
@@ -162,19 +169,44 @@ async def get_mi_plan_detalle(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
+    if current_user.is_admin:
+        return {
+            "tiene_plan": True,
+            "plan_nombre": "Administrador",
+            "plan_precio": 0,
+            "plan_precio_usd": 0.0,
+            "limite_pacientes_diario": 9999,
+            "fecha_inicio": "Permanente",
+            "fecha_fin": "Sin Vencimiento",
+            "dias_restantes": 999,
+            "porcentaje_progreso": 0,
+            "status": "active",
+            "es_anual": False,
+            "permissions": {
+                "can_use_odontogram": True,
+                "can_use_multimedia": True,
+                "can_use_voice": True,
+                "can_export_history": True,
+                "can_use_bot": True
+            }
+        }
+
+    query = (
         select(Subscription, Plan)
-        .join(Plan, Subscription.plan_type == Plan.nombre)
+        .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
         .where(Subscription.user_id == current_user.id)
     )
+    result = await db.execute(query)
     row = result.first()
     
-    if not row:
+    if not row or not row[0]:
         return {"tiene_plan": False, "mensaje": "Sin suscripción activa"}
     
     sub, plan = row
+    if not plan:
+        return {"tiene_plan": False, "mensaje": "Plan no encontrado en catálogo"}
+
     ahora = datetime.now(COLOMBIA_TZ)
-    
     db_fecha_fin = sub.current_period_end
     if not db_fecha_fin:
         return {
@@ -190,7 +222,6 @@ async def get_mi_plan_detalle(
     else:
         fecha_fin = COLOMBIA_TZ.localize(db_fecha_fin)
 
-    # 1. EVALUACIÓN BINARIA DE EXPIRACIÓN
     if fecha_fin <= ahora:
         dias_restantes = 0
         status_final = "expired"
@@ -200,7 +231,6 @@ async def get_mi_plan_detalle(
         segundos_restantes = (fecha_fin - ahora).total_seconds()
         dias_restantes = max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
         
-        # Cálculo de progreso visual
         fecha_inicio = fecha_fin - timedelta(days=plan.duracion_dias)
         duracion_total = (fecha_fin - fecha_inicio).total_seconds()
         tiempo_transcurrido = (ahora - fecha_inicio).total_seconds()
@@ -244,13 +274,17 @@ async def actualizar_perfil(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Actualiza la información básica y de marca del odontólogo"""
+    """Actualiza la información básica y de marca del odontólogo e invalida caché de bot"""
     current_user.nombres = request.nombres
     current_user.apellidos = request.apellidos
     current_user.nombre_consultorio = request.nombre_consultorio
     current_user.telefono = request.telefono
     
     await db.commit()
+
+    # Invalida caché de configuración del consultorio para reflejo en WhatsApp
+    CACHE_CONFIG_DOCTOR.pop(str(current_user.id), None)
+
     return {"success": True, "message": "Perfil actualizado correctamente"}
 
 @router.put("/cambiar-password")

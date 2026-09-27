@@ -1,13 +1,16 @@
 # backend_fastapi/endpoints/auth.py
+import pytz
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from database import get_db
 from models import Usuario, Plan, Subscription
 from schemas.auth import LoginRequest, TokenResponse, UsuarioCreate
 from utils.auth_utils import verificar_password, hash_password, crear_token_acceso
-from datetime import datetime, timedelta
 from services.bot_engine_service import poblar_plantilla_bot_doctor
+
+COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 router = APIRouter()
 
@@ -16,30 +19,38 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     # 1. Buscamos el usuario siempre en minúsculas
     username_lower = login_data.username.lower()
     result = await db.execute(
-        select(Usuario).where(Usuario.username == username_lower)
+        select(Usuario).where(func.lower(Usuario.username) == username_lower)
     )
     user = result.scalar_one_or_none()
     
     if not user or not verificar_password(login_data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario o contraseña incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    # 2. Buscamos la suscripción del usuario
-    sub_result = await db.execute(
-        select(Subscription).where(Subscription.user_id == user.id)
+    # 2. Buscamos la suscripción y el plan en una sola consulta unificada (Regla 7.E)
+    query_sub = (
+        select(Subscription, Plan)
+        .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
+        .where(Subscription.user_id == user.id)
     )
-    subscription = sub_result.scalar_one_or_none()
+    sub_result = await db.execute(query_sub)
+    row = sub_result.first()
 
-    plan = None
-    if subscription:
-        # Intentamos buscar primero por plan_id (relación moderna)
-        if subscription.plan_id:
-            plan_result = await db.execute(select(Plan).where(Plan.id == subscription.plan_id))
-            plan = plan_result.scalar_one_or_none()
-        
-        # Fallback: Si no tiene plan_id, buscamos por el string plan_type (compatibilidad)
-        if not plan and subscription.plan_type:
-            plan_result = await db.execute(select(Plan).where(Plan.nombre == subscription.plan_type))
-            plan = plan_result.scalar_one_or_none()
+    subscription, plan = row if row else (None, None)
+
+    # 3. Validación estricta de vigencia para no otorgar permisos falsos en login
+    esta_activo = False
+    if user.is_admin:
+        esta_activo = True
+    elif subscription and subscription.status == "active" and subscription.current_period_end:
+        ahora_col = datetime.now(COLOMBIA_TZ)
+        db_fin = subscription.current_period_end
+        fecha_fin = db_fin.astimezone(COLOMBIA_TZ) if getattr(db_fin, "tzinfo", None) else COLOMBIA_TZ.localize(db_fin)
+        if fecha_fin > ahora_col:
+            esta_activo = True
 
     token_data = {"sub": user.username}
     access_token = crear_token_acceso(token_data)
@@ -53,20 +64,21 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
         email=user.email,
         is_admin=user.is_admin,
         permissions={
-            "can_use_odontogram": True if user.is_admin else (plan.can_use_odontogram if plan else False),
-            "can_use_multimedia": True if user.is_admin else (plan.can_use_multimedia if plan else False),
-            "can_use_voice": True if user.is_admin else (plan.can_use_voice if plan else False),
-            "can_export_history": True if user.is_admin else (plan.can_export_history if plan else False),
-            "can_use_bot": True if user.is_admin else (plan.can_use_bot if plan else False), # <--- AGREGAR
+            "can_use_odontogram": True if user.is_admin else (plan.can_use_odontogram if (plan and esta_activo) else False),
+            "can_use_multimedia": True if user.is_admin else (plan.can_use_multimedia if (plan and esta_activo) else False),
+            "can_use_voice": True if user.is_admin else (plan.can_use_voice if (plan and esta_activo) else False),
+            "can_export_history": True if user.is_admin else (plan.can_export_history if (plan and esta_activo) else False),
+            "can_use_bot": True if user.is_admin else (plan.can_use_bot if (plan and esta_activo) else False),
         }
     )
 
 @router.post("/register", response_model=TokenResponse)
 async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Verificar si existe (usando lower)
+    # 1. Verificar si existe usuario o email duplicado
     username_lower = user_data.username.lower()
+    email_lower = user_data.email.lower()
     result = await db.execute(
-        select(Usuario).where((Usuario.username == username_lower) | (Usuario.email == user_data.email))
+        select(Usuario).where((func.lower(Usuario.username) == username_lower) | (func.lower(Usuario.email) == email_lower))
     )
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El nombre de usuario o email ya están registrados")
@@ -75,13 +87,18 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
     plan_result = await db.execute(select(Plan).where(Plan.nombre == 'trial'))
     plan = plan_result.scalar_one_or_none()
 
+    ahora_bogota = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+    fecha_fin_trial = ahora_bogota + timedelta(days=7)
+
     try:
         nuevo_usuario = Usuario(
             username=username_lower,
-            email=user_data.email,
+            email=email_lower,
             password_hash=hash_password(user_data.password),
             nombres=user_data.nombres,
             apellidos=user_data.apellidos or "",
+            nombre_consultorio=user_data.nombre_consultorio,
+            telefono=user_data.telefono,
             is_admin=False
         )
         db.add(nuevo_usuario)
@@ -92,12 +109,14 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
             plan_id=plan.id if plan else None,
             plan_type=plan.nombre if plan else 'trial',
             status="active",
-            current_period_end=datetime.now() + timedelta(days=7)
+            current_period_start=ahora_bogota,
+            current_period_end=fecha_fin_trial
         )
         db.add(nuevo_usuario_plan)
         await db.commit()
         await db.refresh(nuevo_usuario)
-        # Inicializar automáticamente su bot con la plantilla oficial
+
+        # 3. Inicializar automáticamente su bot con la plantilla oficial usando sus datos reales
         await poblar_plantilla_bot_doctor(
             user_id=str(nuevo_usuario.id),
             doctor_nombre=f"{nuevo_usuario.nombres} {nuevo_usuario.apellidos or ''}".strip(),
@@ -121,9 +140,9 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
                 "can_use_multimedia": True if nuevo_usuario.is_admin else (plan.can_use_multimedia if plan else False),
                 "can_use_voice": True if nuevo_usuario.is_admin else (plan.can_use_voice if plan else False),
                 "can_export_history": True if nuevo_usuario.is_admin else (plan.can_export_history if plan else False),
-                "can_use_bot": True if nuevo_usuario.is_admin else (plan.can_use_bot if plan else False), # <--- AGREGAR
+                "can_use_bot": True if nuevo_usuario.is_admin else (plan.can_use_bot if plan else False),
             }
         )
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en registro: {str(e)}")

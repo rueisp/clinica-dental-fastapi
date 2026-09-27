@@ -12,7 +12,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Definimos la URL real del backend directamente para la compilación de Next.js
-ENV NEXT_PUBLIC_API_URL=https://dental-backend-779789369655.us-east1.run.app
+ENV NEXT_PUBLIC_API_URL=https://dental-backend-ps6ikmo65a-ue.a.run.app
 ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN npm run build

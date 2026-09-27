@@ -1,32 +1,34 @@
 # backend_fastapi/config.py
 import os
-from datetime import timedelta
 import cloudinary
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "tu-clave-secreta-de-desarrollo")
+    # 1. Seguridad y Autenticación
+    SECRET_KEY = os.getenv("SECRET_KEY", "tu-clave-secreta-de-desarrollo").strip()
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 120
+    DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
     
-    # Evolution API v2
-    EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "").rstrip("/")
-    EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
+    # 2. Motor de WhatsApp (Evolution API v2 en Hetzner)
+    EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "").strip().rstrip("/")
+    EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "").strip()
 
-    # Supabase
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
+    # 3. Base de Datos Supabase (Postgres & Realtime)
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    SUPABASE_KEY = (os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")).strip()
 
-    # Gemini IA
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    # 4. Inteligencia Artificial (Google Gemini)
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-    # Telegram
-    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-    CHAT_ID = os.getenv("CHAT_ID", "")
+    # 5. Notificaciones de Administración (Telegram)
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+    CHAT_ID = os.getenv("CHAT_ID", "").strip()
 
 def init_cloudinary():
-    """Inicializa la configuración global de Cloudinary"""
+    """Inicializa la configuración global de Cloudinary forzando URLs seguras HTTPS"""
     cloudinary.config(
-        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-        api_key=os.getenv("CLOUDINARY_API_KEY"),
-        api_secret=os.getenv("CLOUDINARY_API_SECRET")
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME", "").strip(),
+        api_key=os.getenv("CLOUDINARY_API_KEY", "").strip(),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET", "").strip(),
+        secure=True
     )

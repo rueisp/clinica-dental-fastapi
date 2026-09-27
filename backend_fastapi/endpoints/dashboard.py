@@ -209,12 +209,11 @@ async def eliminar_cita(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Eliminar una cita (soft delete)"""
+    """Eliminar una cita (soft delete con registro de fecha de borrado)"""
     await verificar_suscripcion_activa(current_user, db)
-    from models import Cita
     
     result = await db.execute(
-        select(Cita).where(Cita.id == cita_id)
+        select(Cita).where(Cita.id == cita_id, Cita.is_deleted == False)
     )
     cita = result.scalar_one_or_none()
     
@@ -224,10 +223,12 @@ async def eliminar_cita(
     if cita.odontologo_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No autorizado")
     
+    colombia_tz = pytz.timezone('America/Bogota')
     cita.is_deleted = True
+    cita.deleted_at = datetime.now(colombia_tz)
     await db.commit()
     
-    return {"success": True, "message": "Cita eliminada"}  
+    return {"success": True, "message": "Cita eliminada"} 
 
 
 # ==================== CITAS CRUD ====================
@@ -300,6 +301,12 @@ async def create_cita(
     
     if not fecha_str or not hora_str:
         raise HTTPException(status_code=400, detail="Fecha y hora son requeridas")
+
+    if not ("08:00" <= hora_str <= "20:30"):
+        raise HTTPException(
+            status_code=400, 
+            detail="El horario permitido de atención es de 08:00 AM a 08:30 PM"
+        )
     
     try:
         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
@@ -328,7 +335,7 @@ async def create_cita(
     return {
         "success": True,
         "message": "Cita creada exitosamente",
-        "cita_id": nueva_cita.id
+        "cita_id": str(nueva_cita.id)
     }
 
 @router.put("/citas/{cita_id}")
@@ -338,25 +345,19 @@ async def update_cita(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Actualizar una cita existente"""
+    """Actualizar una cita existente preservando cambios en pacientes provisionales"""
     await verificar_suscripcion_activa(current_user, db)
     
-    from datetime import datetime
-    
-    # Buscar la cita
-    result = await db.execute(
-        select(Cita).where(
-            Cita.id == cita_id,
-            Cita.is_deleted == False,
-            Cita.odontologo_id == current_user.id
-        )
-    )
+    query = select(Cita).where(Cita.id == cita_id, Cita.is_deleted == False)
+    if not current_user.is_admin:
+        query = query.where(Cita.odontologo_id == current_user.id)
+
+    result = await db.execute(query)
     cita = result.scalar_one_or_none()
     
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     
-    # Actualizar campos (todos con . en lugar de .get)
     if cita_data.fecha:
         try:
             cita.fecha = datetime.strptime(cita_data.fecha, '%Y-%m-%d').date()
@@ -364,18 +365,27 @@ async def update_cita(
             pass
     
     if cita_data.hora:
+        if not ("08:00" <= cita_data.hora <= "20:30"):
+            raise HTTPException(
+                status_code=400, 
+                detail="El horario permitido de atención es de 08:00 AM a 08:30 PM"
+            )
         try:
             cita.hora = datetime.strptime(cita_data.hora, '%H:%M').time()
         except ValueError:
             pass
     
-    # --- CORREGIDO: Este bloque ahora tiene 8 espacios de indentación y se ejecuta siempre ---
     cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo
     cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor
     
-    # Actualizar el ID del paciente si se proporciona uno nuevo
     if cita_data.paciente_id is not None:
-        cita.paciente_id = cita_data.paciente_id
+        cita.paciente_id = UUID(cita_data.paciente_id) if str(cita_data.paciente_id).strip() else None
+
+    # Corrección de pérdida de datos en pacientes provisionales
+    if cita_data.paciente_nombre is not None:
+        cita.nombre_provisional = cita_data.paciente_nombre
+    if cita_data.paciente_telefono is not None:
+        cita.telefono_provisional = cita_data.paciente_telefono
 
     await db.commit()
     
@@ -395,20 +405,7 @@ async def get_home_data(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. VALIDACIÓN DE SUSCRIPCIÓN (Se mantiene igual...)
-    plan_result = await db.execute(
-        select(Subscription).where(
-            Subscription.user_id == current_user.id,
-            Subscription.status == "active"
-        )
-    )
-    user_plan = plan_result.scalar_one_or_none()
-    
-    if not user_plan:
-        raise HTTPException(
-            status_code=403,
-            detail="Usuario sin plan activo. Contacta al administrador para activar tu suscripción."
-        )
+    await verificar_suscripcion_activa(current_user, db)
     
     # 2. CONFIGURACIÓN DE FECHA LOCAL (Colombia)
     colombia_tz = pytz.timezone('America/Bogota')

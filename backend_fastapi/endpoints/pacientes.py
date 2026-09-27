@@ -73,6 +73,7 @@ async def crear_paciente(
     db: AsyncSession = Depends(get_db)
 ):
     await verificar_suscripcion_activa(current_user, db)  # Verificar que el usuario tenga una suscripción activa antes de permitir crear pacientes
+    await verificar_limite_pacientes(current_user, db)
     
     # 1. Verificar documento duplicado
     if documento:
@@ -289,7 +290,7 @@ async def listar_papelera(
         "success": True,
         "pacientes": [
             {
-                "id": p.id,
+                "id": str(p.id),
                 "nombres": p.nombres,
                 "apellidos": p.apellidos,
                 "documento": p.documento,
@@ -365,6 +366,49 @@ async def exportar_backup_excel(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.get("/buscar")
+async def buscar_pacientes_autocomplete(
+    q: str,
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Busca pacientes por nombre para autocompletado (máximo 10 resultados)"""
+    
+    # ✅ Aplicamos la misma lógica: convertimos espacios en comodines %
+    search_term = f"%{q.replace(' ', '%')}%"
+    
+    query = select(Paciente).where(
+        Paciente.is_deleted == False,
+        or_(
+            Paciente.nombres.ilike(search_term),
+            Paciente.apellidos.ilike(search_term),
+            Paciente.documento.ilike(search_term), # ✅ Agregamos búsqueda por documento aquí también
+            func.concat(Paciente.nombres, ' ', Paciente.apellidos).ilike(search_term)
+        )
+    )
+    
+    if not current_user.is_admin:
+        query = query.where(Paciente.odontologo_id == current_user.id)
+    
+    query = query.limit(10)
+    
+    result = await db.execute(query)
+    pacientes = result.scalars().all()
+    
+    return {
+        "pacientes": [
+            {
+                "id": str(p.id),
+                "nombres": p.nombres,
+                "apellidos": p.apellidos,
+                "nombre_completo": f"{p.nombres} {p.apellidos}",
+                "telefono": p.telefono,
+                "documento": p.documento
+            }
+            for p in pacientes
+        ]
+    }
 
 @router.get("/{paciente_id}")
 async def get_paciente(
@@ -597,7 +641,7 @@ async def actualizar_paciente(
     return {
         "success": True,
         "message": "Paciente actualizado exitosamente",
-        "paciente_id": paciente.id
+        "paciente_id": str(paciente.id)
     }
 
 @router.delete("/{paciente_id}")
@@ -623,9 +667,10 @@ async def eliminar_paciente(
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este paciente")
     
-    # Soft delete
+    # Soft delete con hora local de Colombia
+    colombia_tz = pytz.timezone('America/Bogota')
     paciente.is_deleted = True
-    paciente.deleted_at = datetime.utcnow()
+    paciente.deleted_at = datetime.now(colombia_tz).replace(tzinfo=None)
 
     # ✅ OCULTAR CITAS: Para que no aparezcan en la agenda
     await db.execute(
@@ -732,87 +777,31 @@ async def eliminar_permanente(
 
 # endpoints/pacientes.py (agregar este endpoint)
 
-@router.get("/buscar")
-async def buscar_pacientes_autocomplete(
-    q: str,
-    current_user: Usuario = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Busca pacientes por nombre para autocompletado (máximo 10 resultados)"""
-    
-    # ✅ Aplicamos la misma lógica: convertimos espacios en comodines %
-    search_term = f"%{q.replace(' ', '%')}%"
-    
-    query = select(Paciente).where(
-        Paciente.is_deleted == False,
-        or_(
-            Paciente.nombres.ilike(search_term),
-            Paciente.apellidos.ilike(search_term),
-            Paciente.documento.ilike(search_term), # ✅ Agregamos búsqueda por documento aquí también
-            func.concat(Paciente.nombres, ' ', Paciente.apellidos).ilike(search_term)
-        )
-    )
-    
-    if not current_user.is_admin:
-        query = query.where(Paciente.odontologo_id == current_user.id)
-    
-    query = query.limit(10)
-    
-    result = await db.execute(query)
-    pacientes = result.scalars().all()
-    
-    return {
-        "pacientes": [
-            {
-                "id": str(p.id),
-                "nombres": p.nombres,
-                "apellidos": p.apellidos,
-                "nombre_completo": f"{p.nombres} {p.apellidos}",
-                "telefono": p.telefono,
-                "documento": p.documento
-            }
-            for p in pacientes
-        ]
-    }
-
 @router.get("/{paciente_id}/exportar-word")
 async def exportar_paciente_word(
     paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # --- BLOQUEO POR VENCIMIENTO ---
-    # Esta línea revisa si el plan está 'active'. Si venció o es trial de > 7 días,
-    # lanzará un error 403 automáticamente y detendrá la descarga.
-    await verificar_suscripcion_activa(current_user, db)
+    """Exporta la historia clínica completa a Word validando el permiso del plan en memoria"""
+    await verificar_permiso("can_export_history", current_user, db)
     
     # 1. Buscamos el paciente e incluimos sus evoluciones
     result = await db.execute(
         select(Paciente)
         .options(selectinload(Paciente.evoluciones))
-        .where(Paciente.id == paciente_id)
+        .where(Paciente.id == paciente_id, Paciente.is_deleted == False)
     )
     paciente = result.scalar_one_or_none()
 
     if not paciente:
         raise HTTPException(status_code=404, detail="Paciente no encontrado")
 
-    # 2. Verificamos permisos de pertenencia
+    # 2. Verificamos pertenencia (solo el doctor dueño o el admin pueden exportar)
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para exportar este paciente")
 
-    # 3. Validar si el plan tiene el permiso de exportar (Word es para todos los activos)
-    # Buscamos el permiso específico en la tabla planes
-    res_sub = await db.execute(
-        select(Plan).join(Subscription, Subscription.plan_type == Plan.nombre)
-        .where(Subscription.user_id == current_user.id)
-    )
-    plan_info = res_sub.scalar_one_or_none()
-    
-    if not plan_info or not plan_info.can_export_history:
-        raise HTTPException(status_code=403, detail="Tu plan no permite exportar historias clínicas")
-
-    # 4. Generación y retorno del archivo (Tu código actual...)
+    # 3. Generación y retorno del archivo Word
     buffer = generar_historia_clinica_word(paciente, current_user)
     filename = f"Historia_{paciente.apellidos}_{paciente.nombres}.docx".replace(" ", "_")
     

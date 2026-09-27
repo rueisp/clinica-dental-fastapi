@@ -1,13 +1,14 @@
 import os
-from dotenv import load_dotenv
+import html
 import httpx
 import logging
+from dotenv import load_dotenv
 
 # Forzamos la carga del .env
 load_dotenv()
 
 async def enviar_alerta_pago_telegram(doctor_nombre: str, plan_nombre: str, referencia: str):
-    """Envía una notificación al administrador cuando se reporta un pago usando HTML"""
+    """Envía una notificación al administrador cuando se reporta un pago usando HTML protegido contra caracteres especiales"""
     
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -16,12 +17,16 @@ async def enviar_alerta_pago_telegram(doctor_nombre: str, plan_nombre: str, refe
         logging.error("⚠️ Telegram Token o CHAT_ID no configurados en el .env")
         return
 
-    # Usamos etiquetas HTML <b> en lugar de asteriscos para evitar errores con guiones bajos
+    # Escapamos los textos dinámicos para evitar que caracteres como '&', '<', '>' rompan el parser HTML de Telegram
+    doctor_seguro = html.escape(str(doctor_nombre or "Doctor"))
+    plan_seguro = html.escape(str(plan_nombre or "Plan Desconocido"))
+    referencia_segura = html.escape(str(referencia or "Sin referencia"))
+
     mensaje = (
         f"🔔 <b>NUEVO PAGO REPORTADO</b>\n\n"
-        f"👤 <b>Doctor:</b> {doctor_nombre}\n"
-        f"📦 <b>Plan:</b> {plan_nombre}\n"
-        f"🔢 <b>Ref:</b> {referencia}\n\n"
+        f"👤 <b>Doctor:</b> {doctor_seguro}\n"
+        f"📦 <b>Plan:</b> {plan_seguro}\n"
+        f"🔢 <b>Ref:</b> {referencia_segura}\n\n"
         f"👉 Revisa el Panel de Control para activar."
     )
 
@@ -32,11 +37,11 @@ async def enviar_alerta_pago_telegram(doctor_nombre: str, plan_nombre: str, refe
             response = await client.post(url, json={
                 "chat_id": chat_id,
                 "text": mensaje,
-                "parse_mode": "HTML"  # <--- CAMBIADO A HTML PARA EVITAR ERRORES
+                "parse_mode": "HTML"
             })
             
             if response.status_code == 200:
-                print(f"🚀 Telegram enviado con éxito a las {chat_id}")
+                print(f"🚀 Telegram enviado con éxito al chat {chat_id}")
             else:
                 print(f"❌ Telegram rechazó el mensaje: {response.text}")
                 

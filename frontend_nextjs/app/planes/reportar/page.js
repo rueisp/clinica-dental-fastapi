@@ -15,53 +15,36 @@ function ReportarPagoForm() {
     const [imageUrl, setImageUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [enviado, setEnviado] = useState(false);
-    const [copiado, setCopiado] = useState(false);
 
-    // --- ESTADOS PARA MONEDA Y PAYPAL ---
+    // Moneda seleccionada en el catálogo (COP o USD)
     const moneda = searchParams.get('moneda') || 'COP';
 
-    // --- CONSTANTES DE DATOS DE PAGO ---
-    const correoPaypal = "cloudentapp.cliente@gmail.com";
+    // Datos oficiales de recaudo
     const cuentaColombia = "3147953756";
-    const [copiadoPaypal, setCopiadoPaypal] = useState(false);
+    const binanceUID = "281180273";
+    const textoRemesa = "Banco: Nequi / Bancolombia\nTitular: Rueis Pitre\nCédula: 1235250806\nCelular: +57 3147953756";
+
+    // Estados de confirmación de copiado
     const [copiadoColombia, setCopiadoColombia] = useState(false);
+    const [copiadoBinance, setCopiadoBinance] = useState(false);
+    const [copiadoRemesa, setCopiadoRemesa] = useState(false);
 
-    const handleCopiarColombia = () => {
-        // Fallback robusto para entornos HTTP locales y dispositivos móviles
+    const copiarAlPortapapeles = (texto, setEstado) => {
         const textArea = document.createElement("textarea");
-        textArea.value = cuentaColombia;
+        textArea.value = texto;
         textArea.style.position = "fixed";
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
         try {
             document.execCommand('copy');
-            setCopiadoColombia(true);
-            setTimeout(() => setCopiadoColombia(false), 2000);
+            setEstado(true);
+            setTimeout(() => setEstado(false), 2000);
         } catch (err) {
-            console.error('Error al copiar número de pago', err);
+            console.error('Error al copiar:', err);
         }
         document.body.removeChild(textArea);
     };
-
-    const handleCopiarPaypal = () => {
-        // Fallback robusto para entornos HTTP locales y dispositivos móviles
-        const textArea = document.createElement("textarea");
-        textArea.value = correoPaypal;
-        textArea.style.position = "fixed";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            setCopiadoPaypal(true);
-            setTimeout(() => setCopiadoPaypal(false), 2000);
-        } catch (err) {
-            console.error('Error al copiar correo de PayPal', err);
-        }
-        document.body.removeChild(textArea);
-    };
-
 
     const handleUploadImage = async (e) => {
         const file = e.target.files[0];
@@ -126,6 +109,98 @@ function ReportarPagoForm() {
         );
     }
 
+    // Definición de las 3 tarjetas de pago
+    const tarjetaColombia = (
+        <div key="colombia" className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/40 transition-colors">
+            <div className="space-y-1">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <span>💵</span> Nequi / Bancolombia / Llave Bre-B (Colombia)
+                </h3>
+                <p className="text-xs text-gray-500">
+                    Transfiere sin comisiones desde cualquier banco o billetera colombiana al número:
+                </p>
+                <p className="text-sm text-green-700 font-mono font-bold pt-1">{cuentaColombia}</p>
+            </div>
+            <button
+                type="button"
+                onClick={() => copiarAlPortapapeles(cuentaColombia, setCopiadoColombia)}
+                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                    copiadoColombia 
+                        ? 'bg-green-50 border-green-200 text-green-600' 
+                        : 'bg-black hover:bg-gray-800 text-white shadow-md active:scale-95'
+                }`}
+            >
+                {copiadoColombia ? <Check size={14} /> : <Copy size={14} />}
+                {copiadoColombia ? '¡COPIADO!' : 'COPIAR NÚMERO'}
+            </button>
+        </div>
+    );
+
+    const tarjetaBinance = (
+        <div key="binance" className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/40 transition-colors">
+            <div className="space-y-1">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    🪙 Binance Pay (USDT / Dólar Digital - 0% Comisión)
+                </h3>
+                <p className="text-xs text-gray-500">
+                    Envía en USDT instantáneamente a través de Binance Pay ingresando nuestro UID:
+                </p>
+                <div className="pt-1 flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Binance UID:</span>
+                    <span className="text-sm text-yellow-600 font-mono font-bold">{binanceUID}</span>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={() => copiarAlPortapapeles(binanceUID, setCopiadoBinance)}
+                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                    copiadoBinance 
+                        ? 'bg-green-50 border-green-200 text-green-600' 
+                        : 'bg-yellow-500 hover:bg-yellow-600 text-black shadow-md active:scale-95'
+                }`}
+            >
+                {copiadoBinance ? <Check size={14} /> : <Copy size={14} />}
+                {copiadoBinance ? '¡COPIADO!' : 'COPIAR UID'}
+            </button>
+        </div>
+    );
+
+    const tarjetaRemesaLatAm = (
+        <div key="remesa" className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-gray-50/40 transition-colors">
+            <div className="space-y-2 flex-1">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    🌎 Transferencia Local desde Latinoamérica (Soles, Dólares, Pesos)
+                </h3>
+                <p className="text-xs text-gray-500">
+                    Paga en tu moneda local usando <strong>Global66, Western Union, Remitly o Ria</strong> hacia nuestra cuenta en Colombia:
+                </p>
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs space-y-1 text-gray-700">
+                    <p>• <strong>Banco / Billetera:</strong> Nequi / Bancolombia (Colombia)</p>
+                    <p>• <strong>Titular:</strong> Rueis Pitre</p>
+                    <p>• <strong>Cédula de Ciudadanía:</strong> 1235250806</p>
+                    <p>• <strong>Celular / Cuenta:</strong> +57 3147953756</p>
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={() => copiarAlPortapapeles(textoRemesa, setCopiadoRemesa)}
+                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
+                    copiadoRemesa 
+                        ? 'bg-green-50 border-green-200 text-green-600' 
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-95'
+                }`}
+            >
+                {copiadoRemesa ? <Check size={14} /> : <Copy size={14} />}
+                {copiadoRemesa ? '¡COPIADO!' : 'COPIAR DATOS'}
+            </button>
+        </div>
+    );
+
+    // Ordenamiento dinámico según moneda
+    const listaTarjetas = moneda === 'USD' 
+        ? [tarjetaBinance, tarjetaRemesaLatAm, tarjetaColombia]
+        : [tarjetaColombia, tarjetaBinance, tarjetaRemesaLatAm];
+
     return (
         <div className="min-h-screen bg-gray-50 py-12 px-4">
             <div className="max-w-2xl mx-auto">
@@ -135,7 +210,9 @@ function ReportarPagoForm() {
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="bg-black p-6 text-white">
-                        <h1 className="text-2xl font-bold">Reportar Pago: {planNombre}</h1>
+                        <h1 className="text-2xl font-bold">
+                            Reportar Pago: {planNombre.replace(/_/g, ' ').toUpperCase()}
+                        </h1>
                         <p className="opacity-90">Completa los datos para activar tu suscripción.</p>
                     </div>
 
@@ -146,117 +223,12 @@ function ReportarPagoForm() {
                                     <CreditCard size={20} className="text-gray-600" /> Métodos de Pago Disponibles
                                 </h2>
                                 <p className="text-xs text-gray-500 mt-1">
-                                    Realiza tu pago de forma segura y reporta el comprobante abajo para activar tu plan.
+                                    Realiza tu pago por el medio más cómodo para ti y reporta el comprobante abajo.
                                 </p>
                             </div>
                             
                             <div className="divide-y divide-gray-100">
-                                {/* Renderizado condicional del orden según la moneda */}
-                                {moneda === 'USD' ? (
-                                    <>
-                                        {/* 1. PayPal (Primero si es USD) */}
-                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
-                                            <div className="space-y-1">
-                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    🌐 PayPal (Dólares / Internacional)
-                                                </h3>
-                                                <p className="text-xs text-gray-500">
-                                                    Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
-                                                </p>
-                                                <p className="text-sm text-blue-600 font-semibold pt-1 break-all">{correoPaypal}</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleCopiarPaypal}
-                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
-                                                    copiadoPaypal 
-                                                        ? 'bg-green-50 border-green-200 text-green-600' 
-                                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-95'
-                                                }`}
-                                            >
-                                                {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
-                                                {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
-                                            </button>
-                                        </div>
-
-                                        {/* 2. Colombia (Segundo si es USD) */}
-                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
-                                            <div className="space-y-1">
-                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    📲 Llave Bre-B / Nequi / Bancolombia (Colombia)
-                                                </h3>
-                                                <p className="text-xs text-gray-500">
-                                                    Transfiere desde cualquier banco o billetera mediante Llave Bre-B o Nequi al número:
-                                                </p>
-                                                <p className="text-sm text-green-700 font-mono font-bold pt-1">{cuentaColombia}</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleCopiarColombia}
-                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
-                                                    copiadoColombia 
-                                                        ? 'bg-green-50 border-green-200 text-green-600' 
-                                                        : 'bg-black hover:bg-gray-800 text-white shadow-md active:scale-95'
-                                                }`}
-                                            >
-                                                {copiadoColombia ? <Check size={14} /> : <Copy size={14} />}
-                                                {copiadoColombia ? '¡COPIADO!' : 'COPIAR NÚMERO'}
-                                            </button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* 1. Colombia (Primero si es COP) */}
-                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
-                                            <div className="space-y-1">
-                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    📲 Llave Bre-B / Nequi / Bancolombia (Colombia)
-                                                </h3>
-                                                <p className="text-xs text-gray-500">
-                                                    Transfiere desde cualquier banco o billetera mediante Llave Bre-B o Nequi al número:
-                                                </p>
-                                                <p className="text-sm text-green-700 font-mono font-bold pt-1">{cuentaColombia}</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleCopiarColombia}
-                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
-                                                    copiadoColombia 
-                                                        ? 'bg-green-50 border-green-200 text-green-600' 
-                                                        : 'bg-black hover:bg-gray-800 text-white shadow-md active:scale-95'
-                                                }`}
-                                            >
-                                                {copiadoColombia ? <Check size={14} /> : <Copy size={14} />}
-                                                {copiadoColombia ? '¡COPIADO!' : 'COPIAR NÚMERO'}
-                                            </button>
-                                        </div>
-
-                                        {/* 2. PayPal (Segundo si es COP) */}
-                                        <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/30 transition-colors">
-                                            <div className="space-y-1">
-                                                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                                                    🌐 PayPal (Dólares / Internacional)
-                                                </h3>
-                                                <p className="text-xs text-gray-500">
-                                                    Envía tu pago de forma segura en dólares desde cualquier país a nuestra cuenta de PayPal:
-                                                </p>
-                                                <p className="text-sm text-blue-600 font-semibold pt-1 break-all">{correoPaypal}</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleCopiarPaypal}
-                                                className={`sm:self-center px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shrink-0 min-w-[140px] cursor-pointer ${
-                                                    copiadoPaypal 
-                                                        ? 'bg-green-50 border-green-200 text-green-600' 
-                                                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:scale-95'
-                                                }`}
-                                            >
-                                                {copiadoPaypal ? <Check size={14} /> : <Copy size={14} />}
-                                                {copiadoPaypal ? '¡COPIADO!' : 'COPIAR CORREO'}
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
+                                {listaTarjetas}
                             </div>
                         </div>
 
@@ -265,13 +237,13 @@ function ReportarPagoForm() {
                                 <div>
                                     <label className="block text-sm font-bold mb-2">Monto Pagado</label>
                                     <input 
-                                        type="number" placeholder="Ej: 30000" required
+                                        type="number" step="any" placeholder="Ej: 30000 o 10" required
                                         value={monto} onChange={(e) => setMonto(e.target.value)}
                                         className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold mb-2">Referencia / Celular</label>
+                                    <label className="block text-sm font-bold mb-2">Referencia / Celular / Hash</label>
                                     <input 
                                         type="text" placeholder="Número de comprobante" required
                                         value={referencia} onChange={(e) => setReferencia(e.target.value)}

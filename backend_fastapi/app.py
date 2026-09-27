@@ -1,24 +1,35 @@
-# app.py
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import os
+# backend_fastapi/app.py
 from dotenv import load_dotenv
-from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios, whatsapp, bot_config
 
-# 1. Cargar el entorno al puro inicio
+# 1. Cargar variables de entorno al puro inicio antes de cualquier módulo interno
 load_dotenv()
 
-# 2. IMPORTANTE: Inicializar servicios externos
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from config import init_cloudinary
-init_cloudinary() # <--- Al llamar a la función, el linter ya no marcará error
 
-# 3. Luego importar los endpoints
-from endpoints import dashboard, pacientes, evoluciones, pagos, auth, planes, usuarios
+# 2. Inicializar servicios externos globales
+init_cloudinary()
+
+# 3. Importación limpia y única de los 9 controladores de endpoints
+from endpoints import (
+    auth,
+    planes,
+    dashboard,
+    pacientes,
+    evoluciones,
+    pagos,
+    usuarios,
+    whatsapp,
+    bot_config
+)
 
 app = FastAPI(title="Clínica Dental API", version="1.0.0")
 
-# Configuración de CORS Restringida (Soporta IPs locales dinámicas para pruebas en móvil)
+# 4. Configuración de CORS Restringida (Soporta producción, dominios propios y pruebas móviles en red local)
 origins = [
+    "https://cloudentapp.net",
+    "https://www.cloudentapp.net",
     "https://frontend-nextjs-779789369655.us-east1.run.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -27,13 +38,13 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"http://192\.168\.\d+\.\d+:3000", # Permite cualquier IP local (ej. 192.168.1.8, 192.168.1.10, etc.)
+    allow_origin_regex=r"http://192\.168\.\d+\.\d+:3000",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Inclusión de rutas (una sola vez por módulo)
+# 5. Inclusión de rutas oficiales
 app.include_router(auth.router, prefix="/api/auth", tags=["Autenticación"])
 app.include_router(planes.router, prefix="/api/planes", tags=["Planes"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])

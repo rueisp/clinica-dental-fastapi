@@ -107,12 +107,45 @@ async def crear_pago(
         )
 
 @router.get("/{id}", response_model=PagoResponse)
-async def obtener_pago(id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PagoClinico).where(PagoClinico.id == id))
+async def obtener_pago(
+    id: uuid.UUID,
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Consulta un pago clínico por su UUID formateando fecha y monto de forma segura"""
+    query = select(PagoClinico).where(PagoClinico.id == id)
+    if not current_user.is_admin:
+        query = query.where(PagoClinico.odontologo_id == current_user.id)
+
+    result = await db.execute(query)
     pago = result.scalar_one_or_none()
     if not pago:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    return pago
+        raise HTTPException(status_code=404, detail="Pago no encontrado o no tienes permiso")
+    
+    fecha_local = pago.fecha
+    if isinstance(fecha_local, datetime):
+        fecha_local = fecha_local.astimezone(COLOMBIA_TZ).date()
+    elif isinstance(fecha_local, str):
+        try:
+            fecha_local = datetime.strptime(fecha_local, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    return PagoResponse(
+        id=pago.id,
+        codigo=pago.codigo,
+        paciente_id=pago.paciente_id,
+        paciente_nombre=pago.paciente_nombre,
+        fecha=fecha_local,
+        hora=pago.hora,
+        monto=float(pago.monto),
+        metodo_pago=pago.metodo_pago,
+        concepto=pago.concepto,
+        observacion=pago.observacion,
+        telefono=pago.telefono,
+        es_rapido=pago.es_rapido,
+        created_at=pago.fecha if isinstance(pago.fecha, datetime) else None
+    )
 
 # En endpoints/pagos.py
 
@@ -225,11 +258,13 @@ async def eliminar_pago(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    # Buscamos el pago y verificamos que pertenezca al odontólogo actual
-    query = select(PagoClinico).where(
-        PagoClinico.id == id, 
-        PagoClinico.odontologo_id == current_user.id
-    )
+    """Elimina un recibo clínico verificando suscripción y propiedad"""
+    await verificar_suscripcion_activa(current_user, db)
+
+    query = select(PagoClinico).where(PagoClinico.id == id)
+    if not current_user.is_admin:
+        query = query.where(PagoClinico.odontologo_id == current_user.id)
+
     result = await db.execute(query)
     pago = result.scalar_one_or_none()
 

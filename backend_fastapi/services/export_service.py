@@ -2,6 +2,7 @@ from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from io import BytesIO
+from datetime import datetime
 
 def generar_historia_clinica_word(paciente, odontologo):
     doc = Document()
@@ -40,21 +41,24 @@ def generar_historia_clinica_word(paciente, odontologo):
     # --- SECCIÓN 1: DATOS PERSONALES ---
     doc.add_heading('1. Información Personal', level=2)
     tabla_pers = doc.add_table(rows=0, cols=2)
-    tabla_pers.style = 'Table Grid' # <--- Agrega esto
+    tabla_pers.style = 'Table Grid'
 
     fecha_nac = paciente.fecha_nacimiento.strftime('%d/%m/%Y') if paciente.fecha_nacimiento else ""
+    
+    # Combinar dirección con barrio si existe
+    direccion_completa = str(paciente.direccion or "")
+    if paciente.barrio:
+        direccion_completa = f"{direccion_completa} (B. {paciente.barrio})".strip()
 
-    agregar_fila_datos(tabla_pers, "Paciente", f"{paciente.nombres} {paciente.apellidos}", "Identificación", f"{paciente.tipo_documento or ''} {paciente.documento or ''}")
-    agregar_fila_datos(tabla_pers, "F. Nacimiento", fecha_nac, "Edad/Sexo", f"{paciente.edad or ''} años / {paciente.sexo or ''}")
+    agregar_fila_datos(tabla_pers, "Paciente", f"{paciente.nombres} {paciente.apellidos or ''}".strip(), "Identificación", f"{paciente.tipo_documento or ''} {paciente.documento or ''}".strip())
+    agregar_fila_datos(tabla_pers, "F. Nacimiento", fecha_nac, "Edad/Sexo", f"{paciente.edad or ''} años / {paciente.sexo or ''}".strip())
     agregar_fila_datos(tabla_pers, "Ocupación", paciente.ocupacion, "Teléfono", paciente.telefono)
-    agregar_fila_datos(tabla_pers, "Email", paciente.email, "Dirección", paciente.direccion)
-
+    agregar_fila_datos(tabla_pers, "Email", paciente.email, "Dirección", direccion_completa)
 
     # --- SECCIÓN 2: ANAMNESIS Y ANTECEDENTES ---
     h2 = doc.add_heading('2. Anamnesis y Antecedentes', level=2)
     h2.paragraph_format.space_before = Pt(8)
     
-    # Usamos una tabla de una sola columna para textos largos (Motivo, Enfermedad, etc.)
     tabla_clin = doc.add_table(rows=0, cols=1)
     tabla_clin.style = 'Table Grid'
 
@@ -76,11 +80,14 @@ def generar_historia_clinica_word(paciente, odontologo):
     agregar_bloque_texto("Cepillado Dental", paciente.cepillado_dental)
     agregar_bloque_texto("Observaciones Generales", paciente.observaciones)
 
-    # --- SECCIÓN 3: EVOLUCIONES ---
+    # --- SECCIÓN 3: EVOLUCIONES (Filtrando eliminadas y protegiendo fechas) ---
     h3 = doc.add_heading('3. Evoluciones Clínicas', level=2)
     h3.paragraph_format.space_before = Pt(8)
 
-    evoluciones_ordenadas = sorted(paciente.evoluciones, key=lambda x: x.fecha, reverse=True)
+    # 1. Ignorar notas en papelera
+    evoluciones_activas = [ev for ev in (paciente.evoluciones or []) if not getattr(ev, "is_deleted", False)]
+    # 2. Ordenar cronológicamente descendente
+    evoluciones_ordenadas = sorted(evoluciones_activas, key=lambda x: x.fecha or datetime.min, reverse=True)
 
     if not evoluciones_ordenadas:
         p = doc.add_paragraph()
@@ -91,11 +98,12 @@ def generar_historia_clinica_word(paciente, odontologo):
             p = doc.add_paragraph()
             p.paragraph_format.space_after = Pt(1)
             
-            run_fecha = p.add_run(f"{ev.fecha.strftime('%d/%m/%Y %H:%M')} - ")
+            fecha_ev_str = ev.fecha.strftime('%d/%m/%Y %H:%M') if ev.fecha else "Fecha no registrada"
+            run_fecha = p.add_run(f"{fecha_ev_str} - ")
             run_fecha.bold = True
             run_fecha.font.size = Pt(8.5)
             
-            run_desc = p.add_run(ev.descripcion)
+            run_desc = p.add_run(ev.descripcion or "")
             run_desc.font.size = Pt(8.5)
             p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
@@ -104,12 +112,11 @@ def generar_historia_clinica_word(paciente, odontologo):
     firma_p = doc.add_paragraph()
     firma_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     
-    # Limpiamos y validamos los campos del perfil del odontólogo
     consultorio = (odontologo.nombre_consultorio or "").strip()
-    nombre_doctor = f"Dr(a). {odontologo.nombres} {odontologo.apellidos}".strip()
+    apellidos_doc = odontologo.apellidos or ""
+    nombre_doctor = f"Dr(a). {odontologo.nombres} {apellidos_doc}".strip()
     telefono = (odontologo.telefono or "").strip()
 
-    # Si tiene consultorio, mostramos "Consultorio - Dr. Nombre" para que salgan ambos
     if consultorio:
         linea_nombre = f"{consultorio}\n{nombre_doctor}"
     else:
@@ -117,14 +124,13 @@ def generar_historia_clinica_word(paciente, odontologo):
 
     linea_contacto = f"Tel: {telefono}" if telefono else ""
     
-    # Construimos la firma final evitando saltos de línea vacíos
     texto_firma = f"__________________________\n{linea_nombre}"
     if linea_contacto:
         texto_firma += f"\n{linea_contacto}"
 
-    run_firma = firma_p.add_run(texto_firma)
+    firma_p.add_run(texto_firma)
 
-    # Ajustar estilos de los Headings para que sean más pequeños
+    # Ajustar estilos de los Headings
     for paragraph in doc.paragraphs:
         if paragraph.style.name.startswith('Heading 1'):
             for run in paragraph.runs: run.font.size = Pt(14)

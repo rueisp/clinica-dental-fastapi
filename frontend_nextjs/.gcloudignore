@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+.gitignore
+node_modules/
+.next/
+out/
+build/
+.env*
+repomix-output.xml
+*.pem
+.DS_Store
+Thumbs.db

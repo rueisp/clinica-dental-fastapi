@@ -44,7 +44,10 @@ async def get_evoluciones(
     
     result = await db.execute(
         select(Evolucion)
-        .where(Evolucion.paciente_id == paciente_id)
+        .where(
+            Evolucion.paciente_id == paciente_id,
+            Evolucion.is_deleted == False
+        )
         .order_by(desc(Evolucion.fecha))
     )
     evoluciones = result.scalars().all()
@@ -71,6 +74,9 @@ async def create_evolucion(
     db: AsyncSession = Depends(get_db)
 ):
     await verificar_suscripcion_activa(current_user, db)
+
+    if not data.descripcion or not data.descripcion.strip():
+        raise HTTPException(400, "La descripción de la evolución no puede estar vacía")
 
     result = await db.execute(
         select(Paciente).where(
@@ -112,25 +118,32 @@ async def create_evolucion(
         }
     }
 
-# 3. Editar y Eliminar (Cambiado int a UUID en IDs)
 @router.put("/{evolucion_id}")
 async def update_evolucion(
-    evolucion_id: UUID, # <--- CORREGIDO
+    evolucion_id: UUID,
     data: EvolucionUpdate,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     await verificar_suscripcion_activa(current_user, db)
 
-    result = await db.execute(select(Evolucion).where(Evolucion.id == evolucion_id))
+    if not data.descripcion or not data.descripcion.strip():
+        raise HTTPException(400, "La descripción de la evolución no puede estar vacía")
+
+    result = await db.execute(
+        select(Evolucion).where(
+            Evolucion.id == evolucion_id,
+            Evolucion.is_deleted == False
+        )
+    )
     evolucion = result.scalar_one_or_none()
     if not evolucion:
-        raise HTTPException(404, "Evolución no encontrada")
+        raise HTTPException(404, "Evolución no encontrada o ya eliminada")
     
     if not current_user.is_admin and evolucion.odontologo_id != current_user.id:
         raise HTTPException(403, "No autorizado")
     
-    evolucion.descripcion = data.descripcion
+    evolucion.descripcion = data.descripcion.strip()
     await db.commit()
     return {"success": True, "message": "Evolución actualizada"}
 
@@ -138,28 +151,29 @@ async def update_evolucion(
 
 @router.delete("/{evolucion_id}")
 async def delete_evolucion(
-    evolucion_id: UUID, # IMPORTANTE: Cambie int por UUID
+    evolucion_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     await verificar_suscripcion_activa(current_user, db)
     
-    # 1. Buscar la evolución
     result = await db.execute(
-        select(Evolucion).where(Evolucion.id == evolucion_id)
+        select(Evolucion).where(
+            Evolucion.id == evolucion_id,
+            Evolucion.is_deleted == False
+        )
     )
     evolucion = result.scalar_one_or_none()
 
     if not evolucion:
-        raise HTTPException(404, "Evolución no encontrada")
+        raise HTTPException(404, "Evolución no encontrada o ya eliminada")
 
-    # 2. Verificar que usted es el dueño (Seguridad)
     if not current_user.is_admin and evolucion.odontologo_id != current_user.id:
         raise HTTPException(403, "No autorizado para eliminar esta nota")
 
-    # 3. Aplicar Borrado Suave (Soft Delete)
+    colombia_tz = pytz.timezone('America/Bogota')
     evolucion.is_deleted = True
-    evolucion.deleted_at = datetime.now() # O su lógica de Bogotá
+    evolucion.deleted_at = datetime.now(colombia_tz)
     
     await db.commit()
     return {"success": True, "message": "Evolución movida a la papelera"}

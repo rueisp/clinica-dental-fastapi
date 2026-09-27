@@ -1,29 +1,29 @@
+# backend_fastapi/schemas/pago.py
 from pydantic import BaseModel, Field
 from datetime import date, time, datetime
-from typing import Optional, Union # Añadimos Union para mayor flexibilidad
+from typing import Optional, Union
 from uuid import UUID
 
-# Usamos PagoCreate para que coincida con lo que busca tu __init__.py
 class PagoCreate(BaseModel):
-    # CAMBIO: De int a Union[str, int] para aceptar el UUID largo
-    paciente_id: Optional[UUID] = None # Mucho más seguro que Union
+    """Esquema para el registro de un cobro o recibo clínico"""
+    paciente_id: Optional[Union[UUID, str]] = None
     paciente_nombre: str = Field(..., min_length=1)
-    fecha: Optional[date] = None
+    fecha: Optional[Union[date, str]] = None
     concepto: str
-    # CAMBIO: Usar float o Decimal es mejor para dinero, pero si prefiere int, asegúrese de que el frontend envíe números
     monto: float = Field(..., gt=0) 
-    metodo_pago: str
+    metodo_pago: str = "Efectivo"
     observacion: Optional[str] = None
     pagado_por: Optional[str] = None
     telefono: Optional[str] = None
     es_rapido: bool = False
 
 class PagoResponse(BaseModel):
-    id: UUID  # Para que acepte el formato 58d54ab0...
+    """Esquema para serializar y responder información de cobro"""
+    id: Union[UUID, str]
     codigo: str
-    paciente_id: Optional[UUID] = None
+    paciente_id: Optional[Union[UUID, str]] = None
     paciente_nombre: Optional[str] = "Paciente General"
-    fecha: date
+    fecha: Union[date, str]
     hora: Optional[time] = None
     monto: float
     metodo_pago: Optional[str] = "Efectivo"
@@ -31,14 +31,15 @@ class PagoResponse(BaseModel):
     observacion: Optional[str] = None
     telefono: Optional[str] = None
     es_rapido: bool = False
-    created_at: Optional[datetime] = None # Campo obligatorio según el error
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 class PagoReporte(BaseModel):
-    plan_id: UUID
+    """Esquema para reportar el pago de una suscripción profesional"""
+    plan_id: Union[UUID, str]
     plan_nombre: str
-    monto: float
-    comprobante_url: str # La URL que te dará Cloudinary en el frontend
-    referencia_pago: str # El número que el doctor anote de Nequi/Bancolombia        
+    monto: float = Field(..., gt=0)
+    comprobante_url: str
+    referencia_pago: str

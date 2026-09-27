@@ -1,42 +1,39 @@
-from pydantic import BaseModel, Field
-from datetime import date, time, datetime
-from typing import Optional, Union # Añadimos Union por seguridad
-from uuid import UUID # IMPORTANTE: Para que reconozca los códigos largos
+# backend_fastapi/schemas/cita.py
+from pydantic import BaseModel
+from typing import Optional, Union
+from uuid import UUID
 
 class CitaCreate(BaseModel):
-    """Esquema para CREAR una nueva cita"""
+    """Esquema para crear una nueva cita médica"""
     fecha: str  
     hora: str   
-    motivo: Optional[str] = None
+    motivo: Optional[str] = "Consulta"
     doctor: Optional[str] = None
-    paciente_id: Optional[UUID] = None # Pydantic validará que sea un UUID válido
+    paciente_id: Optional[Union[UUID, str]] = None
     paciente_nombre: Optional[str] = None
     paciente_telefono: Optional[str] = None
 
 class CitaUpdate(BaseModel):
-    """Esquema para ACTUALIZAR una cita existente"""
+    """Esquema para actualizar una cita existente"""
     fecha: Optional[str] = None
     hora: Optional[str] = None
     motivo: Optional[str] = None
     doctor: Optional[str] = None
-    # CAMBIO: También aquí debe aceptar el código largo
-    paciente_id: Optional[str] = None 
+    paciente_id: Optional[Union[UUID, str]] = None 
     paciente_nombre: Optional[str] = None
     paciente_telefono: Optional[str] = None
 
 class CitaResponse(BaseModel):
-    """Esquema para RESPONDER con datos de cita"""
-    # CAMBIO: El ID de la cita propia también suele ser UUID en su base de datos
-    id: Union[str, int] 
+    """Esquema para serializar y responder datos de cita"""
+    id: Union[UUID, str]
     fecha: str
     hora: str
-    motivo: Optional[str]
-    doctor: Optional[str] # Cambiado a Optional por si acaso
-    estado: str
-    # CAMBIO: Para que al leer la cita no explote si el ID es largo
-    paciente_id: Optional[Union[str, int]] 
-    paciente_nombre: Optional[str]
-    telefono: Optional[str]
+    motivo: Optional[str] = None
+    doctor: Optional[str] = None
+    estado: str = "pendiente"
+    paciente_id: Optional[Union[UUID, str]] = None 
+    paciente_nombre: Optional[str] = None
+    telefono: Optional[str] = None
     
     class Config:
         from_attributes = True

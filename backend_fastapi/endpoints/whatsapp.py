@@ -34,8 +34,12 @@ router = APIRouter()
 # 🌐 URL OFICIAL DEL WEBHOOK EN CLOUD RUN
 WEBHOOK_URL = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
 
-# 🛡️ MEMORIA DE DEDUPLICACIÓN CON EXPIRACIÓN (Evita respuestas duplicadas sin borrados abruptos)
+# ⏱️ VENTANA DE SILENCIO CONFIGURABLE (0 para pruebas continuas; cambiar a 1 o 2 en producción)
+VENTANA_SILENCIO_HORAS = 0
+
+# 🛡️ MEMORIAS VOLÁTILES CON TTL (Deduplicación e Intervención Omnicanal)
 MENSAJES_PROCESADOS: dict[str, float] = {}
+MENSAJES_ENVIADOS_POR_BOT: dict[str, float] = {}
 
 class EnviarMensajeRequest(BaseModel):
     numero: str
@@ -134,12 +138,32 @@ async def webhook_evolution_receiver(request: Request):
 
         if evento in ("messages.upsert", "MESSAGES_UPSERT"):
             key = data.get("key", {})
-            if key.get("fromMe"):
-                return {"status": "ignored_from_me"}
+            message_id = key.get("id")
+            ahora_ts = time.time()
 
             remote_jid = key.get("remoteJid", "")
             if "@g.us" in remote_jid or "status@broadcast" in remote_jid:
                 return {"status": "ignored_group_or_status"}
+
+            # 🛡️ INTERVENCIÓN OMNICANAL: Distinguir mensajes del bot vs respuestas del doctor desde su celular
+            if key.get("fromMe"):
+                if message_id and message_id in MENSAJES_ENVIADOS_POR_BOT:
+                    return {"status": "ignored_bot_self"}
+                
+                # Si el doctor respondió desde su celular físico y el silencio está activado (> 0 horas)
+                if VENTANA_SILENCIO_HORAS > 0:
+                    numero_cel = "".join(filter(str.isdigit, remote_jid.split("@")[0]))
+                    message_obj_doc = data.get("message", {})
+                    texto_doc = (
+                        message_obj_doc.get("conversation")
+                        or message_obj_doc.get("extendedTextMessage", {}).get("text")
+                        or "[Mensaje desde WhatsApp Móvil]"
+                    ).strip()
+                    await registrar_historial_db(numero_cel, "[Intervención Doctor/Humano]", texto_doc, instance=instance)
+                    print(f"👨‍⚕️ [Intervención Móvil] Doctor respondió desde su WhatsApp a {numero_cel}. Silencio activado por {VENTANA_SILENCIO_HORAS}h.", flush=True)
+                    return {"status": "doctor_mobile_intervention_registered"}
+
+                return {"status": "ignored_from_me"}
 
             # 🛡️ FILTRO ANTI-DUPLICADOS (DEDUPLICACIÓN INTELIGENTE: TTL 5 MINUTOS)
             message_id = key.get("id")
@@ -211,8 +235,8 @@ async def webhook_evolution_receiver(request: Request):
 
             print(f"📩 [Webhook Evolution] Mensaje recibido de {numero_paciente} en {instance} (Doctor ID: {odontologo_id}): '{texto_paciente}'", flush=True)
 
-            # 1. Silencio humano
-            if await verificar_silencio_humano(numero_paciente, ventana_horas=0, instance=instance):
+            # 1. Silencio humano (Utiliza la constante configurada arriba)
+            if await verificar_silencio_humano(numero_paciente, ventana_horas=VENTANA_SILENCIO_HORAS, instance=instance):
                 print(f"🤫 [Webhook Evolution] Silencio activo para {numero_paciente}.", flush=True)
                 await registrar_historial_db(numero_paciente, texto_paciente, "", instance=instance)
                 return {"status": "silence_active"}

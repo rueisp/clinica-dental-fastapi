@@ -3,13 +3,13 @@ import pytz
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func  # <-- Importamos func para el fallback insensible a mayúsculas
+from sqlalchemy import select, func
 from models import LimiteDiario, Usuario, Plan, Subscription
 
 COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
-    """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado y Blindado)"""
+    """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado bajo Regla 7.E)"""
     # 1. BYPASS PARA EL ADMINISTRADOR
     if current_user.is_admin:
         sub_admin = Subscription(status="active", plan_type="pro")
@@ -65,7 +65,7 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
     return sub
 
 async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSession):
-    """Verifica si el plan permite una función sin consultas SQL redundantes"""
+    """Verifica si el plan permite una función leyendo directamente de memoria sin consultas SQL redundantes"""
     if current_user.is_admin:
         return True
 
@@ -80,37 +80,30 @@ async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSessio
     plan = getattr(sub, "plan_cargado", None)
     
     if not plan or not getattr(plan, feature, False):
+        plan_sugerido = "ULTRA" if feature == "can_use_bot" else "PRO"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu plan actual no incluye esta funcionalidad. Mejora a PRO para activarla."
+            detail=f"Tu plan actual no incluye esta funcionalidad. Mejora a {plan_sugerido} para activarla."
         )
     return True
 
 async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
-    # 1. ✅ BYPASS PARA EL ADMINISTRADOR: El admin no tiene límites de registro
+    """Verifica el límite de creación diaria de pacientes reutilizando el plan en memoria (Cero SELECTs duplicados)"""
+    # 1. BYPASS PARA EL ADMINISTRADOR
     if current_user.is_admin:
         return True
 
-    # El resto de tu función se mantiene exactamente igual:
+    # 2. Obtener suscripción y plan cargado en memoria en una sola llamada
     sub = await verificar_suscripcion_activa(current_user, db)
     
-    # ✅ FECHA LOCAL: Obtenemos la fecha actual en Colombia
+    # 3. Fecha local de Colombia
     hoy = datetime.now(COLOMBIA_TZ).date()
     
-    # Buscamos el plan para obtener el límite (o usamos 20 por defecto)
-    # Priorizamos la búsqueda por plan_id (UUID). Si no existe, usamos plan_type de forma segura.
-    if sub.plan_id:
-        result = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
-    else:
-        result = await db.execute(
-            select(Plan).where(func.lower(Plan.nombre) == func.lower(sub.plan_type))
-        )
-    plan_info = result.scalar_one_or_none()
-    
-    # ✅ LÍMITE: Si no hay plan_info, el estándar es 20
+    # 4. Leemos el límite directamente del plan en memoria (sin segundo SELECT a PostgreSQL)
+    plan_info = getattr(sub, "plan_cargado", None)
     limite_maximo = plan_info.limite_pacientes_diario if plan_info else 20
     
-    # Consultamos cuántos lleva hoy
+    # 5. Consultamos únicamente cuántos pacientes lleva registrados hoy
     result_limite = await db.execute(
         select(LimiteDiario).where(
             LimiteDiario.user_id == current_user.id,

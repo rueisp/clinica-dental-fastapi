@@ -1,14 +1,15 @@
+# backend_fastapi/schemas/auth.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Union
 from uuid import UUID 
 
 class UserPermissions(BaseModel):
-    """Define los permisos según el plan del usuario"""
-    can_use_odontogram: bool
-    can_use_multimedia: bool
-    can_use_voice: bool
-    can_export_history: bool
-    can_use_bot: bool # <--- AGREGAR ESTA LÍNEA
+    """Define los permisos según el plan del usuario (valores por defecto seguros)"""
+    can_use_odontogram: bool = False
+    can_use_multimedia: bool = False
+    can_use_voice: bool = False
+    can_export_history: bool = False
+    can_use_bot: bool = False
  
 class LoginRequest(BaseModel):
     username: str

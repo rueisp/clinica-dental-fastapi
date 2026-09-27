@@ -18,288 +18,90 @@ SUPABASE_HEADERS = {
 # 🚀 Caché en memoria para evitar consultas duplicadas a Supabase (TTL: 60 segundos)
 CACHE_SERVICIOS_DOCTOR: dict = {}
 CACHE_CONFIG_DOCTOR: dict = {}
+CACHE_CHATBOT_DOCTOR: dict = {}
 CACHE_SUSCRIPCION_DOCTOR: dict = {}
 
 # ============================================================
-# PLANTILLAS BASE OFICIALES (CLONADAS PARA CADA DOCTOR NUEVO)
+# PLANTILLAS BASE OFICIALES (Importadas desde bot_templates.py)
 # ============================================================
+from services.bot_templates import (
+    PLANTILLA_SERVICIOS_BASE,
+    obtener_plantilla_configuracion,
+    PLANTILLA_CHATBOT_BASE
+)
 
-PLANTILLA_SERVICIOS_BASE = [
-    {
-        "servicio": "Limpieza",
-        "categoria": "General",
-        "palabras_clave": "limpieza, limpiezas, profilaxis, profilaxis dental, limpieza dental, higiene oral, higiene dental, destartraje, detartraje, tartrectomia, limpiarme los dientes, limpiar dientes, limpiarme la boca, hacerme la limpieza, hacerme una limpieza, hacerme limpieza, hacerse una limpieza, quitar sarro, quitarme el sarro, limpieza de sarro, eliminar sarro, sacar sarro, limpieza profunda, limpieza con ultrasonido, limpieza ultrasonido, lavado dental, lavado de dientes",
-        "precio": "COP 50.000",
-        "descripcion": "Limpieza Dental Profunda (Profilaxis). Incluye: Eliminación de placa bacteriana, pulido dental y aplicación de flúor.",
-        "disponible": True
-    },
-    {
-        "servicio": "Resina",
-        "categoria": "General",
-        "palabras_clave": "resina, resinas, calza, calzas, calzar, calzarme, calzarse, calzada, calzadas, calzarle, tapadura, tapaduras, tapar muela, taparme una muela, taparme muela, tapar, taparme, empaste, empastes, empastar, restauracion, restauraciones, arreglar muela, curar muela, obturacion, obturaciones, obturar, resina dental, resinas dentales, calza dental, calzas dentales, calzar diente, calzar dientes, tapar diente, tapar dientes",
-        "precio": "Desde COP 100.000",
-        "descripcion": "Restauración estética con resina de alta estética (calza dental). Incluye aislamiento y fotocurado.",
-        "disponible": True
-    },
-    {
-        "servicio": "Blanqueamiento en Consultorio",
-        "categoria": "General",
-        "palabras_clave": "blanqueamiento, blanqueamientos, blanqueamiento dental, blanqueamiento en consultorio, blanqueamiento clinico, blanqueamiento led, blanqueamiento laser, blanqueamiento con lampara, blanqueamiento con luz, blanquear, blanquearme, blanquearse, blanquear dientes, blanquear los dientes, blanquearme los dientes, blanquearme la sonrisa, aclaramiento, aclaramiento dental, aclaramiento en consultorio, aclarar dientes, aclararme los dientes, aclarar los dientes, hacerme un blanqueamiento, hacerme el blanqueamiento, blanquear sonrisa, dientes blancos, poner los dientes blancos",
-        "precio": "COP 200.000",
-        "descripcion": "Blanqueamiento / Aclaramiento Dental en consultorio. Incluye: Profilaxis previa y sesión de aclaramiento con lámpara LED.",
-        "disponible": True
-    },
-    {
-        "servicio": "Ortodoncia",
-        "categoria": "Ortodoncia",
-        "palabras_clave": "ortodoncia, ortodoncias, brackets, bracket, breke, brecke, breque, brakets, braket, braquets, braquet, frenillos, frenillo, frenos, freno, montaje de brackets, montaje brackets, montaje de ortodoncia, montaje ortodoncia, cuota inicial brackets, cuota inicial ortodoncia, mensualidad de brackets, mensualidad brackets, mensualidad ortodoncia, mensualidades de brackets, control de ortodoncia, controles de ortodoncia, control de brackets, ponerme brackets, ponerme los brackets, ponerme frenillos, ponerme los frenillos, alinear dientes, alinear los dientes, enderezar dientes, enderezar los dientes, tratamiento de ortodoncia, cita de ortodoncia",
-        "precio": "COP 150.000",
-        "descripcion": "Tratamiento de Ortodoncia Convencional (Brackets). Montaje / Cuota inicial: COP 150.000. Mensualidades: COP 70.000.",
-        "disponible": True
-    },
-    {
-        "servicio": "Extracción",
-        "categoria": "General",
-        "palabras_clave": "extraccion, extracciones, exodoncia, sacar muela, sacada de muela, sacar muelas, sacada de muelas, sacan muelas, sacar diente, sacan dientes, sacada de diente, quitar muela, quitar muelas, sacarme una muela, sacarme muela, sacarme un diente",
-        "precio": "Desde COP 120.000",
-        "descripcion": "Aplica para extracciones dentales simples.",
-        "disponible": True
-    },
-    {
-        "servicio": "Prótesis Dental / Caja de Dientes",
-        "categoria": "General",
-        "palabras_clave": "protesis, protesis dental, protesis dentales, protesis removible, protesis removibles, protesis total, protesis parcial, protesis flexible, protesis flexibles, protesis en acrilico, valplast, flexite, caja de dientes, cajas de dientes, caja dental, plancha dental, planchas dentales, plancha, planchas, dentadura, dentaduras, dentadura postiza, dentaduras postizas, dientes postizos, diente postizo, muela postiza, muelas postizas, chapeta, chapetas, chapeta dental, dientes de quitar y poner, diente de quitar y poner, puente dental, puentes dentales",
-        "precio": "Según valoración",
-        "descripcion": "Confección e instalación de prótesis dentales removibles (cajas de dientes totales o parciales).",
-        "disponible": True
-    },
-    {
-        "servicio": "Endodoncia",
-        "categoria": "Especialidad",
-        "palabras_clave": "endodoncia, endodoncias, tratamiento de conducto, tratamiento de conductos, tratamiento conducto, tratamiento conductos, conducto, conductos, conducto dental, conductos dentales, conducto en muela, conducto muela, conducto en diente, conducto diente, matar nervio, matar el nervio, matarme el nervio, matada de nervio, matado de nervio, sacar el nervio, sacarme el nervio, sacar nervio, extraccion del nervio, extraccion de nervio, limpiar conducto, limpiar conductos, limpieza de conducto, terapia de conducto, pulpotomia, pulpectomia",
-        "precio": "Según valoración",
-        "descripcion": "Tratamiento de conductos (Endodoncia) realizado por especialista para salvar la pieza dental natural.",
-        "disponible": True
-    },
-    {
-        "servicio": "Microdiseño Dental",
-        "categoria": "Estética",
-        "palabras_clave": "microdiseno, microdisenos, microdiseño, microdiseños, micro diseno, micro diseño, diseno de sonrisa, diseño de sonrisa, disenos de sonrisa, diseños de sonrisa, diseno de sonrisa en resina, diseño de sonrisa en resina, diseno en resina, diseño en resina, bordes incisales, borde incisal, bordes en resina, bordes dentales, borde dental, carillas en resina, carilla en resina, carillas dentales, carilla dental, carillas de resina, carillas, emparejar dientes, emparejar los dientes, perfilar dientes, perfilar los dientes, nivelar dientes, estetica dental",
-        "precio": "COP 700.000",
-        "descripcion": "Tratamiento de Microdiseño Dental con bordes incisales en resina de alta estética. Armoniza forma y alineación sin desgaste dental severo.",
-        "disponible": True
-    },
-    {
-        "servicio": "Radiografías",
-        "categoria": "Diagnóstico",
-        "palabras_clave": "radiografia, radiografias, radiografia dental, radiografias dentales, rayos x, rayo x, rayosx, rx, panoramica, panoramicas, radiografia panoramica, radiografias panoramicas, periapical, periapicales, radiografia periapical, radiografias periapicales, tomografia, tomografias, tac dental, placa de rayos x, placas de rayos x, toman radiografias, tomar radiografia, hacen radiografias, sacar radiografia, sacan radiografias, toman rayos x, sacar rayos x, sacan rayos x, hacen rayos x",
-        "precio": "No disponible en sede",
-        "descripcion": "IMPORTANTE: No realizamos radiografías ni toma de Rayos X en el consultorio. Remitimos al centro radiológico especializado.",
-        "disponible": True
-    },
-    {
-        "servicio": "Cementación de Corona Caída",
-        "categoria": "General",
-        "palabras_clave": "cementar corona, cementar una corona, cementacion de corona, cementado de corona, recementar corona, recementado de corona, pegar corona, pegarme la corona, pegarme una corona, pegar una corona, se me cayo una corona, se me cayo la corona, se me despego la corona, se me despego una corona, corona despegada, corona suelta, corona floja, pegar funda, pegar una funda, se me cayo la funda, se me cayo una funda, funda despegada, funda suelta, se me cayo un perno, pegar perno",
-        "precio": "Desde COP 80.000",
-        "descripcion": "Cementado o recementado de corona dental previa que se le ha caído al paciente.",
-        "disponible": True
-    },
-    {
-        "servicio": "Corona Dental Nueva",
-        "categoria": "Prótesis / Especialidad",
-        "palabras_clave": "corona, coronas, corona dental, coronas dentales, corona nueva, coronas nuevas, corona dental nueva, funda dental, fundas dentales, funda para diente, fundas para dientes, corona de porcelana, coronas de porcelana, corona en porcelana, coronas en porcelana, corona de zirconio, coronas de zirconio, corona en zirconio, coronas en zirconio, circonio, corona en circonio, corona de ceramica, coronas de ceramica, corona metal porcelana, protesis fija, protesis fija dental, diente de porcelana, muela de porcelana, diente en zirconio, muela en zirconio, ponerme una corona, hacerme una corona, mandar a hacer una corona",
-        "precio": "Desde COP 1.200.000",
-        "descripcion": "Confección e instalación de prótesis fija tipo corona dental nueva. En porcelana o zirconio de alta resistencia.",
-        "disponible": True
-    },
-    {
-        "servicio": "Retenedores de Ortodoncia",
-        "categoria": "Ortodoncia",
-        "palabras_clave": "retenedor, retenedores, retenedor dental, retenedores dentales, retenedores de ortodoncia, retenedor de ortodoncia, placas de ortodoncia, placa de ortodoncia, placas de contencion, placa de contencion, retenedores transparentes, retenedor transparente, placas transparentes, placa transparente, essix, retenedor essix, retenedores essix, hawley, retenedor hawley, placa hawley, retenedor fijo, retenedores fijos, alambre fijo, mandar a hacer retenedores, cambiar retenedores, se me rompio el retenedor, se me perdio el retenedor, se me partio el retenedor",
-        "precio": "Fijo: COP 200.000 | Placas: COP 250.000",
-        "descripcion": "Dispositivos para mantener los dientes en posición tras finalizar la ortodoncia.",
-        "disponible": True
-    },
-    {
-        "servicio": "Placa de Bruxismo",
-        "categoria": "General / Protección",
-        "palabras_clave": "placa de bruxismo, placas de bruxismo, bruxismo, bruxismos, placa para bruxismo, placa miorrelajante, placa neuromiorrelajante, placa oclusal, ferula de descarga, ferula dental, ferula para bruxismo, ferula nocturna, guarda dental, guardas dentales, guarda nocturna, protector nocturno, placa nocturna, placa para dormir, placa dental para dormir, protector para dormir, apretar los dientes, apretar dientes, aprieto los dientes, rechinar los dientes, rechinar dientes, rechino los dientes, placa rigida, placa de acetato",
-        "precio": "Acetato: COP 180.000 | Rígida o Dual: COP 400.000",
-        "descripcion": "Placa de protección para evitar el desgaste dental por el hábito involuntario de apretar o rechinar los dientes.",
-        "disponible": True
-    },
-    {
-        "servicio": "Ortodoncia Convencional",
-        "categoria": "Ortodoncia",
-        "palabras_clave": "ortodoncia convencional, ortodoncia tradicional, ortodoncia normal, ortodoncia metalica, ortodoncias metalicas, brackets convencionales, brackets tradicionales, brackets tradicionales metalicos, brackets metalicos, bracket metalico, brakets metalicos, braquets metalicos, frenillos metalicos, frenos metalicos, brackets con ligas, brackets con cauchos, brackets con gomitas, brackets con cachitos, brackets normales, brackets comunes, brackets plateados",
-        "precio": "Montaje: COP 150.000 | Mensualidad: COP 50.000",
-        "descripcion": "Ortodoncia con brackets tradicionales metálicos. Montaje superior e inferior con valoración incluida.",
-        "disponible": True
-    },
-    {
-        "servicio": "Ortodoncia Autoligados",
-        "categoria": "Ortodoncia",
-        "palabras_clave": "ortodoncia autoligados, ortodoncia de autoligado, ortodoncia autoligada, autoligado, autoligados, brackets autoligados, bracket autoligado, brakets autoligados, braquets autoligados, brackets sin ligas, bracket sin ligas, brakets sin ligas, brackets sin cauchos, bracket sin cauchos, brackets sin gomitas, sin ligas, sin cauchos, sin gomitas, sistema damon, brackets damon, ortodoncia damon, damon, brackets con tapita, brackets con compuerta, autoligables",
-        "precio": "Montaje: COP 400.000 | Mensualidad: COP 50.000",
-        "descripcion": "Ortodoncia con brackets de autoligado (tecnología sin ligas). Tratamientos más rápidos y con menor fricción.",
-        "disponible": True
-    },
-    {
-        "servicio": "Blanqueamiento Casero (Kit Promoción)",
-        "categoria": "General",
-        "palabras_clave": "blanqueamiento casero, blanqueamientos caseros, aclaramiento casero, aclaramientos caseros, blanqueamiento en casa, blanqueamiento para la casa, blanqueamiento para casa, aclaramiento en casa, aclaramiento para la casa, kit de blanqueamiento, kit blanqueamiento, kits de blanqueamiento, kit de aclaramiento, kit aclaramiento, blanqueamiento con cubetas, cubetas de blanqueamiento, cubetas para blanquear, cubetas para blanqueamiento, gel de blanqueamiento, gel blanqueador, jeringas de blanqueamiento, jeringa de blanqueamiento, blanquear dientes en casa, blanquearme en casa",
-        "precio": "COP 100.000",
-        "descripcion": "¡Promoción de Blanqueamiento Dental Casero! Incluye: 2 jeringas de gel aclarador y cubetas personalizadas.",
-        "disponible": True
-    },
-]
-
-def obtener_plantilla_configuracion(doctor_nombre: str = "", consultorio_nombre: str = "", telefono: str = "") -> dict:
-    nombre_clinica = consultorio_nombre or (f"Consultorio Dr. {doctor_nombre}".strip() if doctor_nombre else "Consultorio Odontológico")
-    tel = telefono or "[Tu Número de WhatsApp]"
-    return {
-        "nombre_consultorio": nombre_clinica,
-        "ciudad": "[Tu Ciudad, Ej: Bogotá / Medellín]",
-        "barrio": "[Tu Barrio / Sector]",
-        "direccion": "[Dirección de tu Consultorio, Ej: Calle 123 # 45-67, Consultorio 201]",
-        "telefono": tel,
-        "telefonos": tel,
-        "whatsapp": tel,
-        "email": "contacto@tuconsultorio.com",
-        "horarios": "Lunes a Viernes: 9:00 AM - 12:00 PM y 2:00 PM - 6:00 PM | Sábados: 9:00 AM - 5:00 PM",
-        "horario_lunes_viernes": "9:00 AM - 12:00 M / 2:00 PM - 6:00 PM",
-        "horario_sabado": "9:00 AM - 12:00 M / 2:00 PM - 5:00 PM",
-        "horario_domingo": "Cerrado",
-        "mensaje_bienvenida": f"¡Hola! 👋 Gracias por comunicarte con {nombre_clinica}. ¿En qué te podemos ayudar hoy?",
-        "mensaje_despedida": "¡Será un gusto atenderte! 😊"
-    }
-
-PLANTILLA_CHATBOT_BASE = [
-    {
-        "intencion": "saludo",
-        "palabras_clave": "hola, buenos dias, buenas tardes, buenas noches, buen dia, buendia, buena tarde, buena noche, buenas, como esta, como estan, como estas, como le va, que tal, que mas, saludos, cordial saludo, hi, hello, holis, hola doctor, hola doctora, hola doc, buenas doctor, buenas doc",
-        "respuesta": "¡Hola! 🦷 Gracias por comunicarte con nuestro consultorio odontológico. ¿En qué te podemos colaborar el día de hoy?",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "agendar_cita_disponibilidad",
-        "palabras_clave": "cita hoy, citas hoy, cita para hoy, citas para hoy, tienen cita, tienen citas, hay cita, hay citas, tienen espacio, tienen espacios, tienen cupo, tienen cupos, agendar cita, agendar una cita, apartar cita, apartar una cita, pedir cita, pedir una cita, sacar cita, sacar una cita, quiero una cita, quiero cita, me pueden agendar, me regalan una cita, espacio para hoy, cupo para hoy, disponibilidad, tienen disponibilidad, espacio hoy, cupo hoy",
-        "respuesta": "¡Hola! 🦷 Con mucho gusto. En este momento el doctor revisará la agenda para confirmarte los espacios disponibles para tu atención a la brevedad posible. ¡Un momento por favor! ✨",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "costo_valoracion",
-        "palabras_clave": "valoracion, valoraciones, revision, revisiones, cita de valoracion, cita de revision, consulta de valoracion, consulta de revision, cuanto vale la valoracion, cuanto cuesta la valoracion, precio de la valoracion, valor de la valoracion, costo de la valoracion, que vale la valoracion, que cuesta la valoracion, cobran la valoracion, cuanto cobran por la valoracion, cobran la revision, cuanto vale la revision, cuanto cuesta la revision, precio de la revision, valor de la revision, costo de la revision, la valoracion tiene costo, tiene costo la valoracion, tiene costo la revision, cobran por revisar, valoracion gratis, valoracion gratuita",
-        "respuesta": "¡Hola! 🦷 En nuestro consultorio la cita de *valoración y diagnóstico inicial es totalmente gratuita (sin costo)*. Te revisamos, evaluamos tu caso y te entregamos tu presupuesto sin compromiso. ¿Te gustaría que te agendemos un espacio? 📅✨",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "precios",
-        "palabras_clave": "precios, precio, lista de precios, listas de precios, precios generales, catalogo de precios, catalogo de servicios, lista de tarifas, tarifas, tarifa, valores de servicios, valor de tratamientos, costo de tratamientos, cotizacion general, cotizacion, cotizaciones, cotizar, presupuesto general, presupuesto, presupuestos, cuanto vale, que vale, cuanto cuesta, que cuesta, cuanto cobran, cuanto es, cuanto sale, que precios tienen, que precios manejan, que tarifas manejan, costo, costos, valor, valores, precio de la consulta, cuanto vale la consulta, cuanto cuesta la consulta, valor de la consulta",
-        "respuesta": "Nuestros Precios Principales: ✨ Limpieza: COP 50.000 | 💎 Resinas: Desde COP 100.000 | 🌟 Blanqueamiento: COP 200.000 | 🦷 Extracciones: Desde COP 120.000 | 📐 Ortodoncia: Inicial COP 150.000.\n\n¿Te gustaría agendar una cita de valoración?",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "horarios",
-        "palabras_clave": "horario, horarios, horario de atencion, horarios de atencion, que horario tienen, que horarios tienen, que horario manejan, que horarios manejan, cual es el horario, cual es su horario, a que hora abren, a que hora cierran, hasta que hora atienden, desde que hora atienden, hasta que hora abren, hasta que hora trabajan, que dias abren, que dias atienden, que dias trabajan, estan abiertos, estan abiertos hoy, estan atendiendo, estan atendiendo hoy, atienden hoy, abren hoy, trabajan hoy, atienden los sabados, abren los sabados, atienden sabados, abren sabados, atienden domingos, abren domingos, atienden festivos, abren festivos, jornada de atencion, dias de atencion",
-        "respuesta": "📅 *Horarios de Atención:*\n• Lunes a Viernes: 9:00 AM - 12:00 PM y 2:00 PM - 6:00 PM\n• Sábados: 9:00 AM - 12:00 PM y 2:00 PM - 5:00 PM\n• Domingos y Festivos: Cerrado.",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "ubicacion",
-        "palabras_clave": "direccion, direcciones, ubicacion, ubicaciones, donde estan, donde quedan, donde estan ubicados, donde quedan ubicados, donde queda el consultorio, donde es el consultorio, donde atienden, cual es la direccion, cual es su direccion, me regala la direccion, me comparte la direccion, me da la direccion, que direccion tienen, en que parte estan, en que parte quedan, en que barrio estan, en que barrio quedan, en que ciudad estan, como llego, como llegar, como hago para llegar, por donde quedan, por donde estan, sede, sedes, direccion del consultorio, ubicacion del consultorio, punto de referencia, puntos de referencia, que queda cerca",
-        "respuesta": "📍 *NUESTRA UBICACIÓN:*\nNos encontramos ubicados en [Dirección de tu Consultorio, Ej: Calle 123 # 45-67].\n\n¡Será un gusto atenderte! 🦷",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "despedida",
-        "palabras_clave": "gracias, muchas gracias, mil gracias, muchisimas gracias, gracias doctor, gracias doctora, gracias doc, dios le pague, dios lo bendiga, dios la bendiga, perfecto, excelente, listo, dale, de acuerdo, entendido, todo claro, quedo claro, muy amable, muy formal, genial, ok, ok gracias, chao, chaito, hasta luego, hasta pronto, adios, nos vemos, que tenga buen dia, que tenga feliz dia, que este bien, feliz dia, feliz tarde, feliz noche",
-        "respuesta": "¡Con mucho gusto! 😊 En nuestro consultorio estamos para servirte. ¡Que tengas un excelente día! 🦷",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "metodos_pago",
-        "palabras_clave": "metodos de pago, metodo de pago, formas de pago, forma de pago, medios de pago, medio de pago, como puedo pagar, como se paga, formas para pagar, como cancelar, puedo pagar con, nequi, bancolombia, daviplata, bre b, bre-b, breb, transferencia, transferencias, datafono, datafonos, datáfono, tarjeta, tarjetas, tarjeta debito, tarjeta credito, tarjetas de credito, tarjetas de debito, reciben tarjeta, reciben tarjetas, aceptan tarjeta, aceptan tarjetas, tienen datafono, tienen nequi, reciben nequi, aceptan nequi, reciben transferencia, aceptan transferencia, efectivo, en efectivo, pago en efectivo, reciben efectivo, aceptan efectivo, pago a cuotas, a cuotas",
-        "respuesta": "💳 *MÉTODOS DE PAGO EN CONSULTORIO:*\n• Efectivo\n• Transferencias (Nequi, Bancolombia)\n• Tarjetas débito y crédito.\n\n¡Facilidades para que cuides tu sonrisa! 🦷",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "Referencias para llegar al consultorio",
-        "palabras_clave": "como llego, como llegar, como hago para llegar, como se llega, por donde llego, punto de referencia, puntos de referencia, referencia para llegar, referencias para llegar, alguna referencia, que queda cerca, cerca de que queda, cerca a que queda, que hay cerca, al lado de que queda, frente a que queda, diagonal a que queda, por donde es la entrada, por donde se entra, donde queda la entrada, como es la fachada, foto de la fachada, como es el consultorio por fuera, foto del consultorio, croquis, mapa para llegar, no doy con la direccion, no encuentro el consultorio",
-        "respuesta": "📍 *PUNTOS DE REFERENCIA PARA LLEGAR:*\nEstamos ubicados [Describe tus puntos de referencia: diagonal a..., frente a...].\n\n¡Te adjuntamos una imagen de referencia para que nos encuentres fácilmente! 🏢🦷",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "incidencia_bracket_despegado",
-        "palabras_clave": "se me despegaron, se me despego, se me despego un bracket, se me despego el bracket, se me despegaron los brackets, se me despegaron varios brackets, despegaron brackets, despego brackets, bracket despegado, brackets despegados, se me cayeron, se me cayo, se me cayo un bracket, se me cayo el bracket, se me cayeron los brackets, bracket caido, brackets caidos, se me soltaron, se me solto, se me solto un bracket, se me solto el bracket, bracket suelto, brackets sueltos, bracket flojo, brackets flojos, me los pueden pegar, me lo pueden pegar, que me los peguen, que me lo peguen, pegar bracket, pegar brackets, pegarme el bracket, pegarme un bracket, pegar de nuevo, volver a pegar, se me partio un bracket, bracket roto, me chusa el alambre, me pulla el alambre, se me salio el alambre, se me solto el alambre",
-        "respuesta": "¡Hola! 🦷 Danos un momento, por favor.\nLos doctores revisarán tu caso para darte una solución a la brevedad. ¡Ya te escribimos! ✨",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    },
-    {
-        "intencion": "cordales_terceros_molares",
-        "palabras_clave": "tercer molar, terceros molares, cordal, cordales, muela del juicio, muelas del juicio, cirugia de cordales, sacar cordal, sacar cordales, sacada de cordal, sacada de cordales, sacar muela del juicio, extraccion de cordales, extraccion de cordal, extracciones de cordales, extraccion de terceros molares, extracciones de terceros molares, cirugia oral",
-        "respuesta": "¡Hola! 👋 En nuestro consultorio realizamos extracciones dentales simples, pero actualmente *no realizamos extracción ni cirugía de terceros molares (cordales o muelas del juicio)*. Te sugerimos consultar con un especialista en Cirugía Maxilofacial. 🦷✨",
-        "link_imagen": None,
-        "estado": "ACTIVO"
-    }
-]
 
 # ============================================================
 # FUNCIONES DE INICIALIZACIÓN MULTI-TENANT
 # ============================================================
 
-# Ubicación: backend_fastapi/services/bot_engine_service.py (antes de extraer_user_id_de_instancia)
+# Ubicación: backend_fastapi/services/bot_engine_service.py (reemplazo completo de verificar_suscripcion_activa_bot)
+
 async def verificar_suscripcion_activa_bot(odontologo_id: str) -> bool:
-    """Verifica la vigencia del plan del doctor con caché en memoria RAM de 10 minutos (0 ms de latencia)"""
+    """Verifica con caché en RAM (0 ms) que el doctor tenga plan vigente y activo directamente en PostgreSQL"""
     if not odontologo_id:
         return False
 
     ahora_ts = datetime.now(timezone.utc).timestamp()
     cache_sub = CACHE_SUSCRIPCION_DOCTOR.get(odontologo_id)
     
-    # Si la verificación en memoria tiene menos de 10 minutos (600s), responder en 0 ms
+    # 1. Si la memoria RAM tiene menos de 10 minutos (600s), responder en 0 ms
     if cache_sub and (ahora_ts - cache_sub["timestamp"] < 600):
         return cache_sub["activo"]
 
-    url_sub = f"{Config.SUPABASE_URL}/rest/v1/subscriptions?user_id=eq.{odontologo_id}&limit=1"
-    async with httpx.AsyncClient(timeout=4.0) as client:
-        try:
-            res = await client.get(url_sub, headers=SUPABASE_HEADERS)
-            if res.status_code == 200:
-                filas = res.json()
-                if not filas:
-                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
-                    return False
+    try:
+        from database import AsyncSessionLocal
+        from models import Usuario, Subscription, Plan
+        from sqlalchemy import select
+        import uuid
 
-                sub = filas[0]
-                if sub.get("status") != "active":
-                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
-                    return False
+        doctor_uuid = uuid.UUID(odontologo_id)
 
-                fin_str = sub.get("current_period_end")
-                if not fin_str:
-                    CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
-                    return False
+        async with AsyncSessionLocal() as db:
+            # A. Bypass para Administrador
+            res_user = await db.execute(select(Usuario).where(Usuario.id == doctor_uuid))
+            usuario = res_user.scalar_one_or_none()
+            if usuario and usuario.is_admin:
+                CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": True, "timestamp": ahora_ts}
+                return True
 
-                fecha_fin = datetime.fromisoformat(fin_str.replace("Z", "+00:00"))
-                esta_activo = fecha_fin > datetime.now(timezone.utc)
+            # B. Buscar suscripción en PostgreSQL directo (sin bloqueo de RLS)
+            res_sub = await db.execute(select(Subscription).where(Subscription.user_id == doctor_uuid))
+            sub = res_sub.scalar_one_or_none()
+            if not sub or sub.status != "active" or not sub.current_period_end:
+                CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
+                return False
 
-                CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": esta_activo, "timestamp": ahora_ts}
-                return esta_activo
-        except Exception as e:
-            print(f"⚠️ [Error Verificando Suscripción Bot]: {e}", flush=True)
-            return True
+            # C. Verificar fecha de vigencia
+            ahora_utc = datetime.now(timezone.utc)
+            fecha_fin = sub.current_period_end
+            if hasattr(fecha_fin, "tzinfo") and fecha_fin.tzinfo is not None:
+                vigente = fecha_fin > ahora_utc
+            else:
+                vigente = fecha_fin > ahora_utc.replace(tzinfo=None)
+
+            if not vigente:
+                CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
+                return False
+
+            # D. Verificar permiso de bot según el plan (Exclusivo Trial y Ultra)
+            res_plan = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+            plan = res_plan.scalar_one_or_none()
+            
+            tiene_permiso = False
+            if plan and plan.can_use_bot:
+                tiene_permiso = True
+            elif sub.plan_type:
+                tipo_normalizado = sub.plan_type.lower()
+                if "trial" in tipo_normalizado or "ultra" in tipo_normalizado:
+                    tiene_permiso = True
+
+            CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": tiene_permiso, "timestamp": ahora_ts}
+            return tiene_permiso
+
+    except Exception as e:
+        print(f"⚠️ [Error Verificando Suscripción en BD]: {e}", flush=True)
+        return False
 
     return False
 
@@ -325,55 +127,52 @@ def extraer_user_id_de_instancia(instance_name: str) -> str | None:
         return None
 
 async def poblar_plantilla_bot_doctor(user_id: str, doctor_nombre: str = "", consultorio_nombre: str = "", telefono: str = ""):
-    """Puebla automáticamente las tablas 'configuracion', 'servicios' y 'chatbot' para un doctor si están vacías"""
+    """Puebla automáticamente las tablas solo si el doctor no tiene NADA configurado."""
     if not user_id:
         return
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            # 1. Verificar si ya tiene configuración
-            url_chk = f"{Config.SUPABASE_URL}/rest/v1/configuracion?odontologo_id=eq.{user_id}&limit=1"
-            res_chk = await client.get(url_chk, headers=SUPABASE_HEADERS)
-            if res_chk.status_code == 200 and len(res_chk.json()) > 0:
-                return  # Ya está configurado
+            # 1. VERIFICACIÓN MULTI-TABLA: Aseguramos que ninguna tabla tenga datos del doctor
+            tablas_a_verificar = ["configuracion", "servicios", "chatbot"]
+            for tabla in tablas_a_verificar:
+                url_chk = f"{Config.SUPABASE_URL}/rest/v1/{tabla}?odontologo_id=eq.{user_id}&limit=1"
+                res_chk = await client.get(url_chk, headers=SUPABASE_HEADERS)
+                if res_chk.status_code == 200 and len(res_chk.json()) > 0:
+                    # Si alguna tabla ya tiene datos, abortamos para no duplicar
+                    return 
 
             print(f"🌱 [Bot Multi-Tenant] Inicializando plantilla base para doctor ID: {user_id}", flush=True)
 
             # 2. Poblar 'configuracion'
             cfg_dict = obtener_plantilla_configuracion(doctor_nombre, consultorio_nombre, telefono)
-            cfg_payload = [
-                {"odontologo_id": user_id, "clave": k, "valor": str(v)}
-                for k, v in cfg_dict.items()
-            ]
+            cfg_payload = [{"odontologo_id": user_id, "clave": k, "valor": str(v)} for k, v in cfg_dict.items()]
             await client.post(f"{Config.SUPABASE_URL}/rest/v1/configuracion", json=cfg_payload, headers=SUPABASE_HEADERS)
 
             # 3. Poblar 'servicios'
-            srv_payload = [
-                {**item, "odontologo_id": user_id}
-                for item in PLANTILLA_SERVICIOS_BASE
-            ]
+            srv_payload = [{**item, "odontologo_id": user_id} for item in PLANTILLA_SERVICIOS_BASE]
             await client.post(f"{Config.SUPABASE_URL}/rest/v1/servicios", json=srv_payload, headers=SUPABASE_HEADERS)
 
             # 4. Poblar 'chatbot'
-            bot_payload = [
-                {**item, "odontologo_id": user_id}
-                for item in PLANTILLA_CHATBOT_BASE
-            ]
+            bot_payload = [{**item, "odontologo_id": user_id} for item in PLANTILLA_CHATBOT_BASE]
             await client.post(f"{Config.SUPABASE_URL}/rest/v1/chatbot", json=bot_payload, headers=SUPABASE_HEADERS)
 
             print(f"✅ [Bot Multi-Tenant] Plantilla inicializada con éxito para doctor ID: {user_id}", flush=True)
         except Exception as e:
             print(f"❌ [Bot Multi-Tenant Init Error]: {e}", flush=True)
-
 # ============================================================
 # LÓGICA DE TEXTO Y SILENCIO HUMANO
 # ============================================================
 
 def eliminar_tildes_y_signos(texto: str) -> str:
-    """Limpia tildes, signos de interrogación y caracteres especiales"""
+    """Limpia tildes, signos y separa números pegados a palabras (ej: 'hola3' -> 'hola 3')"""
     if not texto:
         return ""
-    sin_tildes = "".join(c for c in unicodedata.normalize("NFD", str(texto)) if unicodedata.category(c) != "Mn")
+    # 1. Separar números pegados a letras (ej: 'hola3' -> 'hola 3')
+    texto_separado = re.sub(r"([a-zA-Z])(\d+)", r"\1 \2", str(texto))
+    # 2. Quitar tildes
+    sin_tildes = "".join(c for c in unicodedata.normalize("NFD", texto_separado) if unicodedata.category(c) != "Mn")
+    # 3. Quitar caracteres especiales
     limpio = re.sub(r"[^\w\s]", " ", sin_tildes)
     return " ".join(limpio.split()).lower()
 
@@ -426,7 +225,7 @@ async def verificar_silencio_humano(numero: str, ventana_horas: int = 0, instanc
             return False
         except Exception:
             return False
-
+        
 async def registrar_historial_db(numero: str, mensaje: str, respuesta: str, instance: str = None):
     url = f"{Config.SUPABASE_URL}/rest/v1/historial"
     payload = {
@@ -437,11 +236,12 @@ async def registrar_historial_db(numero: str, mensaje: str, respuesta: str, inst
     if instance:
         payload["instance"] = str(instance)
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             await client.post(url, json=payload, headers=SUPABASE_HEADERS)
         except Exception as e:
             print(f"❌ [Supabase Historial Error]: {e}", flush=True)
+
 
 async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str = None) -> str:
     url = f"{Config.SUPABASE_URL}/rest/v1/historial?numero=eq.{numero}"
@@ -449,7 +249,7 @@ async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str
         url += f"&instance=eq.{instance}"
     url += f"&order=created_at.desc&limit={limite}"
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
+    async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             res = await client.get(url, headers=SUPABASE_HEADERS)
             datos = res.json() if res.status_code == 200 else []
@@ -463,17 +263,87 @@ async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str
             return "\n---\n".join(interacciones) or "No hay conversación previa."
         except Exception:
             return "No hay conversación previa."
-
-# ============================================================
-# JERARQUÍA DE RESPUESTAS FILTRADA POR ODONTÓLOGO
-# ============================================================
+                
 
 async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = None) -> dict | None:
     """
     Nivel 1: Atiende consultas directas en 0.1s.
-    Compara puntajes reales para que una consulta específica (como cordales) gane sobre un servicio genérico.
+    Responde instantáneamente con mensaje unificado de confirmación de agenda para cualquier
+    solicitud de cita o turno, preservando la atención de costos de valoración y catálogo clínico.
+    Cuenta con caché en RAM (TTL 60s) para servicios y chatbot.
     """
     ahora_ts = datetime.now(timezone.utc).timestamp()
+    paciente_limpio = eliminar_tildes_y_signos(texto_paciente)
+
+    # 🚨 DISCRIMINADOR PRIORITARIO: Intención de Cita, Agenda, Control o Asistencia (Tolerante a singulares y plurales)
+    patrones_cita_control = [
+        r"\bcuando me toca\b",
+        r"\bmi control\b",
+        r"\bel control\b",
+        r"\bproximo control\b",
+        r"\bproximas? citas?\b",
+        r"\bproxima consulta\b",
+        r"\bfecha de mi cita\b",
+        r"\bfecha de mi control\b",
+        r"\bconfirmar mi cita\b",
+        r"\brevisar mi cita\b",
+        r"\bque dia me toca\b",
+        r"\bcitas? de control\b",
+        r"\bcitas? de revision\b",
+        r"\bcitas? de valoracion\b",
+        r"\btengo citas?\b",
+        r"\bhay citas?\b",
+        r"\btienen?\s+(?:un\s+)?citas?\b",
+        r"\btienen?\s+espacios?\b",
+        r"\btienen?\s+cupos?\b",
+        r"\bagendar(?:\s+una)?\s+cita\b",
+        r"\bapartar(?:\s+una)?\s+cita\b",
+        r"\bpedir(?:\s+una)?\s+cita\b",
+        r"\bsacar(?:\s+una)?\s+cita\b",
+        r"\bquiero(?:\s+una)?\s+cita\b",
+        r"\bme pueden agendar\b",
+        r"\bme regalan una cita\b",
+        r"\bdisponibilidad(?:\s+para)?\s+hoy\b",
+        r"\bcitas?\s+(?:para\s+)?hoy\b",
+        r"\bpuedo ir\b",
+        r"\bpuedo pasar\b",
+        r"\bcuando puedo ir\b",
+        r"\bque dia puedo ir\b",
+        r"\ba que hora puedo ir\b",
+        r"\ba que horas puedo ir\b",
+        r"\ba que hora voy\b",
+        r"\bque dia voy\b",
+        r"\ba que hora es mi cita\b",
+        r"\ba que hora tengo\b",
+        r"\bme pueden atender\b",
+        r"\bme puede atender\b",
+        r"\bme atienden\b",
+        r"\bme pueden revisar\b",
+        r"\bme puede revisar\b",
+        r"\bme revisan\b",
+        r"\bme pueden ver\b",
+        r"\bme puede ver\b",
+        r"\bpara que me revisen\b",
+        r"\bpara que me atiendan\b",
+        r"\bpara que me miren\b",
+        r"\bcuando me pueden\b"
+    ]
+
+    es_consulta_agenda = any(re.search(p, paciente_limpio) for p in patrones_cita_control)
+
+    # Validar si es una pregunta sobre el COSTO o GRATUIDAD de la valoración (debe responder tarifa gratuita en Nivel 1)
+    es_pregunta_costo_valoracion = (
+        ("valoracion" in paciente_limpio or "revision" in paciente_limpio)
+        and any(re.search(r"\b" + w + r"\b", paciente_limpio) for w in ["cuanto", "precio", "costo", "cobran", "vale", "cuesta", "gratis"])
+    )
+
+    # Si es solicitud de turno o disponibilidad (y NO pregunta de precio de valoración), respuesta unificada de agenda
+    if es_consulta_agenda and not es_pregunta_costo_valoracion:
+        print(f"📅 [Detección de Agenda/Cita] Paciente consultó turno/control/disponibilidad: '{texto_paciente}'. Respondiendo confirmación de agenda.", flush=True)
+        return {
+            "texto": "¡Hola! 👋 Permítenos revisar la agenda y te confirmamos a la mayor brevedad posible. 🦷📅",
+            "imagen": None
+        }
 
     async with httpx.AsyncClient(timeout=6.0) as client:
         mejor_resp_bot = None
@@ -483,7 +353,7 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
         max_puntos_srv = 0
         servicios_coincidentes = []
 
-        # 1. Búsqueda en tabla 'servicios' (Tratamientos directos)
+        # 1. Búsqueda en tabla 'servicios' (Tratamientos individuales directos con caché de 60s)
         try:
             datos_srv = []
             cache_entry = CACHE_SERVICIOS_DOCTOR.get(odontologo_id)
@@ -521,7 +391,6 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                     precio = fila.get("precio", "Según valoración")
                     desc = (fila.get("descripcion") or "").strip()
                     
-                    # Formato limpio: solo incluye aclaración corta si existe y no es relleno
                     detalle_extra = f"\n\n{desc}" if desc and len(desc) < 80 else ""
 
                     if "resina" in servicio_nom.lower() or "calza" in servicio_nom.lower():
@@ -558,13 +427,22 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
             print(f"🔀 [Multi-Servicio Detectado] Paciente consultó por: {servicios_distintos}. Delegando a Gemini IA...", flush=True)
             return None
 
-        # 2. Búsqueda en tabla 'chatbot' (Ubicación, Horarios, Saludos, Cordales)
+        # 2. Búsqueda en tabla 'chatbot' (Ubicación, Horarios, Saludos, Cordales, Promos con caché de 60s)
         try:
-            url_bot = f"{Config.SUPABASE_URL}/rest/v1/chatbot"
-            if odontologo_id:
-                url_bot += f"?odontologo_id=eq.{odontologo_id}"
-            res_bot = await client.get(url_bot, headers=SUPABASE_HEADERS)
-            datos_bot = res_bot.json() if res_bot.status_code == 200 else []
+            datos_bot = []
+            cache_bot_entry = CACHE_CHATBOT_DOCTOR.get(odontologo_id)
+            if cache_bot_entry and (ahora_ts - cache_bot_entry["timestamp"] < 60):
+                datos_bot = cache_bot_entry["datos"]
+            else:
+                url_bot = f"{Config.SUPABASE_URL}/rest/v1/chatbot"
+                if odontologo_id:
+                    url_bot += f"?odontologo_id=eq.{odontologo_id}"
+                res_bot = await client.get(url_bot, headers=SUPABASE_HEADERS)
+                if res_bot.status_code == 200:
+                    datos_bot = res_bot.json()
+                    if odontologo_id:
+                        CACHE_CHATBOT_DOCTOR[odontologo_id] = {"datos": datos_bot, "timestamp": ahora_ts}
+
             datos_activos = [f for f in datos_bot if str(f.get("estado", "")).upper() == "ACTIVO"]
 
             for fila in datos_activos:
@@ -576,13 +454,18 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                     img_limpia = str(img).strip() if img and str(img).strip() and str(img).strip().upper() != "NULL" else None
                     mejor_resp_bot = {
                         "texto": fila.get("respuesta", ""),
-                        "imagen": img_limpia
+                        "imagen": img_limpia,
+                        "intencion": fila.get("intencion", "")
                     }
         except Exception as e:
             print(f"❌ [Supabase Chatbot Error]: {e}", flush=True)
 
-        # 3. ⚖️ Prioridad justa por puntaje absoluto:
-        # Si la intención de Chatbot (ej: Cordales) acumuló más puntos que el catálogo genérico, GANA CHATBOT
+        # 3. ⚖️ Desempate y Prioridad Inteligente:
+        # Si coincide un servicio específico (ej: calza, resina, limpieza), nunca permitir que gane la lista general de precios
+        if mejor_resp_srv and mejor_resp_bot and mejor_resp_bot.get("intencion") == "precios":
+            print(f"⚡ [Supabase Match Directo] Priorizando tratamiento específico sobre lista general de precios (Puntaje srv: {max_puntos_srv})", flush=True)
+            return mejor_resp_srv
+
         if max_puntos_bot > max_puntos_srv and max_puntos_bot >= 5:
             print(f"⚡ [Supabase Match Directo] Respondiendo 'chatbot' por mayor relevancia (Puntaje: {max_puntos_bot})", flush=True)
             return mejor_resp_bot
@@ -700,6 +583,11 @@ DATOS DEL CONSULTORIO:
 
 TARIFAS OFICIALES EN COP:
 {info_servicios}
+
+🚨 CONSULTAS DE VARIOS TRATAMIENTOS / MULTI-SERVICIO:
+Si el paciente pregunta por dos o más servicios en el mismo mensaje (ej: limpieza y calza):
+1. Consolida en máximo 2 líneas las tarifas en COP de cada servicio preguntado.
+2. Invita brevemente a una cita de valoración conjunta para revisarle (ej: "¿Te gustaría agendar una cita de valoración para revisarte? 📅🦷").
 
 🚨 PROTOCOLO ESTRICTO DE CITAS Y DISPONIBILIDAD:
 Si el paciente pide cita o pregunta disponibilidad para hoy o cualquier día:
