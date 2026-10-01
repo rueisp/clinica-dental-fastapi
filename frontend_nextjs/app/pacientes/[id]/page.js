@@ -9,53 +9,30 @@ import Evoluciones from '@/app/components/pacientes/Evoluciones';
 import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { API_BASE_URL, authFetch, API_ENDPOINTS } from '@/config/api';
 import { ClipboardList, Activity, FileText } from 'lucide-react';
+import AuthGuard from '@/components/AuthGuard';
+import { useUser } from '@/context/UserContext';
 
 export default function MostrarPaciente() {
   const { id } = useParams();
   const router = useRouter();
+  const { user } = useUser();
   const [paciente, setPaciente] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [planActivo, setPlanActivo] = useState(true);
-
-  // --- ESTO ES LO QUE ESTABA AFUERA Y AHORA ESTÁ ADENTRO (CORRECTO) ---
   const [canExport, setCanExport] = useState(true);
 
   useEffect(() => {
-    const validarAcceso = async () => {
-      // 1. Detectar si es Admin (El admin tiene "superpoderes" y no vence)
-      const isAdmin = localStorage.getItem('is_admin') === 'true';
-      
-      if (isAdmin) {
-        setCanExport(true);
-        setPlanActivo(true);
-        return; // Si es admin, no necesitamos validar nada más
-      }
-
-      // 2. Cargar permisos del plan (Lo que compramos: Básico o Pro)
+    if (user?.is_admin) {
+      setCanExport(true);
+    } else if (user?.permissions?.can_export_history !== undefined) {
+      setCanExport(user.permissions.can_export_history);
+    } else {
       const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
       if (perms.can_export_history !== undefined) {
         setCanExport(perms.can_export_history);
       }
-
-      // 3. Verificar estado de la suscripción (¿Ya pagó el mes/año actual?)
-      try {
-        const res = await authFetch(`${API_BASE_URL}/api/usuarios/mi-plan-detalle`);
-        if (res.ok) {
-          const data = await res.json();
-          // Solo puede exportar si el estado es exactamente 'active'
-          setPlanActivo(data.status === 'active');
-        }
-      } catch (err) {
-        console.error("Error al validar suscripción:", err);
-        // En caso de error de red, por seguridad lo dejamos activo para no bloquear al doctor
-        setPlanActivo(true); 
-      }
-    };
-
-    validarAcceso();
-  }, []);
-  // ------------------------------------------------------------------
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchPaciente = async () => {
@@ -142,61 +119,63 @@ export default function MostrarPaciente() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      
-      {/* 2. Header: Sin el botón manual afuera para evitar duplicados */}
-      <HeaderPaciente 
-        paciente={paciente}
-        modo="mostrar"
-        onEliminar={handleEliminar}
-      />
-      
-      <TarjetaInfoPaciente 
-        paciente={paciente}
-        modo="mostrar"
-      />
-      
-      {/* 3. Evoluciones con Icono y Botón de Exportar */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-gray-800">
-            <ClipboardList size={20} className="text-blue-500" />
-            <h2 className="font-bold">Evoluciones Clínicas</h2>
-          </div>
-          
-          <button
-            onClick={handleExportarWord}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-              !canExport 
-              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed grayscale' 
-              : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
-            }`}
-          >
-            <FileText size={16} />
-            {canExport ? 'EXPORTAR HISTORIA' : 'EXPORTAR (PRO) 🔒'}
-          </button>
-        </div>
-        <Evoluciones pacienteId={id} />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        {/* 4. Dentigrama con Icono */}
+    <AuthGuard>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        {/* 2. Header: Sin el botón manual afuera para evitar duplicados */}
+        <HeaderPaciente 
+          paciente={paciente}
+          modo="mostrar"
+          onEliminar={handleEliminar}
+        />
+        
+        <TarjetaInfoPaciente 
+          paciente={paciente}
+          modo="mostrar"
+        />
+        
+        {/* 3. Evoluciones con Icono y Botón de Exportar */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4 text-gray-800">
-            <Activity size={20} className="text-purple-500" />
-            <h2 className="font-bold">Odontograma Digital</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-gray-800">
+              <ClipboardList size={20} className="text-blue-500" />
+              <h2 className="font-bold">Evoluciones Clínicas</h2>
+            </div>
+            
+            <button
+              onClick={handleExportarWord}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                !canExport 
+                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed grayscale' 
+                : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+              }`}
+            >
+              <FileText size={16} />
+              {canExport ? 'EXPORTAR HISTORIA' : 'EXPORTAR (PRO) 🔒'}
+            </button>
           </div>
-          <Dentigrama 
-            dentigramaCanvas={paciente.dentigrama_canvas}
-            modo="mostrar"
+          <Evoluciones pacienteId={id} />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+          {/* 4. Dentigrama con Icono */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4 text-gray-800">
+              <Activity size={20} className="text-purple-500" />
+              <h2 className="font-bold">Odontograma Digital</h2>
+            </div>
+            <Dentigrama 
+              dentigramaCanvas={paciente.dentigrama_canvas}
+              modo="mostrar"
+            />
+          </div>
+
+          <ImagenPerfil 
+            imagenUrl={paciente.imagen_perfil_url}
+            nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
           />
         </div>
-
-        <ImagenPerfil 
-          imagenUrl={paciente.imagen_perfil_url}
-          nombrePaciente={`${paciente.nombres} ${paciente.apellidos}`}
-        />
       </div>
-    </div>
+    </AuthGuard>
   );
 }

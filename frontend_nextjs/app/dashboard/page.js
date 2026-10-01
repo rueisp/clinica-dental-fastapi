@@ -130,7 +130,7 @@ function DashboardContent() {
   };
 
   return (
-    <AuthGuard>
+
       <div className="min-h-screen bg-gray-50 pb-20">
         {/* Cabecera */}
         <div className="px-4 pt-6 pb-4 max-w-5xl mx-auto lg:pr-40">
@@ -277,7 +277,7 @@ function DashboardContent() {
           </button>
         </div>
       </div>
-    </AuthGuard>
+  
   );
 }
 

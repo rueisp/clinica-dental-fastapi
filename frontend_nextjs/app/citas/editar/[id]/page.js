@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
@@ -37,9 +37,44 @@ export default function EditarCita() {
 
   const handleRegistrarPaciente = () => {
     const nombreCompleto = (formData.paciente_nombre || '').trim();
-    const partes = nombreCompleto.split(' ');
-    const nombres = partes[0] || '';
-    const apellidos = partes.slice(1).join(' ') || '';
+    const partes = nombreCompleto.split(/\s+/).filter(Boolean);
+    let nombres = '';
+    let apellidos = '';
+
+    // Lista de segundos nombres más comunes en Colombia
+    const segundosNombresComunes = new Set([
+      'jose', 'maria', 'carlos', 'luis', 'andres', 'david', 'fernando',
+      'alberto', 'antonio', 'manuel', 'guillermo', 'eduardo', 'alejandro',
+      'daniel', 'felipe', 'alexander', 'javier', 'miguel', 'gabriel',
+      'camila', 'sofia', 'paula', 'andrea', 'alejandra', 'carolina',
+      'patricia', 'isabel', 'elena', 'lucia', 'victoria', 'cristina',
+      'marina', 'teresa', 'esperanza', 'rocio', 'ines', 'pablo', 'enrique'
+    ]);
+
+    const limpiar = (txt) => (txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    if (partes.length <= 1) {
+      nombres = partes[0] || '';
+    } else if (partes.length === 2) {
+      nombres = partes[0];
+      apellidos = partes[1];
+    } else if (partes.length === 3) {
+      const segundaPalabraLimpia = limpiar(partes[1]);
+      
+      // Si la 2da palabra es un segundo nombre (ej: María José Gómez, Juan Carlos Pérez)
+      if (segundosNombresComunes.has(segundaPalabraLimpia)) {
+        nombres = `${partes[0]} ${partes[1]}`;
+        apellidos = partes[2];
+      } else {
+        // Si la 2da palabra es un apellido (ej: María Pérez Gómez)
+        nombres = partes[0];
+        apellidos = `${partes[1]} ${partes[2]}`;
+      }
+    } else {
+      // 4 o más palabras (ej: María José Pérez Gómez)
+      nombres = partes.slice(0, 2).join(' ');
+      apellidos = partes.slice(2).join(' ');
+    }
     
     const query = new URLSearchParams({
       nombres,
@@ -71,10 +106,12 @@ export default function EditarCita() {
     }
   };
 
+  const timeoutRef = useRef(null);
+
   // Debounce para búsqueda
   const buscarPacientesDebounced = (termino) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
       if (termino.length >= 3) {
         buscarPacientes(termino);
       } else {
@@ -102,7 +139,7 @@ export default function EditarCita() {
           });
         } else {
           alert('Error al cargar la cita');
-          router.push('/');
+          router.replace('/dashboard');
         }
       } catch (err) {
         console.error('Error:', err);
@@ -160,7 +197,7 @@ export default function EditarCita() {
       });
       
       if (response.ok) {
-        router.push(`/?fecha=${formData.fecha}`);
+        router.replace(`/dashboard?fecha=${formData.fecha}`);
       } else {
         const error = await response.json();
         alert('Error: ' + (error.detail || 'No se pudo actualizar la cita'));
@@ -334,7 +371,7 @@ export default function EditarCita() {
               <Button 
                 texto="Cancelar" 
                 variant="secondary" 
-                onClick={() => router.push(`/calendario/dia?fecha=${formData.fecha}`)}
+                onClick={() => router.replace(`/dashboard?fecha=${formData.fecha}`)}
                 className="flex-1"
               />
             </div>

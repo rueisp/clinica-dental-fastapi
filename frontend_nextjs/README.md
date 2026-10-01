@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🦷 CloudentApp - Frontend (Next.js 16)
 
-## Getting Started
+Interfaz clínica y operativa web de **CloudentApp**, plataforma SaaS integral para consultorios odontológicos. Construida con **Next.js 16 (App Router)**, **React 19** y **Tailwind CSS v4**, optimizada para operar con latencia mínima tanto en computadores de escritorio como en tabletas y dispositivos móviles.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🛠️ Tecnologías y Dependencias
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Framework:** Next.js 16 (App Router, Standalone Output).
+* **UI & Estilos:** Tailwind CSS v4, Lucide React Icons.
+* **Componentes Clínicos:** 
+  * FullCalendar (Agenda diaria y mensual con interfaz táctil).
+  * Odontograma interactivo digital SVG para adultos y niños.
+  * Transcripción y dictado de evoluciones clínicas por voz (Web Speech API).
+* **Bandeja de WhatsApp en Vivo:** Supabase Realtime (WebSockets) para mensajería bidireccional y notificaciones PWA nativas.
+* **Despliegue:** Docker Multi-stage compilado para Google Cloud Run Serverless (`us-east1`).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ⚙️ Variables de Entorno (`.env.local`)
 
-## Learn More
+Crea un archivo `.env.local` en la raíz de `frontend_nextjs/` con la configuración del backend y Supabase:
 
-To learn more about Next.js, take a look at the following resources:
+```env
+# URL de la API de FastAPI (Local o Cloud Run)
+NEXT_PUBLIC_API_URL=http://localhost:8001
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Supabase (PostgreSQL & Realtime para la Bandeja de WhatsApp)
+NEXT_PUBLIC_SUPABASE_URL=https://dywhdvvmtpivkzspihvy.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...

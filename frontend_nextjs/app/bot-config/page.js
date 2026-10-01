@@ -27,9 +27,10 @@ export default function BotConfigPage() {
 
     if (planInvalido) {
       alert('⚠️ La configuración del Asistente Virtual requiere una suscripción activa con módulo Ultra.');
-      router.push('/planes');
+      router.replace('/planes');
     }
   }, [user, router]);
+
 
   const [tabActiva, setTabActiva] = useState('servicios');
   const [cargando, setCargando] = useState(true);
@@ -134,6 +135,9 @@ export default function BotConfigPage() {
         setNuevoServicio({ servicio: '', categoria: 'General', precio: 'COP ', descripcion: '', palabras_clave: '' });
         notificarExito('Tratamiento agregado correctamente');
         cargarDatos();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Error al guardar: ${errData.detail || 'No se pudo crear el tratamiento'}`);
       }
     } catch (err) {
       alert('Error al crear el servicio');
@@ -775,8 +779,14 @@ export default function BotConfigPage() {
 
         {/* MODAL: NUEVO TRATAMIENTO */}
         {modalServicio && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+          <div 
+            onClick={() => setModalServicio(false)} 
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()} 
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 cursor-default"
+            >
               <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="font-black text-lg">Nuevo Tratamiento Clínico</h3>
                 <button onClick={() => setModalServicio(false)} className="p-1 hover:bg-gray-100 rounded-lg">
@@ -841,8 +851,14 @@ export default function BotConfigPage() {
 
         {/* MODAL: NUEVA PREGUNTA / AFICHE */}
         {modalChatbot && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+          <div 
+            onClick={() => setModalChatbot(false)} 
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()} 
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 cursor-default"
+            >
               <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="font-black text-lg">Nueva Respuesta / Promo</h3>
                 <button onClick={() => setModalChatbot(false)} className="p-1 hover:bg-gray-100 rounded-lg">
@@ -910,8 +926,14 @@ export default function BotConfigPage() {
 
         {/* ⚠️ MODAL DE ADVERTENCIA DE RESTAURACIÓN SEGURA */}
         {modalRestaurar && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 border border-red-100 animate-in fade-in zoom-in-95">
+          <div 
+            onClick={() => setModalRestaurar(false)} 
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()} 
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 border border-red-100 animate-in fade-in zoom-in-95 cursor-default"
+            >
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2 text-red-600 font-black text-base">
                   <AlertTriangle size={20} />

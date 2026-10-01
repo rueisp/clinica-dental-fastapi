@@ -7,6 +7,7 @@ export default function HeaderPaciente({
   paciente, 
   modo,           
   loading = false,
+  saving = false,
   onEliminar,
 }) {
   
@@ -61,34 +62,34 @@ export default function HeaderPaciente({
           )}
         </div>
         
-        {/* Botones de acción con el nuevo componente Button */}
+        {/* Botones de acción con el componente Button */}
         <div className="flex flex-wrap gap-3">
           {modo === 'mostrar' && (
             <>
               <Button 
-            icon="Trash2" 
-            texto="Eliminar" 
-            onClick={onEliminar}
-            variant="danger" 
-          />
-            <Button 
-              icon="Pencil" 
-              texto="Editar" 
-              href={`/pacientes/${paciente?.id}/editar`} 
-              variant="primary" 
-            />
-            <Button 
-              icon="Users" 
-              texto="Pacientes" 
-              href="/pacientes" 
-              variant="secondary" 
-            />
-            <Button 
-              icon="Home" 
-              texto="Inicio" 
-              href="/" 
-              variant="secondary" 
-            />
+                icon="Trash2" 
+                texto="Eliminar" 
+                onClick={onEliminar}
+                variant="danger" 
+              />
+              <Button 
+                icon="Pencil" 
+                texto="Editar" 
+                href={`/pacientes/${paciente?.id}/editar`} 
+                variant="primary" 
+              />
+              <Button 
+                icon="Users" 
+                texto="Pacientes" 
+                href="/pacientes" 
+                variant="secondary" 
+              />
+              <Button 
+                icon="Home" 
+                texto="Inicio" 
+                href="/dashboard" 
+                variant="secondary" 
+              />
             </>
           )}
           
@@ -100,10 +101,11 @@ export default function HeaderPaciente({
                 variant="secondary" 
               />
               <Button 
-                texto="Guardar Cambios" 
+                texto={saving ? "Guardando..." : "Guardar Cambios"} 
                 type="submit"
                 form="form-editar-paciente"
-                variant="primary" 
+                variant="primary"
+                disabled={saving}
               />
             </>
           )}
@@ -116,10 +118,11 @@ export default function HeaderPaciente({
                 variant="secondary" 
               />
               <Button 
-                texto="Guardar Paciente" 
+                texto={saving ? "Guardando..." : "Guardar Paciente"} 
                 type="submit"
                 form="form-registrar-paciente"
-                variant="primary" 
+                variant="primary"
+                disabled={saving}
               />
             </>
           )}

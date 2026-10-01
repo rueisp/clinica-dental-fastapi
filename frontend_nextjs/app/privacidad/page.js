@@ -33,7 +33,12 @@ export default function PrivacidadPage() {
             <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">2. Información que Recolectamos</h2>
             <div className="bg-zinc-50 p-6 rounded-2xl border border-zinc-100 space-y-3">
               <p><strong>De los odontólogos usuarios:</strong> nombre, correo electrónico, número de contacto, nombre de consultorio y especialidad.</p>
-              <p><strong>De los pacientes:</strong> nombres, datos de contacto, historia clínica, imágenes/radiografías, odontograma e historial de interacciones a través del asistente de WhatsApp y la bandeja de mensajes. Esta información es almacenada por CloudentApp por cuenta y bajo la total responsabilidad del odontólogo usuario.</p>
+              <p>
+                <strong>De los pacientes:</strong> nombres, datos de contacto, historia clínica, imágenes/radiografías, 
+                odontograma e historial de interacciones a través del asistente de WhatsApp y la bandeja de mensajes. 
+                Esta información es almacenada por CloudentApp por cuenta y bajo la total responsabilidad del odontólogo usuario. 
+                <em>(CloudentApp no graba ni almacena archivos de audio del dictado por voz; la transcripción se procesa localmente en el dispositivo del usuario).</em>
+              </p>
             </div>
           </section>
 
@@ -54,15 +59,24 @@ export default function PrivacidadPage() {
             </p>
           </section>
 
-          {/* SECCIÓN PRIVACIDAD DE WHATSAPP */}
+          {/* SECCIÓN PRIVACIDAD DE WHATSAPP E INTELIGENCIA ARTIFICIAL */}
           <section>
-            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">5. Privacidad en las Comunicaciones de WhatsApp</h2>
-            <div className="bg-zinc-50 p-6 rounded-2xl border border-zinc-100 text-zinc-600 leading-relaxed space-y-2">
+            <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">
+              5. Comunicaciones de WhatsApp e Inteligencia Artificial
+            </h2>
+            <div className="bg-zinc-50 p-6 rounded-2xl border border-zinc-100 text-zinc-600 leading-relaxed space-y-3">
               <p>
-                Las conversaciones, mensajes y consultas recibidas a través de la integración de WhatsApp son tratadas con estricta confidencialidad y son de propiedad exclusiva de la cuenta del odontólogo.
+                Las conversaciones, mensajes y consultas recibidas a través de la integración de WhatsApp son 
+                tratadas con estricta confidencialidad y son de propiedad exclusiva de la cuenta del odontólogo.
+              </p>
+              <p>
+                <strong>Procesamiento de Asistencia Virtual (IA):</strong> Las consultas canalizadas por el bot 
+                utilizan modelos de lenguaje (Google Gemini) con el único fin de generar respuestas contextuales en tiempo real. 
+                Los datos no son almacenados con fines publicitarios ni utilizados para entrenar modelos públicos de terceros.
               </p>
               <p className="font-semibold text-zinc-800">
-                CloudentApp nunca comercializa, analiza con fines publicitarios, cede ni transfiere a terceros las conversaciones ni la información de contacto de los pacientes.
+                CloudentApp nunca comercializa, analiza con fines comerciales, cede ni transfiere a terceros las 
+                conversaciones ni la información de contacto de los pacientes.
               </p>
             </div>
           </section>
@@ -70,7 +84,17 @@ export default function PrivacidadPage() {
           <section>
             <h2 className="text-xl font-black uppercase tracking-tight border-l-4 border-blue-600 pl-4 mb-4">6. Derechos, Seguridad y Vigencia</h2>
             <p className="text-zinc-600 mb-4">Los usuarios pueden conocer, actualizar o rectificar sus datos escribiendo directamente a <span className="text-blue-600 font-bold">cloudentapp.cliente@gmail.com</span>.</p>
-            <p className="text-zinc-600">Implementamos encriptación de grado bancario (AES-256 en reposo y TLS 1.3 en tránsito) y acceso restringido respaldado por la infraestructura de Google Cloud y Supabase. Los datos se conservan mientras la cuenta esté activa y 60 días adicionales tras la cancelación para permitir la descarga de copias de seguridad.</p>
+            <p className="text-zinc-600">
+              Implementamos encriptación de grado bancario (AES-256 en reposo y TLS 1.3 en tránsito) y acceso 
+              restringido respaldado por proveedores de infraestructura de clase mundial: 
+              <strong> Google Cloud Platform</strong> (cómputo e IA), 
+              <strong> Supabase</strong> (base de datos transaccional), 
+              <strong> Cloudinary</strong> (almacenamiento seguro de imágenes) y 
+              <strong> Hetzner Online GmbH</strong> (servidor dedicado para la pasarela de WhatsApp). 
+              El usuario conserva el derecho de descargar una copia de seguridad completa en Excel en cualquier momento. 
+              Los datos se conservan mientras la cuenta esté activa y hasta 60 días adicionales tras la cancelación 
+              para garantizar la portabilidad y recuperación de la información.
+            </p>
           </section>
         </article>
       </main>

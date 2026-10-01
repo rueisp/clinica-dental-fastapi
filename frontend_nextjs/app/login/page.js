@@ -1,14 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { API_BASE_URL, setAuthToken } from '@/config/api';
+import Link from 'next/link';
+import { API_ENDPOINTS, setAuthToken } from '@/config/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,19 +15,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(API_ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        // 1. Guardar el token para las peticiones API
+        // 1. Purgar caché previa para garantizar datos limpios del nuevo doctor
+        localStorage.removeItem('user_data_cache');
+
+        // 2. Guardar el nuevo token para las peticiones API
         setAuthToken(data.access_token);
         
-        // 2. Guardar información básica para persistencia
+        // 3. Guardar información básica para persistencia
         localStorage.setItem('user_nombres', data.nombres);
         localStorage.setItem('is_admin', data.is_admin);
 
@@ -38,16 +40,17 @@ export default function LoginPage() {
 
         console.log('✅ Login exitoso, redirigiendo...');
         
-        // CAMBIO CRÍTICO: Usamos window.location en lugar de router.push
-        // Esto obliga a la app a recargar el UserContext con los nuevos datos.
+        // Recarga completa para que UserContext inicialice limpio con la nueva sesión
         window.location.href = '/dashboard'; 
-        
       } else {
-        setError(data.detail || 'Error al iniciar sesión');
+        const errorMsg = typeof data.detail === 'string'
+          ? data.detail
+          : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'Error al iniciar sesión');
+        setError(errorMsg);
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Error de conexión con el servidor');
+      setError('Error de conexión con el servidor. Verifica tu conexión a internet.');
     } finally {
       setLoading(false);
     }
@@ -97,9 +100,18 @@ export default function LoginPage() {
           </button>
         </form>
         
-        <div className="mt-4 text-sm text-gray-500 text-center">
-          <p>Organiza tu consultorio de manera eficiente.</p>
-          
+        <div className="mt-6 text-sm text-gray-500 text-center space-y-2">
+          <p>
+            ¿No tienes una cuenta?{' '}
+            <Link href="/registro" className="text-blue-600 font-bold hover:underline">
+              Regístrate aquí
+            </Link>
+          </p>
+          <p>
+            <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">
+              ← Volver al inicio
+            </Link>
+          </p>
         </div>
       </div>
     </div>

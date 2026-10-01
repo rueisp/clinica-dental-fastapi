@@ -9,16 +9,14 @@ export function UserProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const cargarUsuario = async () => {
-    // Usamos un AbortController para evitar que la petición se quede colgada indefinidamente en el celular
+    // Usamos un AbortController para evitar que la petición se quede colgada en el celular
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000); // 7 segundos de límite (timeout)
+    const timeoutId = setTimeout(() => controller.abort(), 7000); // 7 segundos de límite
 
     try {
       const res = await authFetch(API_ENDPOINTS.PERFIL_USUARIO, {
         signal: controller.signal
       });
-      
-      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -34,19 +32,29 @@ export function UserProvider({ children }) {
         if (data.is_admin !== undefined) {
           localStorage.setItem('is_admin', data.is_admin);
         }
-      } else {
-        // Si el token es inválido (ej: expiró), limpiamos de forma segura
+      } else if (res.status === 401) {
+        // Solo cerramos sesión si el token realmente expiró o es inválido
         limpiarSesionLocal();
+      } else {
+        // Ante errores de servidor (500, 502, 503), mantenemos los datos en caché para no expulsar al doctor
+        const cached = localStorage.getItem('user_data_cache');
+        if (cached && !user) {
+          try {
+            setUser(JSON.parse(cached));
+          } catch (_) {}
+        }
       }
     } catch (err) {
       console.error("Error cargando usuario (red/timeout):", err);
-      // NOTA CRÍTICA PARA MÓVILES: Si hay un error de red o timeout, NO cerramos la sesión.
-      // Dejamos que el usuario siga usando la app con los datos que ya tenemos en caché.
+      // Fallback a caché en caso de fallo de red o timeout en móviles
       const cached = localStorage.getItem('user_data_cache');
       if (cached && !user) {
-        setUser(JSON.parse(cached));
+        try {
+          setUser(JSON.parse(cached));
+        } catch (_) {}
       }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -63,9 +71,13 @@ export function UserProvider({ children }) {
     const token = localStorage.getItem('auth_token');
     const cached = localStorage.getItem('user_data_cache');
 
-    // Si hay caché, lo cargamos de inmediato para que la UI responda al instante en el celular
+    // Si hay caché seguro, lo cargamos de inmediato para respuesta instantánea en celular
     if (cached) {
-      setUser(JSON.parse(cached));
+      try {
+        setUser(JSON.parse(cached));
+      } catch (_) {
+        localStorage.removeItem('user_data_cache');
+      }
     }
 
     if (token) {

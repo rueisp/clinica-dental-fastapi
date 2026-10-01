@@ -1,8 +1,6 @@
 'use client';
 
-import { User, Heart, Trash2 } from 'lucide-react';
-// Importamos las herramientas de configuración central
-import { authFetch, API_ENDPOINTS } from '@/config/api';
+import { User, Heart } from 'lucide-react';
 
 export default function TarjetaInfoPaciente({ 
   paciente,     
@@ -47,12 +45,15 @@ export default function TarjetaInfoPaciente({
     return `${corte.slice(0, 2)}/${corte.slice(2, 4)}/${corte.slice(4)}`;
   };
 
-  // Asegura que la fecha se muestre siempre como DD/MM/YYYY en el campo de texto
+  // Asegura que la fecha se muestre siempre como DD/MM/YYYY en el campo de texto (blindado contra ISO con T)
   const obtenerFechaMostrar = (fecha) => {
     if (!fecha) return '';
-    if (fecha.includes('-')) {
-      const [anio, mes, dia] = fecha.split('-');
-      return `${dia}/${mes}/${anio}`;
+    const fechaLimpia = String(fecha).split('T')[0];
+    if (fechaLimpia.includes('-')) {
+      const [anio, mes, dia] = fechaLimpia.split('-');
+      if (anio && mes && dia) {
+        return `${dia}/${mes}/${anio}`;
+      }
     }
     return fecha;
   };
@@ -71,31 +72,6 @@ export default function TarjetaInfoPaciente({
     const { name, value } = e.target;
     if (onChange) {
       onChange(name, value);
-    }
-  };
-
-  // Función para eliminar paciente corregida (sin IPs fijas)
-  const handleEliminar = async () => {
-    if (!paciente?.id) return;
-
-    const confirmar = confirm('¿Estás seguro de mover este paciente a la papelera?');
-    if (!confirmar) return;
-    
-    try {
-      const response = await authFetch(API_ENDPOINTS.PACIENTE_BY_ID(paciente.id), {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        alert('Paciente movido a la papelera');
-        window.location.href = '/pacientes';
-      } else {
-        const error = await response.json();
-        alert(error.detail || 'Error al eliminar');
-      }
-    } catch (error) {
-      console.error("Error al eliminar:", error);
-      alert('Error de conexión con el servidor');
     }
   };
 
@@ -136,7 +112,7 @@ export default function TarjetaInfoPaciente({
           </div>
           <div>
             <p className="text-xs text-gray-500">Edad</p>
-            <p className="text-sm font-medium text-black">{paciente?.edad || 'N/A'}</p>
+            <p className="text-sm font-medium text-black">{paciente?.edad !== undefined && paciente?.edad !== null ? `${paciente.edad} años` : 'N/A'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500">Sexo</p>
@@ -232,7 +208,7 @@ export default function TarjetaInfoPaciente({
             value={data?.nombres || ''}
             onChange={handleChange}
             required={esRegistro}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: Juan"
           />
         </div>
@@ -244,7 +220,7 @@ export default function TarjetaInfoPaciente({
             value={data?.apellidos || ''}
             onChange={handleChange}
             required={esRegistro}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: Pérez"
           />
         </div>
@@ -254,7 +230,7 @@ export default function TarjetaInfoPaciente({
             name="tipo_documento"
             value={data?.tipo_documento || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm bg-white"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black bg-white"
           >
             <option value="">Seleccione</option>
             <option value="CC">Cédula de Ciudadanía</option>
@@ -270,7 +246,7 @@ export default function TarjetaInfoPaciente({
             value={data?.documento || ''}
             onChange={handleChange}
             required={esRegistro}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: 123456789"
           />
         </div>
@@ -287,7 +263,7 @@ export default function TarjetaInfoPaciente({
             onChange={handleFechaChange}
             placeholder="DD/MM/AAAA"
             maxLength="10"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm bg-white"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black bg-white"
           />
         </div>
         <div>
@@ -297,7 +273,7 @@ export default function TarjetaInfoPaciente({
             name="edad"
             value={data?.edad || ''}
             readOnly
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-sm text-black font-medium"
             placeholder="Se calcula"
           />
         </div>
@@ -307,7 +283,7 @@ export default function TarjetaInfoPaciente({
             name="sexo"
             value={data?.sexo || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm bg-white"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black bg-white"
           >
             <option value="">Seleccione</option>
             <option value="M">Masculino</option>
@@ -322,7 +298,7 @@ export default function TarjetaInfoPaciente({
             value={data?.telefono || ''}
             onChange={handleChange}
             required={esRegistro}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: 3001234567"
           />
         </div>
@@ -336,7 +312,7 @@ export default function TarjetaInfoPaciente({
             name="email"
             value={data?.email || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: juan@email.com"
           />
         </div>
@@ -347,7 +323,7 @@ export default function TarjetaInfoPaciente({
             name="ocupacion"
             value={data?.ocupacion || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: Ingeniero"
           />
         </div>
@@ -358,7 +334,7 @@ export default function TarjetaInfoPaciente({
             name="direccion"
             value={data?.direccion || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: Calle 123"
           />
         </div>
@@ -369,7 +345,7 @@ export default function TarjetaInfoPaciente({
             name="barrio"
             value={data?.barrio || ''}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
             placeholder="Ej: El Poblado"
           />
         </div>
@@ -390,7 +366,7 @@ export default function TarjetaInfoPaciente({
             value={data?.motivo_consulta || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
         <div>
@@ -400,7 +376,7 @@ export default function TarjetaInfoPaciente({
             value={data?.enfermedad_actual || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
       </div>
@@ -413,7 +389,7 @@ export default function TarjetaInfoPaciente({
             value={data?.alergias || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
         <div>
@@ -423,7 +399,7 @@ export default function TarjetaInfoPaciente({
             value={data?.observaciones || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
       </div>
@@ -436,7 +412,7 @@ export default function TarjetaInfoPaciente({
             value={data?.cepillado_dental || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
         <div>
@@ -446,7 +422,7 @@ export default function TarjetaInfoPaciente({
             value={data?.habitos || ''}
             onChange={handleChange}
             rows="2"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/20 text-sm text-black"
           ></textarea>
         </div>
       </div>

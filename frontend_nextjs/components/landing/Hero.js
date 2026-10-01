@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { ArrowRight, Bot, MessageSquare } from 'lucide-react';
+import { ArrowRight, Bot } from 'lucide-react';
 
 export default function Hero() {
   return (

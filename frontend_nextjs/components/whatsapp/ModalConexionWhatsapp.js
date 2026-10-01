@@ -12,12 +12,13 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const intervalPollingRef = useRef(null);
 
-  // 1. Consultar estado actual
+  // 1. Consultar estado actual blindado contra errores 401/403
   const consultarEstado = async () => {
     try {
       const res = await authFetch(API_ENDPOINTS.WHATSAPP_ESTADO);
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        const data = await res.json();
         if (data.conectado) {
           setEstado('conectado');
           setQrCode(null);
@@ -25,9 +26,17 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
         } else {
           setEstado('desconectado');
         }
+      } else {
+        // Si el plan venció (403) o el token expiró (401), evitamos el spinner infinito
+        setEstado('desconectado');
+        setErrorMsg(data.detail || 'No se pudo verificar el estado de WhatsApp.');
+        detenerPolling();
       }
     } catch (err) {
       console.error('[WhatsApp Modal] Error consultando estado:', err);
+      setEstado('desconectado');
+      setErrorMsg('Error de conexión con el servidor.');
+      detenerPolling();
     }
   };
 
@@ -80,7 +89,7 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
     }
   };
 
-  // Polling para detectar cuando el doctor escanea el QR
+  // Polling para detectar cuando el doctor escanea el QR con freno ante errores
   const iniciarPolling = () => {
     detenerPolling();
     intervalPollingRef.current = setInterval(async () => {
@@ -93,6 +102,9 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
             setQrCode(null);
             detenerPolling();
           }
+        } else if (res.status === 401 || res.status === 403) {
+          // Detener polling inmediatamente si la sesión o los permisos fallaron
+          detenerPolling();
         }
       } catch (e) {
         console.error('[Polling WhatsApp]', e);
@@ -121,8 +133,14 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
   if (!abierto) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 overflow-hidden text-black animate-in fade-in zoom-in-95 duration-200">
+    <div 
+      onClick={onCerrar}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()} 
+        className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 overflow-hidden text-black animate-in fade-in zoom-in-95 duration-200 cursor-default"
+      >
         
         {/* Cabecera */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">

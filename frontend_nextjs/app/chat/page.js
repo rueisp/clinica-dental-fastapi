@@ -29,7 +29,7 @@ function ChatContent() {
 
     if (planInvalido) {
       alert('⚠️ La bandeja de WhatsApp requiere una suscripción activa con módulo Ultra.');
-      router.push('/planes');
+      router.replace('/planes');
     }
   }, [user, router]);
   
@@ -162,13 +162,15 @@ function ChatContent() {
     }
 
     cargarDirectorioPacientes();
-    if (miInstancia) {
-      cargarHistorial();
-    }
+
+    // Solo inicializamos el historial y el canal si ya tenemos la instancia del doctor cargada
+    if (!miInstancia) return;
+
+    cargarHistorial();
 
     // Escuchar solo mensajes de la instancia de este doctor
     const canal = supabase
-      .channel(`chat-realtime-${miInstancia || 'default'}`)
+      .channel(`chat-realtime-${miInstancia}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'historial' },
@@ -176,7 +178,7 @@ function ChatContent() {
           const nuevaFila = payload.new;
 
           // 🛡️ Filtro de seguridad: ignorar si no pertenece a la instancia de este doctor
-          if (miInstancia && nuevaFila.instance && nuevaFila.instance !== miInstancia) {
+          if (nuevaFila.instance && nuevaFila.instance !== miInstancia) {
             return;
           }
 

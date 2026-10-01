@@ -10,8 +10,14 @@ export default function ReciboDetalle() {
   const [pago, setPago] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [esDoctor, setEsDoctor] = useState(false);
 
   useEffect(() => {
+    // Detecta de forma segura en cliente si es el odontólogo en sesión
+    if (typeof window !== 'undefined') {
+      setEsDoctor(Boolean(localStorage.getItem('auth_token')));
+    }
+
     const fetchPago = async () => {
       try {
         const res = await authFetch(`${API_BASE_URL}/api/pagos/codigo/${codigo}`);
@@ -54,7 +60,8 @@ export default function ReciboDetalle() {
     const urlRecibo = window.location.href;
     const nombreEmisor = (pago.clinica_nombre || 'RECIBO DE PAGO').toUpperCase();
     
-    const mensaje = `🧾 *${nombreEmisor}*%0A%0A*Paciente:* ${pago.paciente_nombre}%0A*Monto:* ${formatearMoneda(pago.monto)}%0A*Concepto:* ${pago.concepto}%0A%0A📎 *Ver recibo detallado:* ${urlRecibo}`;
+    const textoPlano = `🧾 *${nombreEmisor}*\n\n*Paciente:* ${pago.paciente_nombre}\n*Monto:* ${formatearMoneda(pago.monto)}\n*Concepto:* ${pago.concepto}\n\n📎 *Ver recibo detallado:* ${urlRecibo}`;
+    const mensaje = encodeURIComponent(textoPlano);
     
     const telefonoOriginal = pago.telefono || '';
     const telLimpio = telefonoOriginal.replace(/\D/g, '');
@@ -155,9 +162,9 @@ export default function ReciboDetalle() {
         <div className="bg-white/90 backdrop-blur-lg border border-gray-200 shadow-2xl rounded-full px-6 py-3 flex items-center gap-6">
                   
           {/* 1. Botón Dashboard (Solo para el Doctor) */}
-          {typeof window !== 'undefined' && localStorage.getItem('auth_token') && (
-                  <>
-                    <button onClick={() => router.push('/dashboard')} className="flex flex-col items-center gap-1 group">
+          {esDoctor && (
+            <>
+              <button onClick={() => router.push('/dashboard')} className="flex flex-col items-center gap-1 group cursor-pointer">
                 <div className="p-2 bg-gray-100 text-gray-600 rounded-full group-hover:bg-black group-hover:text-white transition-colors">
                   <LayoutDashboard size={20} />
                 </div>

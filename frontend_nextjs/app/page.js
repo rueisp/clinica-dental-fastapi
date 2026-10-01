@@ -8,9 +8,8 @@ import Features from '@/components/landing/Features';
 import Pricing from '@/components/landing/Pricing';
 import SecurityTrust from '@/components/landing/SecurityTrust';
 import { 
-  ShieldAlert, Monitor, Layout, Calendar, Mic, FileText, 
-  Bot, MessageSquare, Sparkles, CheckCircle2, Zap, Clock, DollarSign,
-  ClipboardList // <--- AGREGAR ESTA LÍNEA 
+  ShieldAlert, Monitor, Layout, Calendar, FileText, 
+  Bot, MessageSquare, Sparkles, Clock, DollarSign 
 } from 'lucide-react';
 
 function LandingContent() {
@@ -56,7 +55,7 @@ function LandingContent() {
   useEffect(() => {
     const session = localStorage.getItem('auth_token');
     if (session) {
-      router.push(`/dashboard${queryString}`);
+      router.replace(`/dashboard${queryString}`);
     } else {
       setIsChecking(false);
     }

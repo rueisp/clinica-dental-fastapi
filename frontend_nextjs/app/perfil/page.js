@@ -1,10 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
+import { getFechaHoyLocal } from '@/app/utils/fechas';
 import { User, Shield, CreditCard, Save, Lock, Smartphone, Building, Database, Download } from 'lucide-react';
 import AuthGuard from '@/components/AuthGuard';
 
 export default function PerfilPage() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [plan, setPlan] = useState(null);
@@ -51,10 +54,18 @@ export default function PerfilPage() {
                 method: 'PUT',
                 body: JSON.stringify(perfil)
             });
-            if (res.ok) alert("¡Perfil actualizado con éxito!");
-            else alert("Error al actualizar");
+            const data = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+                alert("¡Perfil actualizado con éxito!");
+            } else {
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'Error al actualizar el perfil');
+                alert(`Error: ${errorMsg}`);
+            }
         } catch (err) {
-            alert("Error de conexión");
+            alert("Error de conexión con el servidor.");
         } finally {
             setSaving(false);
         }
@@ -74,15 +85,19 @@ export default function PerfilPage() {
                     new_password: passwords.new_password
                 })
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
+
             if (res.ok) {
-                alert("Contraseña actualizada");
+                alert("¡Contraseña actualizada con éxito!");
                 setPasswords({ old_password: '', new_password: '', confirm_password: '' });
             } else {
-                alert(data.detail || "Error al cambiar contraseña");
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'Error al cambiar la contraseña');
+                alert(`Error: ${errorMsg}`);
             }
         } catch (err) {
-            alert("Error de conexión");
+            alert("Error de conexión con el servidor.");
         } finally {
             setSaving(false);
         }
@@ -106,7 +121,7 @@ export default function PerfilPage() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const fechaHoy = new Date().toISOString().split('T')[0];
+            const fechaHoy = getFechaHoyLocal();
             a.download = `Backup_Pacientes_${fechaHoy}.csv`;
             document.body.appendChild(a);
             a.click();
@@ -276,14 +291,25 @@ export default function PerfilPage() {
                             <div className="bg-white/10 p-4 rounded-2xl border border-white/5 mb-6">
                                 <div className="flex justify-between items-end mb-2">
                                     <p className="text-xs text-gray-300 font-bold uppercase">Estado</p>
-                                    <span className="px-3 py-1 bg-green-500 text-white text-[10px] font-black rounded-full uppercase">Activo</span>
+                                    <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase ${
+                                        plan?.status === 'active' 
+                                            ? 'bg-green-500 text-white' 
+                                            : plan?.status === 'expired' 
+                                                ? 'bg-red-500 text-white' 
+                                                : plan?.status === 'pending_payment'
+                                                    ? 'bg-yellow-400 text-black'
+                                                    : 'bg-gray-500 text-white'
+                                    }`}>
+                                        {plan?.status === 'active' ? 'Activo' : plan?.status === 'expired' ? 'Vencido' : plan?.status === 'pending_payment' ? 'En Verificación' : (plan?.status || 'Inactivo')}
+                                    </span>
                                 </div>
                                 <p className="text-xs text-gray-400 italic">Vence el: {plan?.fecha_fin || '...'}</p>
                             </div>
 
                             <button 
-                                onClick={() => window.location.href = '/planes'}
-                                className="w-full py-3 bg-white text-black rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                type="button"
+                                onClick={() => router.push('/planes')}
+                                className="w-full py-3 bg-white text-black rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all cursor-pointer"
                             >
                                 Gestionar Planes
                             </button>

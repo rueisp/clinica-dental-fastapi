@@ -188,7 +188,21 @@ def calcular_puntaje_coincidencia(texto_paciente: str, lista_keywords: list) -> 
         if not kw_limpio:
             continue
         
-        patron = r"\b" + re.escape(kw_limpio) + r"(?:es|s)?\b"
+        # 1. Tolerar pronombres enclíticos colombianos en verbos (-me, -te, -se) si terminan en 'r'
+        palabras_kw = []
+        for p in kw_limpio.split():
+            esc = re.escape(p)
+            if p.endswith("r"):
+                esc += r"(?:me|te|se|nos|le|les)?"
+            palabras_kw.append(esc)
+
+        # 2. Tolerar artículos y conectores intermedios entre palabras compuestas
+        if len(palabras_kw) > 1:
+            conector = r"\s+(?:un|una|unos|unas|el|la|los|las|de|del|mi|mis)?\s*"
+            patron = r"\b" + conector.join(palabras_kw) + r"(?:es|s)?\b"
+        else:
+            patron = r"\b" + palabras_kw[0] + r"(?:es|s)?\b"
+
         if re.search(patron, paciente_limpio):
             if kw_limpio in SALUDOS_CORTOS and es_mensaje_largo:
                 continue

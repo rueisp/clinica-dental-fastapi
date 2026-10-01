@@ -10,10 +10,22 @@ import random
 import string
 
 # Importaciones de la aplicación (Sin el prefijo de carpeta raíz)
+import httpx
+from config import Config
 from utils.notifications import enviar_alerta_pago_telegram
 from database import get_db
 from dependencies.auth import get_current_user
-from models import PagoSuscripcion, Plan, Subscription, Usuario, Paciente, PagoClinico
+from models import (
+    PagoSuscripcion, Plan, Subscription, Usuario, 
+    Paciente, PagoClinico, Cita, Evolucion, LimiteDiario
+)
+from services.bot_engine_service import (
+    SUPABASE_HEADERS,
+    CACHE_CONFIG_DOCTOR,
+    CACHE_SERVICIOS_DOCTOR,
+    CACHE_CHATBOT_DOCTOR,
+    CACHE_SUSCRIPCION_DOCTOR
+)
 
 # Importaciones de esquemas agrupadas
 from schemas.pago import PagoCreate, PagoResponse, PagoReporte
@@ -552,14 +564,16 @@ async def obtener_resumen_usuarios(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No autorizado")
 
-    # Unimos Usuario con Subscription para traer todo de un golpe
+    # Unimos Usuario con Subscription para traer la información
     query = select(Usuario, Subscription).join(Subscription, Usuario.id == Subscription.user_id)
     result = await db.execute(query)
     rows = result.all()
 
+    ahora_colombia = datetime.now(COLOMBIA_TZ)
     respuesta = []
+
     for user, sub in rows:
-        # Contamos de forma ultra-rápida en SQL cuántos pacientes activos tiene este doctor
+        # 1. Contamos pacientes activos del odontólogo
         count_query = select(func.count(Paciente.id)).where(
             Paciente.odontologo_id == user.id,
             Paciente.is_deleted == False
@@ -567,14 +581,33 @@ async def obtener_resumen_usuarios(
         count_result = await db.execute(count_query)
         total_pacientes = count_result.scalar() or 0
 
+        # 2. Cálculo dinámico de vigencia del estado
+        if user.is_admin:
+            estado_dinamico = "active"
+        elif not sub or not sub.current_period_end:
+            estado_dinamico = "expired"
+        elif sub.status == "inactive":
+            estado_dinamico = "inactive"
+        else:
+            db_date = sub.current_period_end
+            if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
+                fecha_fin = db_date.astimezone(COLOMBIA_TZ)
+            else:
+                fecha_fin = COLOMBIA_TZ.localize(db_date)
+
+            if fecha_fin <= ahora_colombia:
+                estado_dinamico = "expired"
+            else:
+                estado_dinamico = sub.status
+
         respuesta.append({
             "id": str(user.id),
             "nombre": f"{user.nombres} {user.apellidos}",
             "email": user.email,
-            "plan_actual": sub.plan_type,
-            "estado": sub.status,
-            "vence": sub.current_period_end.strftime('%Y-%m-%d') if sub.current_period_end else "N/A",
-            "total_pacientes": total_pacientes  # <-- ENVIADO AL FRONTEND
+            "plan_actual": sub.plan_type if sub else "Sin Plan",
+            "estado": estado_dinamico,
+            "vence": sub.current_period_end.strftime('%Y-%m-%d') if (sub and sub.current_period_end) else "N/A",
+            "total_pacientes": total_pacientes
         })
     
     return respuesta
@@ -675,3 +708,95 @@ async def suspender_manual_admin(
 
     await db.commit()
     return {"success": True, "message": "Suscripción suspendida correctamente"}
+
+@router.delete("/admin/usuarios/{user_id}")
+async def eliminar_doctor_admin(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Elimina permanentemente una cuenta de doctor y todos sus datos en cascada transaccional"""
+    # 1. Candado de Administrador
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de administrador para realizar esta acción."
+        )
+
+    # 2. Validación de UUID
+    try:
+        target_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Identificador de usuario inválido.")
+
+    # 3. Candado de autoprotección: El administrador nunca puede borrarse a sí mismo
+    if target_uuid == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Operación bloqueada: No puedes eliminar tu propia cuenta de administrador."
+        )
+
+    # 4. Verificar que el usuario exista
+    res_user = await db.execute(select(Usuario).where(Usuario.id == target_uuid))
+    usuario_a_eliminar = res_user.scalar_one_or_none()
+
+    if not usuario_a_eliminar:
+        raise HTTPException(status_code=404, detail="El doctor no existe o ya fue eliminado.")
+
+    user_id_str = str(target_uuid)
+    instance_name = f"doctor_{user_id_str.replace('-', '_')}"
+
+    try:
+        # 5. Limpieza en cascada en PostgreSQL (Orden estricto de dependencias)
+        await db.execute(delete(Evolucion).where(Evolucion.odontologo_id == target_uuid))
+        await db.execute(delete(Cita).where(Cita.odontologo_id == target_uuid))
+        await db.execute(delete(PagoClinico).where(PagoClinico.odontologo_id == target_uuid))
+        await db.execute(delete(Paciente).where(Paciente.odontologo_id == target_uuid))
+        await db.execute(delete(PagoSuscripcion).where(PagoSuscripcion.user_id == target_uuid))
+        await db.execute(delete(LimiteDiario).where(LimiteDiario.user_id == target_uuid))
+        await db.execute(delete(Subscription).where(Subscription.user_id == target_uuid))
+        await db.delete(usuario_a_eliminar)
+
+        # 6. Limpieza complementaria en Supabase (Tablas personalizadas del bot del doctor)
+        if Config.SUPABASE_URL and Config.SUPABASE_KEY:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                try:
+                    await client.delete(
+                        f"{Config.SUPABASE_URL}/rest/v1/configuracion?odontologo_id=eq.{user_id_str}",
+                        headers=SUPABASE_HEADERS
+                    )
+                    await client.delete(
+                        f"{Config.SUPABASE_URL}/rest/v1/servicios?odontologo_id=eq.{user_id_str}",
+                        headers=SUPABASE_HEADERS
+                    )
+                    await client.delete(
+                        f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id_str}",
+                        headers=SUPABASE_HEADERS
+                    )
+                    await client.delete(
+                        f"{Config.SUPABASE_URL}/rest/v1/historial?instance=eq.{instance_name}",
+                        headers=SUPABASE_HEADERS
+                    )
+                except Exception as e:
+                    print(f"⚠️ [Advertencia limpieza Supabase]: {e}", flush=True)
+
+        # 7. Invalidar cachés en RAM
+        CACHE_CONFIG_DOCTOR.pop(user_id_str, None)
+        CACHE_SERVICIOS_DOCTOR.pop(user_id_str, None)
+        CACHE_CHATBOT_DOCTOR.pop(user_id_str, None)
+        CACHE_SUSCRIPCION_DOCTOR.pop(user_id_str, None)
+
+        # 8. Confirmación final de la transacción
+        await db.commit()
+
+        return {
+            "success": True,
+            "message": f"Cuenta de {usuario_a_eliminar.nombres} ({usuario_a_eliminar.email}) eliminada permanentemente con todos sus datos."
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error durante el borrado en cascada: {str(e)}"
+        )

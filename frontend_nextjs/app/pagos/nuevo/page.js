@@ -3,6 +3,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch, API_ENDPOINTS } from '@/config/api';
 import { ArrowLeft, Save, User, Phone, X } from 'lucide-react';
+import { getFechaHoyLocal } from '@/app/utils/fechas';
+import AuthGuard from '@/components/AuthGuard';
 
 function NuevoPagoForm() {
   const router = useRouter();
@@ -12,11 +14,11 @@ function NuevoPagoForm() {
   const [form, setForm] = useState({
     paciente_id: null,
     paciente_nombre: '',
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: getFechaHoyLocal(),
     concepto: '',
     monto: '',
     metodo_pago: 'Efectivo',
-    observacion: '', // Campo vinculado a Supabase
+    observacion: '',
     telefono: '',
     es_rapido: esRapidoParam
   });
@@ -24,9 +26,11 @@ function NuevoPagoForm() {
   const [pacientes, setPacientes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    if (busqueda.length > 1) {
+    // Solo busca si el doctor está escribiendo y no ha fijado un paciente ya seleccionado
+    if (busqueda.length > 1 && !form.paciente_id) {
       const timer = setTimeout(async () => {
         const res = await authFetch(`${API_ENDPOINTS.PACIENTES}?search=${busqueda}`);
         if (res.ok) {
@@ -36,7 +40,7 @@ function NuevoPagoForm() {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [busqueda]);
+  }, [busqueda, form.paciente_id]);
 
   const seleccionarPaciente = (p) => {
     setForm({ 
@@ -52,11 +56,13 @@ function NuevoPagoForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (guardando) return;
+    setGuardando(true);
     
     const datosParaEnviar = {
-      paciente_id: form.paciente_id, // UUID o null
+      paciente_id: form.paciente_id,
       paciente_nombre: form.paciente_nombre,
-      monto: parseFloat(form.monto), // Forzar número
+      monto: parseFloat(form.monto),
       metodo_pago: form.metodo_pago,
       concepto: form.concepto,
       fecha: form.fecha,
@@ -75,12 +81,14 @@ function NuevoPagoForm() {
         const pagoCreado = await res.json();
         router.push(`/pagos/recibo/${pagoCreado.codigo}`);
       } else {
-        const errorData = await res.json();
-        alert(`Error del servidor: ${errorData.detail}`);
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Error: ${errorData.detail || 'No se pudo registrar el pago'}`);
+        setGuardando(false);
       }
     } catch (err) {
       console.error("Error en el envío:", err);
       alert("No se pudo conectar con el servidor. Verifique la conexión.");
+      setGuardando(false);
     }
   };
 
@@ -133,12 +141,12 @@ function NuevoPagoForm() {
               )}
             </div>
             {mostrarSugerencias && pacientes.length > 0 && (
-              <div className="absolute z-10 w-full bg-white border rounded-xl shadow-lg mt-1">
+              <div className="absolute z-10 w-full bg-white border border-gray-100 rounded-xl shadow-lg mt-1 overflow-hidden">
                 {pacientes.map(p => (
                   <div 
                     key={p.id} 
                     onClick={() => seleccionarPaciente(p)}
-                    className="p-3 hover:bg-gray-50 cursor-pointer border-bottom text-black"
+                    className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-black font-medium text-sm transition-colors"
                   >
                     {p.nombres} {p.apellidos}
                   </div>
@@ -214,9 +222,10 @@ function NuevoPagoForm() {
 
           <button
             type="submit"
-            className="w-full bg-green-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-green-600 shadow-lg"
+            disabled={guardando}
+            className="w-full bg-green-500 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 mt-4 hover:bg-green-600 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
           >
-            <Save size={20} /> Guardar y Generar Recibo
+            <Save size={20} /> {guardando ? 'Generando Recibo...' : 'Guardar y Generar Recibo'}
           </button>
         </form>
       </div>
@@ -224,12 +233,13 @@ function NuevoPagoForm() {
   );
 }
 
-// Reemplaza el bloque final por este:
 const NuevoPago = () => {
   return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando formulario de pago...</div>}>
-      <NuevoPagoForm />
-    </Suspense>
+    <AuthGuard>
+      <Suspense fallback={<div className="p-8 text-center text-gray-400 font-medium">Cargando formulario de pago...</div>}>
+        <NuevoPagoForm />
+      </Suspense>
+    </AuthGuard>
   );
 };
 

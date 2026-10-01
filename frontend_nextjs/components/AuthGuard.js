@@ -10,10 +10,9 @@ export default function AuthGuard({ children }) {
   const router = useRouter();
 
   useEffect(() => {
-    // 2. Si el contexto terminó de cargar y NO encontró un usuario válido,
-    // significa que el token no existe o expiró. Redirigimos a login.
+    // Si el contexto terminó de cargar y no hay usuario, redirigimos limpiamente a login
     if (!loading && !user) {
-      router.push('/login');
+      router.replace('/login');
     }
   }, [user, loading, router]);
 

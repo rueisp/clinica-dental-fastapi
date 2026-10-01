@@ -15,14 +15,21 @@ export default function Pricing() {
         const token = getAuthToken();
         setIsLoggedIn(!!token && token !== 'test_token_123');
 
-        fetch(API_ENDPOINTS.PLANES, { cache: 'no-store' }) // <--- AGREGAR { cache: 'no-store' }
-            .then(res => res.json())
+        fetch(API_ENDPOINTS.PLANES, { cache: 'no-store' })
+            .then(async (res) => {
+                if (!res.ok) {
+                    throw new Error(`Error en catálogo de planes: ${res.status}`);
+                }
+                return res.json();
+            })
             .then(data => {
                 setPlanes(Array.isArray(data) ? data : []);
-                setLoading(false);
             })
             .catch(err => {
                 console.error("Error cargando planes:", err);
+                setPlanes([]);
+            })
+            .finally(() => {
                 setLoading(false);
             });
     }, []);
@@ -35,10 +42,21 @@ export default function Pricing() {
     }).sort((a, b) => a.orden - b.orden);
 
     const handlePlanClick = (plan) => {
+        // Si el plan es gratuito (Trial de 7 días)
+        if (plan.nombre === 'trial' || plan.precio_cop === 0) {
+            if (isLoggedIn) {
+                router.push('/dashboard');
+            } else {
+                router.push(`/registro?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
+            }
+            return;
+        }
+
+        // Si es un plan de pago (Básico, Pro, Ultra)
         if (isLoggedIn) {
             router.push(`/planes/reportar?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         } else {
-            router.push(`/registro?plan_id=${plan.id}&moneda=${moneda}`);
+            router.push(`/registro?plan_id=${plan.id}&plan_nombre=${plan.nombre}&moneda=${moneda}`);
         }
     };
 

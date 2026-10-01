@@ -18,10 +18,13 @@ export default function ImagenPerfil({
   const [localPreview, setLocalPreview] = useState(null);
   const [canUseMultimedia, setCanUseMultimedia] = useState(true);
 
-  // 1. CARGAR PERMISOS (Sincronización con el Plan) - MANTENIDO
+  // 1. CARGAR PERMISOS (Sincronización con el Plan y Bypass Admin)
   useEffect(() => {
+    const isAdmin = localStorage.getItem('is_admin') === 'true';
     const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
-    if (perms.can_use_multimedia !== undefined) {
+    if (isAdmin) {
+      setCanUseMultimedia(true);
+    } else if (perms.can_use_multimedia !== undefined) {
       setCanUseMultimedia(perms.can_use_multimedia);
     }
   }, []);

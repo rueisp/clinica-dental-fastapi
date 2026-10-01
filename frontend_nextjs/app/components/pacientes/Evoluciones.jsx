@@ -83,17 +83,33 @@ export default function Evoluciones({ pacienteId }) {
   }, [editandoId, canUseVoice]);
 
   const toggleEscuchar = () => {
+    if (!recognitionRef.current) {
+      alert("El reconocimiento de voz no es compatible con este navegador. Te sugerimos usar Google Chrome o Safari.");
+      return;
+    }
+
     if (estaEscuchando) {
-      recognitionRef.current?.stop();
+      recognitionRef.current.stop();
       setEstaEscuchando(false);
     } else {
       try {
-        recognitionRef.current?.start();
+        recognitionRef.current.start();
         setEstaEscuchando(true);
       } catch (e) {
         console.error("No se pudo iniciar el dictado", e);
+        setEstaEscuchando(false);
       }
     }
+  };
+
+  const formatearFechaEvolucion = (fechaStr) => {
+    if (!fechaStr) return '';
+    const fechaIso = String(fechaStr).replace(' ', 'T');
+    const d = new Date(fechaIso);
+    if (isNaN(d.getTime())) return fechaStr;
+    return d.toLocaleDateString('es-ES', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
   };
 
   // --- LÓGICA DE API (Usando authFetch) ---
@@ -148,17 +164,18 @@ export default function Evoluciones({ pacienteId }) {
     if (!editandoTexto.trim()) return alert('El texto no puede estar vacío');
 
     try {
-      // ✅ La URL debe ser /api/evoluciones/{id}, sin la palabra "/pacientes/"
       const url = `${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`;
-
       const response = await authFetch(url, {
-        method: 'PUT', // Este método debe coincidir con @router.put en el backend
+        method: 'PUT',
         body: JSON.stringify({ descripcion: editandoTexto })
       });
 
       if (response.ok) {
         setEditandoId(null);
         cargarEvoluciones();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        alert('Error: ' + (error.detail || 'No se pudo actualizar'));
       }
     } catch (err) {
       alert('Error de conexión');
@@ -168,10 +185,14 @@ export default function Evoluciones({ pacienteId }) {
   const eliminarEvolucion = async (evolucionId) => {
     if (!confirm('¿Eliminar esta evolución?')) return;
     try {
-      // ✅ URL: /api/evoluciones/{evolucionId}
       const url = `${API_ENDPOINTS.NUEVA_EVOLUCION}/${evolucionId}`;
       const response = await authFetch(url, { method: 'DELETE' });
-      if (response.ok) cargarEvoluciones();
+      if (response.ok) {
+        cargarEvoluciones();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        alert('Error: ' + (error.detail || 'No se pudo eliminar'));
+      }
     } catch (err) {
       alert('Error de conexión');
     }
@@ -266,9 +287,7 @@ export default function Evoluciones({ pacienteId }) {
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Fecha de Registro</span>
                       <span className="text-xs font-bold text-gray-500">
-                        {new Date(evolucion.fecha).toLocaleDateString('es-ES', {
-                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
+                        {formatearFechaEvolucion(evolucion.fecha)}
                       </span>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

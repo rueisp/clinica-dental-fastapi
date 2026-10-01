@@ -1,17 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Menu, X, Home, Users, CalendarDays, Trash2, CreditCard, UserCog, LogOut, MessageSquare, Bot, Lock } from 'lucide-react';
 import { setAuthToken } from '@/config/api';
 import { useUser } from '@/context/UserContext';
 
 export default function Sidebar() {
-  const router = useRouter();
   const pathname = usePathname();
   
-  const { user, loading } = useUser(); 
+  const { user, loading, logout } = useUser();
   
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -57,7 +56,13 @@ export default function Sidebar() {
   const closeSidebar = () => { if (isMobile) setIsOpen(false); };
 
   const handleLogout = () => {
-    setAuthToken(null);
+    if (logout) {
+      logout();
+    } else {
+      setAuthToken(null);
+    }
+    localStorage.removeItem('user_nombres');
+    localStorage.removeItem('nombre_usuario');
     window.location.href = '/login'; 
   };
 
@@ -116,8 +121,12 @@ export default function Sidebar() {
 
         <nav className="p-4 space-y-2">
           <Link
-            href="/"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            href="/dashboard"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/dashboard'
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <Home className="w-5 h-5" />
@@ -126,7 +135,11 @@ export default function Sidebar() {
 
           <Link
             href="/pacientes"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/pacientes' || (pathname.startsWith('/pacientes/') && pathname !== '/pacientes/papelera')
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <Users className="w-5 h-5" />
@@ -176,17 +189,25 @@ export default function Sidebar() {
           </Link>
 
           <Link
-            href="/"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            href="/citas/nueva"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname.startsWith('/citas/')
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <CalendarDays className="w-5 h-5" />
-            <span>Agendar</span>
+            <span>Agendar Cita</span>
           </Link>
 
           <Link
             href="/pacientes/papelera"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/pacientes/papelera'
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <Trash2 className="w-5 h-5" />
@@ -195,7 +216,11 @@ export default function Sidebar() {
 
           <Link
             href="/pagos"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/pagos' || (pathname.startsWith('/pagos/') && !pathname.includes('/recibo/'))
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <CreditCard className="w-5 h-5" />
@@ -208,7 +233,11 @@ export default function Sidebar() {
         <nav className="p-4 space-y-2">
           <Link
             href="/planes"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/planes' || pathname.startsWith('/planes/')
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <CreditCard className="w-5 h-5" />
@@ -217,7 +246,11 @@ export default function Sidebar() {
           
           <Link
             href="/perfil"
-            className="flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              pathname === '/perfil'
+                ? 'bg-blue-50 text-blue-600 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
             onClick={closeSidebar}
           >
             <UserCog className="w-5 h-5" />

@@ -3,6 +3,8 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { API_ENDPOINTS, authFetch } from '@/config/api';
 import { Upload, CheckCircle, CreditCard, ArrowLeft, Copy, Check, Zap } from 'lucide-react';
+import AuthGuard from '@/components/AuthGuard';
+
 
 function ReportarPagoForm() {
     const router = useRouter();
@@ -86,12 +88,19 @@ function ReportarPagoForm() {
                 })
             });
 
+            const data = await response.json().catch(() => ({}));
+
             if (response.ok) {
                 setEnviado(true);
-                setTimeout(() => router.push('/dashboard'), 3000);
+                setTimeout(() => router.replace('/dashboard'), 3000);
+            } else {
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'No se pudo procesar el reporte de pago.');
+                alert(`⚠️ ${errorMsg}`);
             }
         } catch (err) {
-            alert("Error al enviar el reporte");
+            alert("Error de conexión al enviar el reporte. Por favor, verifica tu red.");
         } finally {
             setLoading(false);
         }
@@ -286,8 +295,10 @@ function ReportarPagoForm() {
 
 export default function ReportarPago() {
     return (
-        <Suspense fallback={<div className="p-8 text-center">Cargando formulario de reporte...</div>}>
-            <ReportarPagoForm />
-        </Suspense>
+        <AuthGuard>
+            <Suspense fallback={<div className="p-8 text-center">Cargando formulario de reporte...</div>}>
+                <ReportarPagoForm />
+            </Suspense>
+        </AuthGuard>
     );
 }

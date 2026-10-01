@@ -6,13 +6,12 @@ import './globals.css';
 import { UserProvider } from '@/context/UserContext';
 
 export default function RootLayout({ children }) {
-  const pathname = usePathname() || '';
-  
-  const cleanPathname = pathname.split('?')[0].replace(/\/$/, "") || '/';
-  const publicRoutes = ['/', '/login', '/registro', '/privacidad', '/terminos'];
-  const isPublicRoute = 
-    publicRoutes.includes(cleanPathname) || 
-    cleanPathname.startsWith('/pagos/recibo/');
+  const pathname = usePathname();
+    const cleanPathname = pathname ? (pathname.split('?')[0].replace(/\/$/, "") || '/') : '';
+    const publicRoutes = ['/', '/login', '/registro', '/privacidad', '/terminos'];
+    const isPublicRoute = 
+      publicRoutes.includes(cleanPathname) || 
+      cleanPathname.startsWith('/pagos/recibo/');
 
   // Registro del Service Worker para notificaciones nativas
   useEffect(() => {
@@ -28,7 +27,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="theme-color" content="#000000" />
       </head>
       <body className="bg-gray-100 antialiased">
@@ -37,7 +40,6 @@ export default function RootLayout({ children }) {
             {!isPublicRoute && <Sidebar />}
 
             <main 
-              key={cleanPathname}
               className={`flex-1 w-full ${
                 isPublicRoute 
                   ? 'lg:ml-0 p-0' 

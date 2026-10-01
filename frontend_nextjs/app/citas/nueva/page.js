@@ -135,7 +135,7 @@ function NuevaCitaForm() {
     // 1. Verificación preventiva de plan vencido
     if (planVencido) {
       alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agendando citas.');
-      router.push('/planes');
+      router.replace('/planes');
       return;
     }
 

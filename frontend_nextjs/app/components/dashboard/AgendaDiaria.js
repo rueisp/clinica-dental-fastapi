@@ -55,7 +55,7 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
     // 1. Candado de seguridad si el plan está vencido
     if (planVencido) {
       alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para enviar recordatorios por WhatsApp.');
-      router.push('/planes');
+      router.replace('/planes');
       return;
     }
 
@@ -184,7 +184,7 @@ const AgendaDiaria = memo(function AgendaDiaria({ fecha, citasExternas, loading 
                           onClick={() => {
                             if (planVencido) {
                               alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para editar citas.');
-                              router.push('/planes');
+                              router.replace('/planes');
                               return;
                             }
                             router.push(`/citas/editar/${cita.id}`);

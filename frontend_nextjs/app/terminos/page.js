@@ -74,21 +74,41 @@ export default function TerminosPage() {
             </section>
 
             <section>
-              <h3 className="text-lg font-black text-zinc-900 uppercase">4. Suscripciones y Pagos</h3>
-              <p>Ofrecemos una prueba gratuita de 7 días. Los planes profesionales se activan mediante reporte de pago manual. CloudentApp se reserva el derecho de suspender el acceso ante la falta de pago o uso indebido.</p>
+              <h3 className="text-lg font-black text-zinc-900 uppercase">4. Suscripciones, Pagos y Mejoras de Plan</h3>
+              <p className="leading-relaxed">
+                Ofrecemos una prueba gratuita de 7 días no renovable por cuenta. La contratación de planes profesionales se formaliza mediante reporte manual de transferencia. Nos reservamos un tiempo prudencial de verificación para la activación del servicio.
+              </p>
+              <ul className="list-disc pl-6 text-zinc-600 text-sm space-y-1.5 mt-2">
+                <li>
+                  <strong>Mejoras de Plan (Upgrades):</strong> El Usuario podrá solicitar un plan superior en cualquier momento; el sistema liquidará y prorrateará automáticamente el saldo de los días restantes de su suscripción actual.
+                </li>
+                <li>
+                  <strong>Cambios a menor valor:</strong> No se permiten cambios a planes de menor tarifa mientras exista un ciclo activo; el Usuario deberá aguardar a la fecha de vencimiento.
+                </li>
+                <li>
+                  <strong>Política de No Reembolso:</strong> Una vez aprobado y activado el acceso al plan contratado, no se otorgarán reembolsos monetarios por terminación anticipada voluntaria.
+                </li>
+              </ul>
             </section>
 
-            {/* 📱 NUEVA SECCIÓN DE INTEGRACIÓN WHATSAPP */}
+            {/* 📱 SECCIÓN DE INTEGRACIÓN WHATSAPP E INTELIGENCIA ARTIFICIAL */}
             <section className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
               <h3 className="text-lg font-black text-blue-950 uppercase flex items-center gap-2">
-                📱 5. Integración del Asistente de WhatsApp y Dispositivos Vinculados
+                📱 5. Asistente de WhatsApp, Inteligencia Artificial y Dispositivos Vinculados
               </h3>
-              <p className="text-blue-900 text-sm mt-2 leading-relaxed">
-                El módulo de atención automatizada y mensajería opera como una extensión autorizada de la cuenta de WhatsApp del Usuario a través del protocolo oficial de dispositivos vinculados. El Usuario conserva el control total de su línea y puede vincular o revocar el acceso en cualquier momento directamente desde la plataforma o desde su aplicación móvil de WhatsApp.
-              </p>
-              <p className="text-blue-900 text-sm mt-2 leading-relaxed">
-                Por protocolos de seguridad y sincronización propios de WhatsApp, las sesiones pueden requerir una renovación periódica mediante escaneo de código QR (por ejemplo, ante inactividad prolongada del dispositivo principal o actualizaciones de seguridad de la red). CloudentApp emitirá una alerta visual en el panel del Usuario para facilitar su reconexión inmediata en 1 solo clic. El Usuario es el único responsable por la gestión y contenido de las comunicaciones dirigidas a sus pacientes.
-              </p>
+              <div className="text-blue-900 text-sm mt-2 leading-relaxed space-y-3">
+                <p>
+                  El módulo de atención automatizada opera como una extensión autorizada de la línea de WhatsApp del Usuario mediante el protocolo de dispositivos vinculados. Las credenciales de sesión pueden requerir renovación periódica mediante escaneo de código QR según los mecanismos de seguridad de WhatsApp.
+                </p>
+                <p>
+                  <strong>Deslinde de Responsabilidad Clínica y Diagnóstica:</strong> El asistente virtual asistido por Inteligencia Artificial cumple un rol estrictamente administrativo, tarifario y de triaje orientativo. 
+                  <strong className="text-blue-950"> El Asistente Virtual NO realiza diagnósticos médicos, no prescribe fármacos ni sustituye la consulta odontológica profesional presencial.</strong> 
+                  El odontólogo es el único responsable de supervisar la exactitud de los precios configurados y de la atención clínica definitiva otorgada a sus pacientes.
+                </p>
+                <p>
+                  <strong>Uso Receptivo (Inbound) y Prevención de Bloqueos:</strong> La herramienta está concebida exclusivamente para responder interacciones iniciadas voluntariamente por los pacientes. Queda prohibido el uso del sistema para campañas de mensajería masiva en frío (spam). CloudentApp no asume responsabilidad alguna ante restricciones o suspensiones de líneas telefónicas impuestas por Meta/WhatsApp derivadas del comportamiento del Usuario.
+                </p>
+              </div>
             </section>
 
             <section>

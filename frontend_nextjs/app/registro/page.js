@@ -1,13 +1,14 @@
 "use client";
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-// Importamos tus propias funciones del archivo config/api.js
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { API_ENDPOINTS, setAuthToken } from '@/config/api';
 
 function RegistroForm() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const planIdFromUrl = searchParams.get('plan_id');
+    const planNombreFromUrl = searchParams.get('plan_nombre');
+    const monedaFromUrl = searchParams.get('moneda') || 'COP';
 
     const [formData, setFormData] = useState({
         nombres: '',
@@ -36,33 +37,42 @@ function RegistroForm() {
                 body: JSON.stringify(formData),
             });
 
-            const data = await response.json();
+            const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
-                throw new Error(data.detail || "Error en el registro");
+                const errorMsg = typeof data.detail === 'string'
+                    ? data.detail
+                    : (Array.isArray(data.detail) ? data.detail[0]?.msg : 'Error al registrar la cuenta');
+                setError(errorMsg);
+                return;
             }
 
-            // 1. Guardar el token con tu función global
+            // 1. Purgar caché previa para garantizar datos limpios del nuevo doctor
+            localStorage.removeItem('user_data_cache');
+
+            // 2. Guardar el token de autenticación
             setAuthToken(data.access_token);
             
-            // 2. Guardar el nombre para el saludo del Dashboard
+            // 3. Guardar el nombre para el saludo del Dashboard
             localStorage.setItem("nombre_usuario", data.nombre_usuario);
 
-            // 🔥 3. NUEVO: Guardar los permisos del plan en localStorage
+            // 4. Guardar los permisos del plan en localStorage
             if (data.permissions) {
                 localStorage.setItem("user_permissions", JSON.stringify(data.permissions));
             }
 
-            // 4. Redirección limpia
-            window.location.href = "/dashboard"; 
+            // 5. Redirección inteligente según el plan elegido en la Landing
+            const esPlanDePago = planIdFromUrl && planNombreFromUrl && planNombreFromUrl.toLowerCase() !== 'trial';
+
+            if (esPlanDePago) {
+                window.location.href = `/planes/reportar?plan_id=${planIdFromUrl}&plan_nombre=${planNombreFromUrl}&moneda=${monedaFromUrl}`;
+            } else {
+                window.location.href = "/dashboard"; 
+            }
 
         } catch (err) {
-            // Si el error es un objeto de FastAPI (422), extraemos el mensaje
-            if (typeof err.message === 'object') {
-                setError(JSON.stringify(err.message));
-            } else {
-                setError(err.message);
-            }
+            console.error('Register error:', err);
+            setError('Error de conexión con el servidor. Verifica tu red.');
         } finally {
             setLoading(false);
         }
@@ -79,10 +89,24 @@ function RegistroForm() {
                     <input name="email" type="email" placeholder="Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
                     <input name="password" type="password" placeholder="Contraseña" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
                     
-                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold">
+                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition cursor-pointer disabled:opacity-50">
                         {loading ? "Cargando..." : "REGISTRARME"}
                     </button>
                 </form>
+
+                <div className="mt-6 text-sm text-gray-500 text-center space-y-2">
+                    <p>
+                        ¿Ya tienes una cuenta?{' '}
+                        <Link href="/login" className="text-blue-600 font-bold hover:underline">
+                            Inicia sesión aquí
+                        </Link>
+                    </p>
+                    <p>
+                        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">
+                            ← Volver al inicio
+                        </Link>
+                    </p>
+                </div>
             </div>
         </div>
     );

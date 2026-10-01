@@ -9,6 +9,7 @@ import ImagenPerfil from '@/app/components/pacientes/ImagenPerfil';
 import { API_BASE_URL, authFetch } from '@/config/api';
 import { Lock } from 'lucide-react'; // Importamos icono de bloqueo
 import { useUser } from '@/context/UserContext';
+import AuthGuard from '@/components/AuthGuard';
 
 function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaciente()" a "function NuevoPacienteForm()"
   const router = useRouter();
@@ -26,18 +27,23 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
   useEffect(() => {
     if (!userLoading && planVencido) {
       alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para registrar nuevos pacientes.');
-      router.push('/planes');
+      router.replace('/planes');
     }
   }, [planVencido, userLoading, router]);
   
-  // ✅ ESTADO DE PERMISOS
+  // ✅ ESTADO DE PERMISOS (Con bypass para Administrador)
   const [canUseOdontogram, setCanUseOdontogram] = useState(true);
-  const [modalOdontograma, setModalOdontograma] = useState(false); // <-- AGREGAR ESTA LÍNEA
+  const [modalOdontograma, setModalOdontograma] = useState(false);
 
   useEffect(() => {
-    const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
-    if (perms.can_use_odontogram !== undefined) setCanUseOdontogram(perms.can_use_odontogram);
-  }, []);
+    const isAdmin = localStorage.getItem('is_admin') === 'true' || user?.is_admin;
+    if (isAdmin) {
+      setCanUseOdontogram(true);
+    } else {
+      const perms = JSON.parse(localStorage.getItem('user_permissions') || '{}');
+      if (perms.can_use_odontogram !== undefined) setCanUseOdontogram(perms.can_use_odontogram);
+    }
+  }, [user]);
 
   const [formData, setFormData] = useState({
     nombres: '', apellidos: '', tipo_documento: '', documento: '',
@@ -87,7 +93,7 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
     // 1. Candado de seguridad para plan vencido
     if (planVencido) {
       alert('⚠️ Tu plan ha expirado. Por favor, renueva tu suscripción para registrar nuevos pacientes.');
-      router.push('/planes');
+      router.replace('/planes');
       return;
     }
     
@@ -236,11 +242,13 @@ function NuevoPacienteForm() { // Cambiado de "export default function NuevoPaci
   );
 }
 
-// Exportación final envuelta en Suspense para Next.js
+// Exportación final envuelta en AuthGuard y Suspense para Next.js
 export default function NuevoPaciente() {
   return (
-    <Suspense fallback={<div className="p-8 text-center font-medium text-gray-500">Cargando formulario...</div>}>
-      <NuevoPacienteForm />
-    </Suspense>
+    <AuthGuard>
+      <Suspense fallback={<div className="p-8 text-center font-medium text-gray-500">Cargando formulario...</div>}>
+        <NuevoPacienteForm />
+      </Suspense>
+    </AuthGuard>
   );
 }

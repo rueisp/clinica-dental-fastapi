@@ -31,17 +31,38 @@ export default function Navbar() {
           )}
         </div>
 
-        <button className="md:hidden text-zinc-950" onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X /> : <Menu />}
+        <button 
+          type="button"
+          aria-label="Menú principal"
+          className="md:hidden text-zinc-950 p-2 rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer" 
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden bg-white border-t border-zinc-100 p-6 space-y-4 animate-in fade-in slide-in-from-top-2">
-          <Link href="/#funciones" className="block font-bold text-zinc-600">Funciones</Link>
-          <Link href="/#precios" className="block font-bold text-zinc-600">Precios</Link>
-          <Link href={isLoggedIn ? "/dashboard" : "/login"} className="block bg-zinc-950 text-white px-4 py-3 rounded-xl text-center font-bold">
+        <div className="md:hidden bg-white border-t border-zinc-100 p-6 space-y-4 animate-in fade-in slide-in-from-top-2 shadow-lg">
+          <Link 
+            href="/#funciones" 
+            onClick={() => setIsOpen(false)}
+            className="block font-bold text-zinc-600 hover:text-blue-600 transition-colors py-1"
+          >
+            Funciones
+          </Link>
+          <Link 
+            href="/#precios" 
+            onClick={() => setIsOpen(false)}
+            className="block font-bold text-zinc-600 hover:text-blue-600 transition-colors py-1"
+          >
+            Precios
+          </Link>
+          <Link 
+            href={isLoggedIn ? "/dashboard" : "/login"} 
+            onClick={() => setIsOpen(false)}
+            className="block bg-zinc-950 text-white px-4 py-3 rounded-xl text-center font-bold hover:bg-zinc-800 transition-all shadow-md"
+          >
             {isLoggedIn ? 'Dashboard' : 'Iniciar Sesión'}
           </Link>
         </div>
