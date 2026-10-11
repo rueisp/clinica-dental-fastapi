@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case, cast, Date
 from datetime import datetime, timedelta, date
+from utils.fechas import ahora_aware, hoy_local, asegurar_tz
 from typing import Optional
-import pytz
 from database import get_db
 from dependencies.auth import get_current_user
 from models import Usuario, Cita, Paciente, Subscription, Plan
@@ -28,6 +28,7 @@ async def test_auth(
     }
 
 
+# Ubicación: backend_fastapi/endpoints/dashboard.py (dentro de get_dashboard_stats)
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     current_user: Usuario = Depends(get_current_user),
@@ -35,9 +36,8 @@ async def get_dashboard_stats(
 ):
     """Endpoint básico del dashboard con saludo y fecha"""
     
-    colombia_tz = pytz.timezone('America/Bogota')
-    ahora = datetime.now(colombia_tz)
-    hoy = ahora.date()
+    ahora = ahora_aware()
+    hoy = hoy_local()
     
     # Contador total de pacientes
     query_total_pacientes = (
@@ -223,12 +223,11 @@ async def eliminar_cita(
     if cita.odontologo_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No autorizado")
     
-    colombia_tz = pytz.timezone('America/Bogota')
     cita.is_deleted = True
-    cita.deleted_at = datetime.now(colombia_tz)
+    cita.deleted_at = ahora_aware().replace(tzinfo=None)
     await db.commit()
     
-    return {"success": True, "message": "Cita eliminada"} 
+    return {"success": True, "message": "Cita eliminada"}
 
 
 # ==================== CITAS CRUD ====================
@@ -407,10 +406,10 @@ async def get_home_data(
 ):
     await verificar_suscripcion_activa(current_user, db)
     
-    # 2. CONFIGURACIÓN DE FECHA LOCAL (Colombia)
-    colombia_tz = pytz.timezone('America/Bogota')
-    ahora = datetime.now(colombia_tz)
-    hoy = ahora.date()
+    # Ubicación: backend_fastapi/endpoints/dashboard.py (dentro de get_home_data)
+    # 2. CONFIGURACIÓN DE FECHA LOCAL (Centralizada)
+    ahora = ahora_aware()
+    hoy = hoy_local()
     
     try:
         fecha_agenda = datetime.strptime(selected_date, '%Y-%m-%d').date() if selected_date else hoy

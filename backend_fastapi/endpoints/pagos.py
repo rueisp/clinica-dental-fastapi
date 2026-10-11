@@ -1,3 +1,4 @@
+# backend_fastapi/endpoints/pagos.py (Bloque inicial a modificar)
 import math
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,14 +6,13 @@ from sqlalchemy import select, delete, func, extract
 from typing import Optional, List
 from datetime import datetime, timedelta
 import uuid
-import pytz
 import random
 import string
 
-# Importaciones de la aplicación (Sin el prefijo de carpeta raíz)
 import httpx
 from config import Config
 from utils.notifications import enviar_alerta_pago_telegram
+from utils.fechas import obtener_ahora_local, obtener_hoy_local, limpiar_naive, obtener_tz_doctor
 from database import get_db
 from dependencies.auth import get_current_user
 from models import (
@@ -27,21 +27,18 @@ from services.bot_engine_service import (
     CACHE_SUSCRIPCION_DOCTOR
 )
 
-# Importaciones de esquemas agrupadas
 from schemas.pago import PagoCreate, PagoResponse, PagoReporte
-
 from dependencies.limites import verificar_suscripcion_activa
 
 router = APIRouter(prefix="/pagos", tags=["pagos"])
 
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
-def generar_codigo_unico():
-    """Genera un código único para el recibo tipo R-20240520-ABC123"""
-    fecha_str = datetime.now(COLOMBIA_TZ).strftime('%Y%m%d')
+def generar_codigo_unico(zona_horaria: str = None):
+    """Genera un código único para el recibo tipo R-20240520-ABC123 usando la hora local"""
+    fecha_str = obtener_ahora_local(zona_horaria).strftime('%Y%m%d')
     random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"R-{fecha_str}-{random_str}"
 
+# backend_fastapi/endpoints/pagos.py (dentro de la función crear_pago)
 @router.post("/nuevo", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
 async def crear_pago(
     pago_data: PagoCreate,
@@ -50,8 +47,8 @@ async def crear_pago(
 ):
     await verificar_suscripcion_activa(current_user, db)
     try:
-        # 1. Obtener el momento exacto en Colombia
-        ahora_colombia = datetime.now(COLOMBIA_TZ)
+        # 1. Obtener el momento exacto usando el helper centralizado
+        ahora_local = obtener_ahora_local('America/Bogota')
         paciente_nombre_final = pago_data.paciente_nombre
         telefono_final = pago_data.telefono
         
@@ -71,11 +68,11 @@ async def crear_pago(
             odontologo_id=current_user.id,
             monto=pago_data.monto,
             metodo_pago=pago_data.metodo_pago,
-            fecha=ahora_colombia.date(),  
-            hora=ahora_colombia.time(),
+            fecha=ahora_local.date(),  
+            hora=ahora_local.time(),
             paciente_nombre=paciente_nombre_final,
             concepto=pago_data.concepto,
-            codigo=generar_codigo_unico(),
+            codigo=generar_codigo_unico('America/Bogota'),
             observacion=pago_data.observacion,
             telefono=telefono_final,
             es_rapido=pago_data.es_rapido
@@ -84,11 +81,13 @@ async def crear_pago(
         db.add(nuevo_pago)
         await db.commit()
         await db.refresh(nuevo_pago)
+        
 
         # 3. Formatear la fecha de forma segura como objeto date local sin modificar el objeto de la DB
         fecha_local = nuevo_pago.fecha
         if isinstance(fecha_local, datetime):
-            fecha_local = fecha_local.astimezone(COLOMBIA_TZ).date()
+            tz = obtener_tz_doctor('America/Bogota')
+            fecha_local = fecha_local.astimezone(tz).date()
         elif isinstance(fecha_local, str):
             try:
                 fecha_local = datetime.strptime(fecha_local, '%Y-%m-%d').date()
@@ -136,7 +135,8 @@ async def obtener_pago(
     
     fecha_local = pago.fecha
     if isinstance(fecha_local, datetime):
-        fecha_local = fecha_local.astimezone(COLOMBIA_TZ).date()
+        tz = obtener_tz_doctor('America/Bogota')
+        fecha_local = fecha_local.astimezone(tz).date()
     elif isinstance(fecha_local, str):
         try:
             fecha_local = datetime.strptime(fecha_local, '%Y-%m-%d').date()
@@ -365,8 +365,8 @@ async def aprobar_pago_admin(
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
     # 4. Cálculo inteligente de fechas y prorrateo
-    ahora_con_tz = datetime.now(COLOMBIA_TZ)
-    ahora = ahora_con_tz.replace(tzinfo=None)
+    ahora_con_tz = obtener_ahora_local('America/Bogota')
+    ahora = limpiar_naive(ahora_con_tz)
     dias_base_nuevo_plan = plan_nuevo.duracion_dias if plan_nuevo.duracion_dias else 30
 
     fecha_fin_actual = suscripcion.current_period_end if suscripcion else None
@@ -472,7 +472,7 @@ async def obtener_pagos_pendientes(
         # Cálculo de días actuales (Sincronizado con Bogotá)
         dias_acumulados = 0
         if sub and sub.current_period_end:
-            ahora = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+            ahora = limpiar_naive(obtener_ahora_local('America/Bogota'))
             vence = sub.current_period_end.replace(tzinfo=None)
             if vence > ahora:
                 dias_acumulados = (vence - ahora).days
@@ -569,7 +569,7 @@ async def obtener_resumen_usuarios(
     result = await db.execute(query)
     rows = result.all()
 
-    ahora_colombia = datetime.now(COLOMBIA_TZ)
+    ahora_colombia = obtener_ahora_local('America/Bogota')
     respuesta = []
 
     for user, sub in rows:
@@ -590,10 +590,11 @@ async def obtener_resumen_usuarios(
             estado_dinamico = "inactive"
         else:
             db_date = sub.current_period_end
+            tz = obtener_tz_doctor('America/Bogota')
             if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
-                fecha_fin = db_date.astimezone(COLOMBIA_TZ)
+                fecha_fin = db_date.astimezone(tz)
             else:
-                fecha_fin = COLOMBIA_TZ.localize(db_date)
+                fecha_fin = tz.localize(db_date)
 
             if fecha_fin <= ahora_colombia:
                 estado_dinamico = "expired"
@@ -606,7 +607,7 @@ async def obtener_resumen_usuarios(
             "email": user.email,
             "plan_actual": sub.plan_type if sub else "Sin Plan",
             "estado": estado_dinamico,
-            "vence": sub.current_period_end.strftime('%Y-%m-%d') if (sub and sub.current_period_end) else "N/A",
+            "vence": sub.current_period_end.strftime('%d/%m/%Y') if sub.current_period_end else "N/A",
             "total_pacientes": total_pacientes
         })
     
@@ -634,7 +635,7 @@ async def activar_manual_admin(
     plan = res_plan.scalar_one_or_none()
 
     # 3. Calcular fechas LIMPIAS
-    ahora = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+    ahora = limpiar_naive(obtener_ahora_local('America/Bogota'))
     dias = plan.duracion_dias if plan else 30
     vencimiento = ahora + timedelta(days=dias)
 
@@ -704,7 +705,7 @@ async def suspender_manual_admin(
 
     # 2. Cambiar el estado a inactivo
     suscripcion.status = "inactive"
-    suscripcion.updated_at = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+    suscripcion.updated_at = limpiar_naive(obtener_ahora_local('America/Bogota'))
 
     await db.commit()
     return {"success": True, "message": "Suscripción suspendida correctamente"}

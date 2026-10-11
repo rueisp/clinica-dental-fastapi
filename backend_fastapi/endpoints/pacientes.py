@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import Optional
 import cloudinary.uploader
 import cloudinary
-import pytz
+from utils.fechas import ahora_naive, hoy_local
 import os
 from pydantic import BaseModel
 from database import get_db
@@ -156,7 +156,7 @@ async def crear_paciente(
     
     # 6. Incrementar o Crear registro de límite diario
     # ✅ Usamos la misma fecha local de Colombia que en limites.py
-    fecha_hoy = datetime.now(pytz.timezone('America/Bogota')).date()
+    fecha_hoy = hoy_local()
     
     result_limite = await db.execute(
         select(LimiteDiario).where(
@@ -668,9 +668,7 @@ async def eliminar_paciente(
         raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este paciente")
     
     # Soft delete con hora local de Colombia
-    colombia_tz = pytz.timezone('America/Bogota')
-    paciente.is_deleted = True
-    paciente.deleted_at = datetime.now(colombia_tz).replace(tzinfo=None)
+    paciente.deleted_at = ahora_naive()
 
     # ✅ OCULTAR CITAS: Para que no aparezcan en la agenda
     await db.execute(

@@ -1,5 +1,5 @@
 # backend_fastapi/endpoints/auth.py
-import pytz
+from utils.fechas import ahora_naive, ahora_aware, asegurar_tz
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,8 +9,6 @@ from models import Usuario, Plan, Subscription
 from schemas.auth import LoginRequest, TokenResponse, UsuarioCreate
 from utils.auth_utils import verificar_password, hash_password, crear_token_acceso
 from services.bot_engine_service import poblar_plantilla_bot_doctor
-
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
 
 router = APIRouter()
 
@@ -46,9 +44,9 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     if user.is_admin:
         esta_activo = True
     elif subscription and subscription.status == "active" and subscription.current_period_end:
-        ahora_col = datetime.now(COLOMBIA_TZ)
+        ahora_col = ahora_aware()
         db_fin = subscription.current_period_end
-        fecha_fin = db_fin.astimezone(COLOMBIA_TZ) if getattr(db_fin, "tzinfo", None) else COLOMBIA_TZ.localize(db_fin)
+        fecha_fin = asegurar_tz(db_fin)
         if fecha_fin > ahora_col:
             esta_activo = True
 
@@ -87,7 +85,7 @@ async def register(user_data: UsuarioCreate, db: AsyncSession = Depends(get_db))
     plan_result = await db.execute(select(Plan).where(Plan.nombre == 'trial'))
     plan = plan_result.scalar_one_or_none()
 
-    ahora_bogota = datetime.now(COLOMBIA_TZ).replace(tzinfo=None)
+    ahora_bogota = ahora_naive()
     fecha_fin_trial = ahora_bogota + timedelta(days=7)
 
     try:

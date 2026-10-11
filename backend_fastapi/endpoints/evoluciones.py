@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from datetime import datetime
-import pytz
+from utils.fechas import obtener_ahora_local, limpiar_naive
 from uuid import UUID  # <--- IMPORTANTE
 from database import get_db
 from dependencies.auth import get_current_user
@@ -65,7 +65,7 @@ async def get_evoluciones(
         ]
     }
 
-# 2. Crear evolución (Añadido odontologo_id)
+# Ubicación: backend_fastapi/endpoints/evoluciones.py (en la función create_evolucion)
 @router.post("/pacientes/{paciente_id}")
 async def create_evolucion(
     paciente_id: UUID, 
@@ -91,9 +91,7 @@ async def create_evolucion(
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
         raise HTTPException(403, "No autorizado")
     
-    colombia_tz = pytz.timezone('America/Bogota')
-    fecha_local = datetime.now(colombia_tz)
-    fecha_sin_zona = fecha_local.replace(tzinfo=None)
+    fecha_sin_zona = limpiar_naive(obtener_ahora_local('America/Bogota'))
 
     nueva = Evolucion(
         descripcion=data.descripcion,
@@ -171,9 +169,8 @@ async def delete_evolucion(
     if not current_user.is_admin and evolucion.odontologo_id != current_user.id:
         raise HTTPException(403, "No autorizado para eliminar esta nota")
 
-    colombia_tz = pytz.timezone('America/Bogota')
     evolucion.is_deleted = True
-    evolucion.deleted_at = datetime.now(colombia_tz)
+    evolucion.deleted_at = obtener_ahora_local('America/Bogota')
     
     await db.commit()
     return {"success": True, "message": "Evolución movida a la papelera"}

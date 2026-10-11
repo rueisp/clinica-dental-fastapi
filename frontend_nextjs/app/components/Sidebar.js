@@ -93,14 +93,14 @@ export default function Sidebar() {
         className={`
           fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50
           transition-transform duration-300 ease-in-out
-          w-80
+          w-80 flex flex-col overflow-y-auto
           ${isMobile 
             ? (isOpen ? 'translate-x-0' : '-translate-x-full')
             : 'translate-x-0'
           }
         `}
       >
-        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+        <div className="p-5 border-b border-gray-200 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-xl font-black text-black tracking-tighter">CloudentApp</h2>
             <div className="mt-1">
@@ -119,10 +119,10 @@ export default function Sidebar() {
           )}
         </div>
 
-        <nav className="p-4 space-y-2">
+        <nav className="p-3 space-y-1">
           <Link
             href="/dashboard"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/dashboard'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -135,7 +135,7 @@ export default function Sidebar() {
 
           <Link
             href="/pacientes"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/pacientes' || (pathname.startsWith('/pacientes/') && pathname !== '/pacientes/papelera')
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -149,7 +149,7 @@ export default function Sidebar() {
           {/* 💬 ACCESO: Chat WhatsApp */}
           <Link
             href={puedeUsarBot ? "/chat" : "/planes"}
-            className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/chat'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -170,7 +170,7 @@ export default function Sidebar() {
           {/* 🤖 ACCESO: Configurar Bot */}
           <Link
             href={puedeUsarBot ? "/bot-config" : "/planes"}
-            className={`flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/bot-config'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -190,7 +190,7 @@ export default function Sidebar() {
 
           <Link
             href="/citas/nueva"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname.startsWith('/citas/')
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -203,7 +203,7 @@ export default function Sidebar() {
 
           <Link
             href="/pacientes/papelera"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/pacientes/papelera'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -216,7 +216,7 @@ export default function Sidebar() {
 
           <Link
             href="/pagos"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/pagos' || (pathname.startsWith('/pagos/') && !pathname.includes('/recibo/'))
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -228,12 +228,12 @@ export default function Sidebar() {
           </Link>
         </nav>
 
-        <hr className="my-4 border-gray-200" />
+        <hr className="my-2 border-gray-200 shrink-0" />
 
-        <nav className="p-4 space-y-2">
+        <nav className="p-3 space-y-1 mt-auto shrink-0">
           <Link
             href="/planes"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/planes' || pathname.startsWith('/planes/')
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -246,7 +246,7 @@ export default function Sidebar() {
           
           <Link
             href="/perfil"
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
               pathname === '/perfil'
                 ? 'bg-blue-50 text-blue-600 font-bold'
                 : 'text-gray-700 hover:bg-gray-100'
@@ -260,7 +260,7 @@ export default function Sidebar() {
           {user?.is_admin && (
             <Link
               href="/admin/pagos"
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border ${
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors border ${
                 pathname === '/admin/pagos' 
                   ? 'text-purple-700 bg-purple-50 border-purple-100' 
                   : 'text-gray-700 hover:bg-gray-100 border-transparent'
@@ -277,7 +277,7 @@ export default function Sidebar() {
               closeSidebar();
               handleLogout();
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-700 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
           >
             <LogOut className="w-5 h-5" />
             <span>Salir</span>

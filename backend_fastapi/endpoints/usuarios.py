@@ -1,4 +1,4 @@
-import pytz
+# backend_fastapi/endpoints/usuarios.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -10,9 +10,7 @@ from models import Usuario, Subscription, Plan
 from utils.auth_utils import verificar_password, hash_password
 from schemas.auth import PasswordUpdate, PerfilUpdate
 from services.bot_engine_service import CACHE_CONFIG_DOCTOR
-
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
+from utils.fechas import obtener_ahora_local, obtener_tz_doctor
 
 router = APIRouter()
 
@@ -36,7 +34,7 @@ async def get_usuario_actual(
     result = await db.execute(query)
     row = result.first()
     
-    ahora_colombia = datetime.now(COLOMBIA_TZ)
+    ahora_colombia = obtener_ahora_local('America/Bogota')
     dias_restantes = 0
     fecha_fin_str = "Vencido"
     status = "inactive"
@@ -53,10 +51,11 @@ async def get_usuario_actual(
         
         if sub and sub.current_period_end:
             db_date = sub.current_period_end
+            tz = obtener_tz_doctor('America/Bogota')
             if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
-                fecha_fin = db_date.astimezone(COLOMBIA_TZ)
+                fecha_fin = db_date.astimezone(tz)
             else:
-                fecha_fin = COLOMBIA_TZ.localize(db_date)
+                fecha_fin = tz.localize(db_date)
             
             fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
             
@@ -138,13 +137,14 @@ async def cambiar_plan(
 
     # 5. Validación de suscripciones activas existentes (Reglas de Upgrade)
     if suscripcion and suscripcion.status == "active" and suscripcion.current_period_end:
-        ahora_colombia = datetime.now(COLOMBIA_TZ)
+        ahora_colombia = obtener_ahora_local('America/Bogota')
         db_fin = suscripcion.current_period_end
         
+        tz = obtener_tz_doctor('America/Bogota')
         if hasattr(db_fin, "tzinfo") and db_fin.tzinfo is not None:
-            fecha_fin = db_fin.astimezone(COLOMBIA_TZ)
+            fecha_fin = db_fin.astimezone(tz)
         else:
-            fecha_fin = COLOMBIA_TZ.localize(db_fin)
+            fecha_fin = tz.localize(db_fin)
 
         # Solo aplicamos restricción de upgrade si el plan está REALMENTE VIGENTE
         if fecha_fin > ahora_colombia and suscripcion.plan_type.lower() != "trial":
@@ -206,7 +206,7 @@ async def get_mi_plan_detalle(
     if not plan:
         return {"tiene_plan": False, "mensaje": "Plan no encontrado en catálogo"}
 
-    ahora = datetime.now(COLOMBIA_TZ)
+    ahora = obtener_ahora_local('America/Bogota')
     db_fecha_fin = sub.current_period_end
     if not db_fecha_fin:
         return {
@@ -217,10 +217,11 @@ async def get_mi_plan_detalle(
             "porcentaje_progreso": 100
         }
 
+    tz = obtener_tz_doctor('America/Bogota')
     if hasattr(db_fecha_fin, "tzinfo") and db_fecha_fin.tzinfo is not None:
-        fecha_fin = db_fecha_fin.astimezone(COLOMBIA_TZ)
+        fecha_fin = db_fecha_fin.astimezone(tz)
     else:
-        fecha_fin = COLOMBIA_TZ.localize(db_fecha_fin)
+        fecha_fin = tz.localize(db_fecha_fin)
 
     if fecha_fin <= ahora:
         dias_restantes = 0

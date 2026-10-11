@@ -1,13 +1,12 @@
-# dependencies/limites.py
-import pytz
+# backend_fastapi/dependencies/limites.py
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from models import LimiteDiario, Usuario, Plan, Subscription
+from utils.fechas import ahora_aware, hoy_local, asegurar_tz
 
-COLOMBIA_TZ = pytz.timezone('America/Bogota')
-
+# Ubicación: backend_fastapi/dependencies/limites.py
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
     """Valida la suscripción trayendo el Plan en un solo viaje SQL (Optimizado bajo Regla 7.E)"""
     # 1. BYPASS PARA EL ADMINISTRADOR
@@ -46,14 +45,11 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
             detail="Tu plan ha expirado o no tiene fecha de vigencia válida. Renueva tu suscripción para continuar."
         )
 
-    ahora = datetime.now(COLOMBIA_TZ)
+    ahora = ahora_aware()
     db_fecha_fin = sub.current_period_end
     
-    # Normalización segura con zona horaria de Colombia
-    if hasattr(db_fecha_fin, "tzinfo") and db_fecha_fin.tzinfo is not None:
-        fecha_fin = db_fecha_fin.astimezone(COLOMBIA_TZ)
-    else:
-        fecha_fin = COLOMBIA_TZ.localize(db_fecha_fin)
+    # Normalización segura usando el módulo central de fechas
+    fecha_fin = asegurar_tz(db_fecha_fin)
 
     if fecha_fin <= ahora:
         raise HTTPException(
@@ -87,6 +83,7 @@ async def verificar_permiso(feature: str, current_user: Usuario, db: AsyncSessio
         )
     return True
 
+# Ubicación: backend_fastapi/dependencies/limites.py
 async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
     """Verifica el límite de creación diaria de pacientes reutilizando el plan en memoria (Cero SELECTs duplicados)"""
     # 1. BYPASS PARA EL ADMINISTRADOR
@@ -96,10 +93,10 @@ async def verificar_limite_pacientes(current_user: Usuario, db: AsyncSession):
     # 2. Obtener suscripción y plan cargado en memoria en una sola llamada
     sub = await verificar_suscripcion_activa(current_user, db)
     
-    # 3. Fecha local de Colombia
-    hoy = datetime.now(COLOMBIA_TZ).date()
+    # 3. Fecha local centralizada
+    hoy = hoy_local()
     
-    # 4. Leemos el límite directamente del plan en memoria (sin segundo SELECT a PostgreSQL)
+    # 4. Leemos el límite directamente del plan en memoria
     plan_info = getattr(sub, "plan_cargado", None)
     limite_maximo = plan_info.limite_pacientes_diario if plan_info else 20
     

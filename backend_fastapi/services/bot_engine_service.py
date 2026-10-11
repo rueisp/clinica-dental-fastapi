@@ -547,9 +547,8 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
     historial = await obtener_historial_reciente(numero_paciente, instance=instance)
 
     # 2. Contexto temporal exacto en Colombia
-    import pytz
-    tz_col = pytz.timezone('America/Bogota')
-    ahora_col = datetime.now(tz_col)
+    from utils.fechas import obtener_ahora_local
+    ahora_col = obtener_ahora_local('America/Bogota')
     dias_semana_map = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
     dia_actual_nombre = dias_semana_map[ahora_col.weekday()]
     hora_actual_str = ahora_col.strftime("%I:%M %p")
