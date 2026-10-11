@@ -1,4 +1,5 @@
 # backend_fastapi/services/evolution_service.py
+import time
 import httpx
 import logging
 from config import Config
@@ -12,6 +13,9 @@ HEADERS = {
 
 # Cache en memoria de mapeo: numero_telefono -> jid_lid
 MAPA_LID_CACHE: dict = {}
+
+# Memoria volátil de IDs despachados por la API/bot con TTL para prevenir auto-silencio
+MENSAJES_ENVIADOS_POR_BOT: dict[str, float] = {}
 
 async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addressing_mode: str = None) -> str:
     """Resuelve el destinatario (@lid o número estándar) con caché de alta velocidad para evitar sobrecargar Hetzner"""
@@ -187,7 +191,7 @@ async def desconectar_instancia(instance_name: str) -> dict:
             return {"success": False, "error": str(e)}
 
 async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, imagen_url: str = None) -> bool:
-    """Despacha un mensaje de texto o multimedia por WhatsApp a través de Evolution API"""
+    """Despacha un mensaje de texto o multimedia por WhatsApp a través de Evolution API y registra su ID contra auto-silencio"""
     destinatario = str(numero).strip()
 
     if "@s.whatsapp.net" in destinatario:
@@ -232,6 +236,20 @@ async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, 
             print(f"📡 [Evolution API Respuesta ({res.status_code})]: {resumen_log}\n", flush=True)
 
             if res.status_code in (200, 201):
+                # Captura atómica del ID del mensaje despachado para evitar que el bot se auto-silencie
+                try:
+                    data_res = res.json()
+                    msg_id = data_res.get("key", {}).get("id")
+                    if msg_id:
+                        ahora_ts = time.time()
+                        # Purga con TTL de 300 segundos si supera 300 registros
+                        if len(MENSAJES_ENVIADOS_POR_BOT) > 300:
+                            expirados = [k for k, ts in MENSAJES_ENVIADOS_POR_BOT.items() if ahora_ts - ts > 300]
+                            for k in expirados:
+                                MENSAJES_ENVIADOS_POR_BOT.pop(k, None)
+                        MENSAJES_ENVIADOS_POR_BOT[msg_id] = ahora_ts
+                except Exception:
+                    pass
                 return True
             return False
         except Exception as e:

@@ -12,7 +12,15 @@ import string
 import httpx
 from config import Config
 from utils.notifications import enviar_alerta_pago_telegram
-from utils.fechas import obtener_ahora_local, obtener_hoy_local, limpiar_naive, obtener_tz_doctor
+from utils.fechas import (
+    obtener_ahora_local,
+    obtener_hoy_local,
+    limpiar_naive,
+    obtener_tz_doctor,
+    fecha_esta_vigente,
+    fecha_esta_vencida,
+    calcular_dias_restantes
+)
 from database import get_db
 from dependencies.auth import get_current_user
 from models import (
@@ -293,7 +301,19 @@ async def reportar_pago(
     current_user: Usuario = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. CANDADO DE SEGURIDAD: Verificar si la referencia ya existe
+    # 1. CANDADO DE SEGURIDAD A: Bloquear si ya tiene un reporte en verificación
+    query_pendiente = select(PagoSuscripcion).where(
+        PagoSuscripcion.user_id == current_user.id,
+        PagoSuscripcion.estado == "pendiente"
+    )
+    result_pendiente = await db.execute(query_pendiente)
+    if result_pendiente.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, 
+            detail="Ya tienes una solicitud de pago en verificación. Espera a que el administrador valide tu comprobante."
+        )
+
+    # 2. CANDADO DE SEGURIDAD B: Verificar si la referencia ya fue utilizada
     query_check = select(PagoSuscripcion).where(
         PagoSuscripcion.referencia_pago == pago_data.referencia_pago
     )
@@ -304,7 +324,7 @@ async def reportar_pago(
             detail="Esta referencia de pago ya fue reportada. Si crees que es un error, contacta a soporte."
         )
 
-    # 2. Guardar el reporte en la tabla de pagos_suscripcion
+    # 3. Guardar el reporte en la tabla de pagos_suscripcion
     nuevo_pago = PagoSuscripcion(
         user_id=current_user.id,
         plan_id=pago_data.plan_id, 
@@ -314,9 +334,6 @@ async def reportar_pago(
         estado="pendiente"
     )
     db.add(nuevo_pago)
-    
-    # 3. Guardar cambios sin alterar el acceso actual del doctor
-    # (El doctor mantiene su consultorio activo mientras tú apruebas el comprobante)
     await db.commit()
 
     # 4. Enviar la alerta a Telegram
@@ -330,7 +347,6 @@ async def reportar_pago(
         print(f"❌ Error enviando Telegram: {str(e)}")
 
     return {"status": "success", "message": "Pago reportado exitosamente. Revisaremos en breve."}
-
 
 @router.post("/admin/aprobar/{pago_id}")
 async def aprobar_pago_admin(
@@ -373,8 +389,8 @@ async def aprobar_pago_admin(
     if fecha_fin_actual and fecha_fin_actual.tzinfo is not None:
         fecha_fin_actual = fecha_fin_actual.replace(tzinfo=None)
 
-    # Verificamos si tiene días vigentes
-    tiene_dias_vigentes = fecha_fin_actual and fecha_fin_actual > ahora
+    # Verificamos si tiene días vigentes usando la autoridad de fechas
+    tiene_dias_vigentes = fecha_esta_vigente(fecha_fin_actual) if fecha_fin_actual else False
     es_mismo_plan = suscripcion and suscripcion.plan_type == plan_nuevo.nombre
 
     if not tiene_dias_vigentes or not suscripcion or suscripcion.plan_type.lower() == "trial":
@@ -387,7 +403,7 @@ async def aprobar_pago_admin(
 
     else:
         # Caso C: UPGRADE (Mejora de plan) con días restantes del plan viejo
-        dias_restantes_viejos = (fecha_fin_actual - ahora).days
+        dias_restantes_viejos = calcular_dias_restantes(fecha_fin_actual)
 
         # Buscar precio del plan anterior para calcular el saldo a favor
         res_plan_viejo = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
@@ -427,6 +443,9 @@ async def aprobar_pago_admin(
             updated_at=ahora
         )
         db.add(nueva_sub)
+
+    # 6. Invalidación inmediata de la memoria RAM del bot
+    CACHE_SUSCRIPCION_DOCTOR.pop(str(pago.user_id), None)
 
     await db.commit()
     
@@ -634,20 +653,22 @@ async def activar_manual_admin(
     res_plan = await db.execute(select(Plan).where(Plan.nombre == plan_nombre))
     plan = res_plan.scalar_one_or_none()
 
-    # 3. Calcular fechas LIMPIAS
+    # 3. Calcular fechas limpias
     ahora = limpiar_naive(obtener_ahora_local('America/Bogota'))
     dias = plan.duracion_dias if plan else 30
     vencimiento = ahora + timedelta(days=dias)
 
-    # 4. Actualizar campos (Sincronizando plan_id y plan_type)
+    # 4. Actualizar campos
     suscripcion.status = "active"
-    suscripcion.plan_id = plan.id if plan else suscripcion.plan_id  # <--- Sincronización agregada
+    suscripcion.plan_id = plan.id if plan else suscripcion.plan_id
     suscripcion.plan_type = plan.nombre if plan else plan_nombre
     suscripcion.current_period_start = ahora
     suscripcion.current_period_end = vencimiento
     suscripcion.updated_at = ahora
 
-    # 5. Forzar el guardado
+    # 5. Invalidar caché del bot
+    CACHE_SUSCRIPCION_DOCTOR.pop(str(user_id), None)
+
     await db.commit()
     return {"success": True, "message": "Activado correctamente"}
 
@@ -673,19 +694,24 @@ async def rechazar_pago_admin(
     if not pago or pago.estado != "pendiente":
         raise HTTPException(status_code=404, detail="Pago no encontrado o ya procesado")
 
-    # 3. Buscar la suscripción del usuario para desbloquearla
+    # 3. Buscar la suscripción del usuario para evaluar su vigencia real
     result_sub = await db.execute(select(Subscription).where(Subscription.user_id == pago.user_id))
     suscripcion = result_sub.scalar_one_or_none()
 
-    # 4. ACTUALIZAR ESTADOS
+    # 4. Actualizar estado sin reactivar cuentas vencidas o suspendidas
     pago.estado = "rechazado"
     if suscripcion:
-        # Devolvemos a 'active' para que el doctor pueda intentar reportar de nuevo
-        suscripcion.status = "active" 
+        if fecha_esta_vencida(suscripcion.current_period_end):
+            suscripcion.status = "expired"
+        elif suscripcion.status != "inactive":
+            suscripcion.status = "active"
+
+    # 5. Invalidar caché del bot
+    CACHE_SUSCRIPCION_DOCTOR.pop(str(pago.user_id), None)
 
     await db.commit()
     
-    return {"success": True, "message": "Pago rechazado. El usuario ha sido desbloqueado."}
+    return {"success": True, "message": "Pago rechazado. El estado del usuario ha sido actualizado correctamente."}
 
 @router.post("/admin/suspender-manual/{user_id}")
 async def suspender_manual_admin(
@@ -706,6 +732,9 @@ async def suspender_manual_admin(
     # 2. Cambiar el estado a inactivo
     suscripcion.status = "inactive"
     suscripcion.updated_at = limpiar_naive(obtener_ahora_local('America/Bogota'))
+
+    # 3. Invalidar caché del bot
+    CACHE_SUSCRIPCION_DOCTOR.pop(str(user_id), None)
 
     await db.commit()
     return {"success": True, "message": "Suscripción suspendida correctamente"}

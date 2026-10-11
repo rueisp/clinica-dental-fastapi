@@ -17,7 +17,8 @@ from services.evolution_service import (
     enviar_mensaje_evolution,
     configurar_webhook_instancia,
     resolver_destinatario_lid,
-    MAPA_LID_CACHE
+    MAPA_LID_CACHE,
+    MENSAJES_ENVIADOS_POR_BOT
 )
 from services.bot_engine_service import (
     verificar_silencio_humano,
@@ -39,7 +40,6 @@ VENTANA_SILENCIO_HORAS = 0
 
 # 🛡️ MEMORIAS VOLÁTILES CON TTL (Deduplicación e Intervención Omnicanal)
 MENSAJES_PROCESADOS: dict[str, float] = {}
-MENSAJES_ENVIADOS_POR_BOT: dict[str, float] = {}
 
 class EnviarMensajeRequest(BaseModel):
     numero: str

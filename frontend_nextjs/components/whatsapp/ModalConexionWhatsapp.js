@@ -11,6 +11,7 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
   const [cargandoAccion, setCargandoAccion] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const intervalPollingRef = useRef(null);
+  const contadorPollingRef = useRef(0);
 
   // 1. Consultar estado actual blindado contra errores 401/403
   const consultarEstado = async () => {
@@ -89,11 +90,20 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
     }
   };
 
-  // Polling para detectar cuando el doctor escanea el QR con freno ante errores
+  // Polling para detectar cuando el doctor escanea el QR con freno automático a los 90s (30 intentos)
   const iniciarPolling = () => {
     detenerPolling();
+    contadorPollingRef.current = 0;
     intervalPollingRef.current = setInterval(async () => {
       try {
+        contadorPollingRef.current += 1;
+        // Si supera 30 intentos (90 segundos), detener para proteger Cloud Run y Hetzner
+        if (contadorPollingRef.current > 30) {
+          detenerPolling();
+          setErrorMsg('El código QR ha expirado. Haz clic en "Nuevo QR" para generar uno actualizado.');
+          return;
+        }
+
         const res = await authFetch(API_ENDPOINTS.WHATSAPP_ESTADO);
         if (res.ok) {
           const data = await res.json();
@@ -117,6 +127,7 @@ export default function ModalConexionWhatsapp({ abierto, onCerrar }) {
       clearInterval(intervalPollingRef.current);
       intervalPollingRef.current = null;
     }
+    contadorPollingRef.current = 0;
   };
 
   useEffect(() => {

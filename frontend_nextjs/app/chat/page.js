@@ -155,7 +155,7 @@ function ChatContent() {
     }
   };
 
-  // 4. Inicialización y suscripción en tiempo real aislada
+  // 4. Inicialización y suscripción en tiempo real aislada con filtro de servidor
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermisoNotificacion(Notification.permission);
@@ -168,16 +168,21 @@ function ChatContent() {
 
     cargarHistorial();
 
-    // Escuchar solo mensajes de la instancia de este doctor
+    // Escuchar únicamente mensajes de la instancia de este doctor filtrados en el servidor de Supabase
     const canal = supabase
       .channel(`chat-realtime-${miInstancia}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'historial' },
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'historial',
+          filter: `instance=eq.${miInstancia}`
+        },
         (payload) => {
           const nuevaFila = payload.new;
 
-          // 🛡️ Filtro de seguridad: ignorar si no pertenece a la instancia de este doctor
+          // 🛡️ Filtro defensivo adicional
           if (nuevaFila.instance && nuevaFila.instance !== miInstancia) {
             return;
           }

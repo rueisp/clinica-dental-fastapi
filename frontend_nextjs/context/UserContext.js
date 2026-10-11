@@ -9,9 +9,9 @@ export function UserProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const cargarUsuario = async () => {
-    // Usamos un AbortController para evitar que la petición se quede colgada en el celular
+    // Tolerancia ampliada a 20 segundos para soportar el arranque en frío (Cold Start) de Cloud Run
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000); // 7 segundos de límite
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const res = await authFetch(API_ENDPOINTS.PERFIL_USUARIO, {
@@ -36,7 +36,7 @@ export function UserProvider({ children }) {
         // Solo cerramos sesión si el token realmente expiró o es inválido
         limpiarSesionLocal();
       } else {
-        // Ante errores de servidor (500, 502, 503), mantenemos los datos en caché para no expulsar al doctor
+        // Ante errores de servidor o gateway (500, 502, 503, 504), respaldamos con caché para no expulsar al doctor
         const cached = localStorage.getItem('user_data_cache');
         if (cached && !user) {
           try {
@@ -45,8 +45,8 @@ export function UserProvider({ children }) {
         }
       }
     } catch (err) {
-      console.error("Error cargando usuario (red/timeout):", err);
-      // Fallback a caché en caso de fallo de red o timeout en móviles
+      console.error("Error cargando usuario (red/timeout serverless):", err);
+      // Fallback a caché local en caso de timeout de arranque en frío
       const cached = localStorage.getItem('user_data_cache');
       if (cached && !user) {
         try {
@@ -71,7 +71,7 @@ export function UserProvider({ children }) {
     const token = localStorage.getItem('auth_token');
     const cached = localStorage.getItem('user_data_cache');
 
-    // Si hay caché seguro, lo cargamos de inmediato para respuesta instantánea en celular
+    // Si hay caché seguro, lo cargamos de inmediato para renderizado instantáneo en celular
     if (cached) {
       try {
         setUser(JSON.parse(cached));
@@ -81,7 +81,7 @@ export function UserProvider({ children }) {
     }
 
     if (token) {
-      cargarUsuario(); // Validamos y actualizamos en segundo plano
+      cargarUsuario(); // Validamos y actualizamos con el backend en segundo plano
     } else {
       limpiarSesionLocal();
       setLoading(false);

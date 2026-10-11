@@ -53,6 +53,7 @@ async def verificar_suscripcion_activa_bot(odontologo_id: str) -> bool:
         from database import AsyncSessionLocal
         from models import Usuario, Subscription, Plan
         from sqlalchemy import select
+        from utils.fechas import fecha_esta_vigente
         import uuid
 
         doctor_uuid = uuid.UUID(odontologo_id)
@@ -72,15 +73,8 @@ async def verificar_suscripcion_activa_bot(odontologo_id: str) -> bool:
                 CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
                 return False
 
-            # C. Verificar fecha de vigencia
-            ahora_utc = datetime.now(timezone.utc)
-            fecha_fin = sub.current_period_end
-            if hasattr(fecha_fin, "tzinfo") and fecha_fin.tzinfo is not None:
-                vigente = fecha_fin > ahora_utc
-            else:
-                vigente = fecha_fin > ahora_utc.replace(tzinfo=None)
-
-            if not vigente:
+            # C. Verificar fecha de vigencia usando la autoridad de fechas (Elimina el desfase UTC de 5h)
+            if not fecha_esta_vigente(sub.current_period_end):
                 CACHE_SUSCRIPCION_DOCTOR[odontologo_id] = {"activo": False, "timestamp": ahora_ts}
                 return False
 

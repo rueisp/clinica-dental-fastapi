@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from models import LimiteDiario, Usuario, Plan, Subscription
-from utils.fechas import ahora_aware, hoy_local, asegurar_tz
+from utils.fechas import hoy_local, fecha_esta_vencida
 
 # Ubicación: backend_fastapi/dependencies/limites.py
 async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
@@ -38,20 +38,8 @@ async def verificar_suscripcion_activa(current_user: Usuario, db: AsyncSession):
         detail = "Tu pago está pendiente de aprobación." if sub.status == "pending_payment" else "Tu suscripción no está activa."
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
-    # 4. Validación estricta de fecha de vigencia (Blindaje contra nulos y expirados)
-    if not sub.current_period_end:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu plan ha expirado o no tiene fecha de vigencia válida. Renueva tu suscripción para continuar."
-        )
-
-    ahora = ahora_aware()
-    db_fecha_fin = sub.current_period_end
-    
-    # Normalización segura usando el módulo central de fechas
-    fecha_fin = asegurar_tz(db_fecha_fin)
-
-    if fecha_fin <= ahora:
+    # 4. Validación estricta de fecha de vigencia delegada a fechas.py
+    if fecha_esta_vencida(sub.current_period_end):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tu plan ha expirado. Por favor, renueva tu suscripción para continuar agregando o editando información."

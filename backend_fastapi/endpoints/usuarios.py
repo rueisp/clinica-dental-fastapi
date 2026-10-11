@@ -10,7 +10,13 @@ from models import Usuario, Subscription, Plan
 from utils.auth_utils import verificar_password, hash_password
 from schemas.auth import PasswordUpdate, PerfilUpdate
 from services.bot_engine_service import CACHE_CONFIG_DOCTOR
-from utils.fechas import obtener_ahora_local, obtener_tz_doctor
+from utils.fechas import (
+    fecha_esta_vigente,
+    fecha_esta_vencida,
+    calcular_dias_restantes,
+    calcular_progreso_periodo,
+    asegurar_tz
+)
 
 router = APIRouter()
 
@@ -34,7 +40,6 @@ async def get_usuario_actual(
     result = await db.execute(query)
     row = result.first()
     
-    ahora_colombia = obtener_ahora_local('America/Bogota')
     dias_restantes = 0
     fecha_fin_str = "Vencido"
     status = "inactive"
@@ -50,22 +55,15 @@ async def get_usuario_actual(
             es_anual = plan.duracion_dias == 365
         
         if sub and sub.current_period_end:
-            db_date = sub.current_period_end
-            tz = obtener_tz_doctor('America/Bogota')
-            if hasattr(db_date, "tzinfo") and db_date.tzinfo is not None:
-                fecha_fin = db_date.astimezone(tz)
-            else:
-                fecha_fin = tz.localize(db_date)
+            fecha_fin_aware = asegurar_tz(sub.current_period_end)
+            fecha_fin_str = fecha_fin_aware.strftime('%Y-%m-%d')
             
-            fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
-            
-            if fecha_fin <= ahora_colombia:
+            if fecha_esta_vencida(sub.current_period_end):
                 dias_restantes = 0
                 status = "expired"
             else:
                 status = sub.status
-                segundos_restantes = (fecha_fin - ahora_colombia).total_seconds()
-                dias_restantes = max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+                dias_restantes = calcular_dias_restantes(sub.current_period_end)
         else:
             status = "expired"
 
@@ -137,17 +135,8 @@ async def cambiar_plan(
 
     # 5. Validación de suscripciones activas existentes (Reglas de Upgrade)
     if suscripcion and suscripcion.status == "active" and suscripcion.current_period_end:
-        ahora_colombia = obtener_ahora_local('America/Bogota')
-        db_fin = suscripcion.current_period_end
-        
-        tz = obtener_tz_doctor('America/Bogota')
-        if hasattr(db_fin, "tzinfo") and db_fin.tzinfo is not None:
-            fecha_fin = db_fin.astimezone(tz)
-        else:
-            fecha_fin = tz.localize(db_fin)
-
         # Solo aplicamos restricción de upgrade si el plan está REALMENTE VIGENTE
-        if fecha_fin > ahora_colombia and suscripcion.plan_type.lower() != "trial":
+        if fecha_esta_vigente(suscripcion.current_period_end) and suscripcion.plan_type.lower() != "trial":
             res_plan_actual = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
             plan_actual = res_plan_actual.scalar_one_or_none()
 
@@ -206,47 +195,50 @@ async def get_mi_plan_detalle(
     if not plan:
         return {"tiene_plan": False, "mensaje": "Plan no encontrado en catálogo"}
 
-    ahora = obtener_ahora_local('America/Bogota')
     db_fecha_fin = sub.current_period_end
-    if not db_fecha_fin:
-        return {
-            "tiene_plan": True,
-            "plan_nombre": plan.nombre,
-            "status": "expired",
-            "dias_restantes": 0,
-            "porcentaje_progreso": 100
-        }
-
-    tz = obtener_tz_doctor('America/Bogota')
-    if hasattr(db_fecha_fin, "tzinfo") and db_fecha_fin.tzinfo is not None:
-        fecha_fin = db_fecha_fin.astimezone(tz)
-    else:
-        fecha_fin = tz.localize(db_fecha_fin)
-
-    if fecha_fin <= ahora:
-        dias_restantes = 0
-        status_final = "expired"
-        porcentaje = 100
-    else:
-        status_final = sub.status
-        segundos_restantes = (fecha_fin - ahora).total_seconds()
-        dias_restantes = max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
-        
-        fecha_inicio = fecha_fin - timedelta(days=plan.duracion_dias)
-        duracion_total = (fecha_fin - fecha_inicio).total_seconds()
-        tiempo_transcurrido = (ahora - fecha_inicio).total_seconds()
-        porcentaje = min(100, max(0, int((tiempo_transcurrido / duracion_total) * 100))) if duracion_total > 0 else 0
-
+    
     meses_es = {
         1: 'ene', 2: 'feb', 3: 'mar', 4: 'abr',
         5: 'may', 6: 'jun', 7: 'jul', 8: 'ago',
         9: 'sep', 10: 'oct', 11: 'nov', 12: 'dic'
     }
-    
-    fecha_inicio_calc = fecha_fin - timedelta(days=plan.duracion_dias)
+
+    if not db_fecha_fin:
+        return {
+            "tiene_plan": True,
+            "plan_nombre": plan.nombre,
+            "plan_precio": plan.precio_cop,
+            "plan_precio_usd": plan.precio_mensual,
+            "limite_pacientes_diario": plan.limite_pacientes_diario,
+            "fecha_inicio": "N/A",
+            "fecha_fin": "Vencido",
+            "dias_restantes": 0,
+            "porcentaje_progreso": 100,
+            "status": "expired",
+            "es_anual": plan.duracion_dias == 365,
+            "permissions": {
+                "can_use_odontogram": False,
+                "can_use_multimedia": False,
+                "can_use_voice": False,
+                "can_export_history": False,
+                "can_use_bot": False,
+            }
+        }
+
+    fecha_fin_aware = asegurar_tz(db_fecha_fin)
+    fecha_inicio_calc = fecha_fin_aware - timedelta(days=plan.duracion_dias)
     fecha_inicio_str = f"{meses_es[fecha_inicio_calc.month]} {fecha_inicio_calc.year}"
-    fecha_fin_str = f"{meses_es[fecha_fin.month]} {fecha_fin.year}"
-    
+    fecha_fin_str = f"{meses_es[fecha_fin_aware.month]} {fecha_fin_aware.year}"
+
+    if fecha_esta_vencida(db_fecha_fin):
+        dias_restantes = 0
+        status_final = "expired"
+        porcentaje = 100
+    else:
+        status_final = sub.status
+        dias_restantes = calcular_dias_restantes(db_fecha_fin)
+        porcentaje = calcular_progreso_periodo(db_fecha_fin, plan.duracion_dias)
+
     return {
         "tiene_plan": True,
         "plan_nombre": plan.nombre,
