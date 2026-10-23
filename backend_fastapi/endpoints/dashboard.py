@@ -2,8 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case, cast, Date
-from datetime import datetime, timedelta, date
-from utils.fechas import ahora_aware, hoy_local, asegurar_tz
+from datetime import datetime, timedelta, date, time
+from utils.fechas import ahora_naive, hoy_local
 from typing import Optional
 from database import get_db
 from dependencies.auth import get_current_user
@@ -14,80 +14,25 @@ from dependencies.limites import verificar_suscripcion_activa
 
 router = APIRouter()
 
-@router.get("/test-auth")
-async def test_auth(
-    current_user: Usuario = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Endpoint de prueba para verificar autenticación"""
-    return {
-        "success": True,
-        "user_id": current_user.id,
-        "user_email": current_user.email,
-        "user_name": current_user.nombres
-    }
+# ============================================================
+# HELPERS REUTILIZABLES DE CALENDARIO Y AGENDA (Cero Duplicación)
+# ============================================================
+DIAS_SEMANA_ES = {
+    0: 'lunes', 1: 'martes', 2: 'miércoles', 3: 'jueves',
+    4: 'viernes', 5: 'sábado', 6: 'domingo'
+}
+MESES_ES = {
+    1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
+    5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
+    9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
+}
 
+def _formatear_fecha_espanol(d: date) -> str:
+    """Formatea una fecha técnica en saludo legible colombiano"""
+    return f"{DIAS_SEMANA_ES[d.weekday()]}, {d.day} de {MESES_ES[d.month]} de {d.year}"
 
-# Ubicación: backend_fastapi/endpoints/dashboard.py (dentro de get_dashboard_stats)
-@router.get("/dashboard/stats")
-async def get_dashboard_stats(
-    current_user: Usuario = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Endpoint básico del dashboard con saludo y fecha"""
-    
-    ahora = ahora_aware()
-    hoy = hoy_local()
-    
-    # Contador total de pacientes
-    query_total_pacientes = (
-        select(func.count(Paciente.id))
-        .where(
-            Paciente.odontologo_id == current_user.id,
-            Paciente.is_deleted == False
-        )
-    )
-    result_total_pacientes = await db.execute(query_total_pacientes)
-    total_pacientes = result_total_pacientes.scalar() or 0
-    
-    # Fechas formateadas
-    dias_semana_es = {
-        0: 'lunes', 1: 'martes', 2: 'miércoles', 3: 'jueves',
-        4: 'viernes', 5: 'sábado', 6: 'domingo'
-    }
-    meses_es = {
-        1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
-        5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
-        9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
-    }
-    
-    fecha_actual_formateada = f"{dias_semana_es[hoy.weekday()]}, {hoy.day} de {meses_es[hoy.month]} de {hoy.year}"
-    
-    return {
-        "success": True,
-        "usuario": {
-            "nombre": current_user.nombres or current_user.username,
-            "email": current_user.email,
-            "is_admin": current_user.is_admin
-        },
-        "fecha_actual_formateada": fecha_actual_formateada,
-        "total_pacientes": total_pacientes
-    }
-
-
-
-@router.get("/citas/por-fecha")
-async def get_citas_por_fecha(
-    fecha: str,
-    current_user: Usuario = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de fecha inválido")
-    
-    # 1. Definimos la consulta base
+async def _obtener_citas_dia_detalladas(db: AsyncSession, fecha_obj: date, odontologo_id: UUID) -> list[dict]:
+    """Consulta y formatea las citas del día para un doctor con datos limpios de paciente"""
     query = (
         select(
             Cita,
@@ -98,34 +43,23 @@ async def get_citas_por_fecha(
         .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
         .where(
             Cita.fecha == fecha_obj,
+            Cita.odontologo_id == odontologo_id,
             Cita.is_deleted == False
         )
+        .order_by(Cita.hora)
     )
-
-    # 2. Filtro condicional: Si NO es admin, solo ve lo suyo
-    if not current_user.is_admin:
-        query = query.where(Cita.odontologo_id == current_user.id)
-    
-    # 3. Ordenamos y ejecutamos
-    query = query.order_by(Cita.hora)
     result = await db.execute(query)
     rows = result.all()
-    
-    citas_list = []
+
+    citas_detalladas = []
     for row in rows:
         cita = row.Cita
-        
-        # Lógica de nombre
-        if row.p_nombres:
-            nombre_final = f"{row.p_nombres} {row.p_apellidos or ''}".strip()
-        elif cita.nombre_provisional:
-            nombre_final = cita.nombre_provisional
-        else:
-            nombre_final = "Paciente sin registrar"
-
-        telefono_final = row.p_tel or cita.telefono_provisional or ""
-        
-        citas_list.append({
+        nombre_final = (
+            f"{row.p_nombres} {row.p_apellidos or ''}".strip()
+            if row.p_nombres
+            else (cita.nombre_provisional or "Paciente sin registrar")
+        )
+        citas_detalladas.append({
             "id": str(cita.id),
             "paciente_nombre": nombre_final,
             "paciente_id": str(cita.paciente_id) if cita.paciente_id else None,
@@ -133,9 +67,72 @@ async def get_citas_por_fecha(
             "motivo": cita.motivo or "Consulta",
             "doctor": cita.doctor,
             "estado": cita.estado,
-            "telefono": telefono_final
+            "telefono": row.p_tel or cita.telefono_provisional or ""
         })
-    
+    return citas_detalladas
+
+async def _obtener_eventos_calendario(
+    db: AsyncSession,
+    odontologo_id: UUID,
+    start: Optional[str] = None,
+    end: Optional[str] = None
+) -> list[dict]:
+    """Agrupa en SQL la cantidad de citas por día en un rango específico para FullCalendar"""
+    query = (
+        select(
+            Cita.fecha.label("fecha"),
+            func.count(Cita.id).label("total")
+        )
+        .where(
+            Cita.odontologo_id == odontologo_id,
+            Cita.is_deleted == False
+        )
+    )
+
+    if start:
+        try:
+            fecha_inicio = datetime.strptime(start.strip(), '%Y-%m-%d').date()
+            query = query.where(Cita.fecha >= fecha_inicio)
+        except ValueError:
+            pass
+
+    if end:
+        try:
+            fecha_fin = datetime.strptime(end.strip(), '%Y-%m-%d').date()
+            query = query.where(Cita.fecha <= fecha_fin)
+        except ValueError:
+            pass
+
+    query = query.group_by(Cita.fecha)
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
+            "start": row.fecha.strftime('%Y-%m-%d'),
+            "color": "transparent",
+            "textColor": "#6b7280"
+        }
+        for row in rows
+    ]
+
+@router.get("/citas/por-fecha")
+async def get_citas_por_fecha(
+    fecha: str,
+    doctor_id: Optional[UUID] = None,
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Consulta citas del día aplicando la regla oficial de visualización del admin"""
+    try:
+        fecha_obj = datetime.strptime(fecha.strip(), '%Y-%m-%d').date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido")
+
+    id_a_filtrar = doctor_id if (current_user.is_admin and doctor_id) else current_user.id
+    citas_list = await _obtener_citas_dia_detalladas(db, fecha_obj, id_a_filtrar)
+
     return {
         "success": True,
         "fecha": fecha,
@@ -145,59 +142,15 @@ async def get_citas_por_fecha(
 
 @router.get("/citas/eventos")
 async def get_citas_eventos(
-    start: Optional[str] = None,  # Nuevo: Fecha inicio (YYYY-MM-DD)
-    end: Optional[str] = None,    # Nuevo: Fecha fin (YYYY-MM-DD)
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    doctor_id: Optional[UUID] = None,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Optimizado: Obtiene el conteo de citas por día filtrando por un rango 
-    específico en SQL para no saturar la memoria.
-    """
-    
-    # 1. Construir query base solo con las columnas necesarias (ID y Fecha)
-    query = (
-        select(
-            Cita.fecha.label("fecha"),
-            func.count(Cita.id).label("total")
-        )
-        .where(Cita.is_deleted == False)
-    )
-    
-    # 2. Filtrar por el dueño de la agenda
-    if not current_user.is_admin:
-        query = query.where(Cita.odontologo_id == current_user.id)
-    
-    # 3. FILTRO CRÍTICO: Rango de fechas en SQL
-    # Si el frontend no envía fechas, por defecto traemos el mes actual (opcional)
-    if start:
-        try:
-            fecha_inicio = datetime.strptime(start, '%Y-%m-%d').date()
-            query = query.where(Cita.fecha >= fecha_inicio)
-        except ValueError: pass
-        
-    if end:
-        try:
-            fecha_fin = datetime.strptime(end, '%Y-%m-%d').date()
-            query = query.where(Cita.fecha <= fecha_fin)
-        except ValueError: pass
-    
-    # 4. Agrupar
-    query = query.group_by(Cita.fecha)
-    
-    result = await db.execute(query)
-    eventos_db = result.all()
-    
-    # 5. Formatear para FullCalendar
-    eventos_list = []
-    for row in eventos_db:
-        eventos_list.append({
-            "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
-            "start": row.fecha.strftime('%Y-%m-%d'),
-            "color": "transparent",
-            "textColor": "#6b7280"
-        })
-    
+    """Consulta eventos de calendario agrupados aplicando la regla oficial del admin"""
+    id_a_filtrar = doctor_id if (current_user.is_admin and doctor_id) else current_user.id
+    eventos_list = await _obtener_eventos_calendario(db, id_a_filtrar, start, end)
     return {
         "success": True,
         "eventos": eventos_list
@@ -220,11 +173,14 @@ async def eliminar_cita(
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     
-    if cita.odontologo_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    if cita.odontologo_id != current_user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permiso para eliminar citas pertenecientes a otro odontólogo."
+        )
     
     cita.is_deleted = True
-    cita.deleted_at = ahora_aware().replace(tzinfo=None)
+    cita.deleted_at = ahora_naive()
     await db.commit()
     
     return {"success": True, "message": "Cita eliminada"}
@@ -292,27 +248,49 @@ async def create_cita(
     """Crear una nueva cita"""
     await verificar_suscripcion_activa(current_user, db)
     
-    from datetime import datetime
-    
-    # Validar datos básicos
-    fecha_str = cita_data.fecha  # ← Cambiado: .get('fecha') → .fecha
-    hora_str = cita_data.hora    # ← Cambiado: .get('hora') → .hora
+    fecha_str = (cita_data.fecha or "").strip()
+    hora_str = (cita_data.hora or "").strip()
     
     if not fecha_str or not hora_str:
         raise HTTPException(status_code=400, detail="Fecha y hora son requeridas")
 
-    if not ("08:00" <= hora_str <= "20:30"):
-        raise HTTPException(
-            status_code=400, 
-            detail="El horario permitido de atención es de 08:00 AM a 08:30 PM"
-        )
-    
     try:
         fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
         hora_obj = datetime.strptime(hora_str, '%H:%M').time()
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de fecha u hora inválido")
-    
+        raise HTTPException(
+            status_code=400, 
+            detail="Formato de fecha (YYYY-MM-DD) u hora (HH:MM) inválido."
+        )
+
+    if not (time(8, 0) <= hora_obj <= time(20, 30)):
+        raise HTTPException(
+            status_code=400, 
+            detail="El horario permitido de atención es de 08:00 AM a 08:30 PM."
+        )
+
+    # Blindaje Cross-Tenant: Verificar pertenencia del paciente si viene especificado
+    paciente_valido_id = None
+    if cita_data.paciente_id:
+        try:
+            paciente_uuid = UUID(str(cita_data.paciente_id))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Identificador de paciente inválido.")
+
+        res_pac = await db.execute(
+            select(Paciente.id).where(
+                Paciente.id == paciente_uuid,
+                Paciente.odontologo_id == current_user.id,
+                Paciente.is_deleted == False
+            )
+        )
+        if not res_pac.scalar_one_or_none():
+            raise HTTPException(
+                status_code=404, 
+                detail="El paciente especificado no existe o no pertenece a tu consultorio."
+            )
+        paciente_valido_id = paciente_uuid
+
     # Crear nueva cita
     nueva_cita = Cita(
         fecha=fecha_obj,
@@ -320,7 +298,7 @@ async def create_cita(
         motivo=cita_data.motivo,
         doctor=cita_data.doctor if cita_data.doctor else f"Dr. {current_user.nombres} {current_user.apellidos or ''}".strip(),
         odontologo_id=current_user.id,
-        paciente_id=cita_data.paciente_id if cita_data.paciente_id else None,
+        paciente_id=paciente_valido_id,
         # Guardamos nombre y teléfono "sueltos" para que aparezcan en negro si no hay historial
         nombre_provisional=cita_data.paciente_nombre, 
         telefono_provisional=cita_data.paciente_telefono,
@@ -359,26 +337,49 @@ async def update_cita(
     
     if cita_data.fecha:
         try:
-            cita.fecha = datetime.strptime(cita_data.fecha, '%Y-%m-%d').date()
+            cita.fecha = datetime.strptime(cita_data.fecha.strip(), '%Y-%m-%d').date()
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido (use YYYY-MM-DD).")
     
     if cita_data.hora:
-        if not ("08:00" <= cita_data.hora <= "20:30"):
+        try:
+            hora_obj = datetime.strptime(cita_data.hora.strip(), '%H:%M').time()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de hora inválido (use HH:MM).")
+
+        if not (time(8, 0) <= hora_obj <= time(20, 30)):
             raise HTTPException(
                 status_code=400, 
-                detail="El horario permitido de atención es de 08:00 AM a 08:30 PM"
+                detail="El horario permitido de atención es de 08:00 AM a 08:30 PM."
             )
-        try:
-            cita.hora = datetime.strptime(cita_data.hora, '%H:%M').time()
-        except ValueError:
-            pass
+        cita.hora = hora_obj
     
     cita.motivo = cita_data.motivo if cita_data.motivo is not None else cita.motivo
     cita.doctor = cita_data.doctor if cita_data.doctor is not None else cita.doctor
     
     if cita_data.paciente_id is not None:
-        cita.paciente_id = UUID(cita_data.paciente_id) if str(cita_data.paciente_id).strip() else None
+        raw_pac_id = str(cita_data.paciente_id).strip()
+        if raw_pac_id:
+            try:
+                pac_uuid = UUID(raw_pac_id)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Identificador de paciente inválido.")
+
+            res_pac = await db.execute(
+                select(Paciente.id).where(
+                    Paciente.id == pac_uuid,
+                    Paciente.odontologo_id == current_user.id,
+                    Paciente.is_deleted == False
+                )
+            )
+            if not res_pac.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=404, 
+                    detail="El paciente especificado no existe o no pertenece a tu consultorio."
+                )
+            cita.paciente_id = pac_uuid
+        else:
+            cita.paciente_id = None
 
     # Corrección de pérdida de datos en pacientes provisionales
     if cita_data.paciente_nombre is not None:
@@ -400,137 +401,30 @@ async def get_home_data(
     selected_date: Optional[str] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
-    doctor_id: Optional[UUID] = None,  # <-- AGREGADO: Parámetro opcional para el admin
+    doctor_id: Optional[UUID] = None,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """Carga ultraligera unificada para el Dashboard: Saludo, Citas del Día y Eventos Mensuales"""
     await verificar_suscripcion_activa(current_user, db)
-    
-    # Ubicación: backend_fastapi/endpoints/dashboard.py (dentro de get_home_data)
-    # 2. CONFIGURACIÓN DE FECHA LOCAL (Centralizada)
-    ahora = ahora_aware()
+
     hoy = hoy_local()
-    
     try:
-        fecha_agenda = datetime.strptime(selected_date, '%Y-%m-%d').date() if selected_date else hoy
-    except ValueError:
+        fecha_agenda = datetime.strptime(selected_date.strip(), '%Y-%m-%d').date() if selected_date else hoy
+    except (ValueError, AttributeError):
         fecha_agenda = hoy
 
-    # 3. OPTIMIZACIÓN CRÍTICA: Solo contar pacientes si estamos en vista mensual/calendario (start y end presentes)
-    total_pacientes = 0
+    # Criterio oficial admin: por defecto ve su propia agenda, salvo que elija auditar a un doctor específico
+    id_a_filtrar = doctor_id if (current_user.is_admin and doctor_id) else current_user.id
+
+    # 1. Eventos del mes (solo se calculan si se navega el calendario con rango)
     eventos_list = []
-    
     if start and end:
-        # Solo ejecutamos esta consulta pesada si el usuario está navegando el calendario mensual
-        query_total_pacientes = (
-            select(func.count(Paciente.id))
-            .where(
-                Paciente.odontologo_id == current_user.id,
-                Paciente.is_deleted == False
-            )
-        )
-        result_total_pacientes = await db.execute(query_total_pacientes)
-        total_pacientes = result_total_pacientes.scalar() or 0
+        eventos_list = await _obtener_eventos_calendario(db, id_a_filtrar, start, end)
 
-        # 5. EVENTOS DEL CALENDARIO (Se mantiene igual, solo se ejecuta si start y end existen...)
-        query_eventos = (
-            select(
-                Cita.fecha.label("fecha"),
-                func.count(Cita.id).label("total")
-            )
-            .where(Cita.is_deleted == False)
-        )
+    # 2. Citas detalladas del día
+    citas_detalladas = await _obtener_citas_dia_detalladas(db, fecha_agenda, id_a_filtrar)
 
-        # Lógica de filtrado inteligente para los eventos del calendario
-        if current_user.is_admin:
-            # Si el admin seleccionó un doctor, el calendario mensual muestra solo sus eventos.
-            # Si no seleccionó ninguno, por defecto muestra sus propios eventos.
-            id_a_filtrar = doctor_id if doctor_id else current_user.id
-            query_eventos = query_eventos.where(Cita.odontologo_id == id_a_filtrar)
-        else:
-            # Si es un doctor normal, solo ve sus propios eventos
-            query_eventos = query_eventos.where(Cita.odontologo_id == current_user.id)
-
-        try:
-            fecha_inicio = datetime.strptime(start, '%Y-%m-%d').date()
-            query_eventos = query_eventos.where(Cita.fecha >= fecha_inicio)
-        except ValueError: pass
-            
-        try:
-            fecha_fin = datetime.strptime(end, '%Y-%m-%d').date()
-            query_eventos = query_eventos.where(Cita.fecha <= fecha_fin)
-        except ValueError: pass
-
-        query_eventos = query_eventos.group_by(Cita.fecha)
-        result_eventos = await db.execute(query_eventos)
-        eventos_db = result_eventos.all()
-
-        for row in eventos_db:
-            eventos_list.append({
-                "title": f"{row.total} cita{'s' if row.total > 1 else ''}",
-                "start": row.fecha.strftime('%Y-%m-%d'),
-                "color": "transparent",
-                "textColor": "#6b7280"
-            })
-
-    # 4. FORMATEO DE FECHA PARA EL SALUDO (Se mantiene igual...)
-    dias_semana_es = {
-        0: 'lunes', 1: 'martes', 2: 'miércoles', 3: 'jueves',
-        4: 'viernes', 5: 'sábado', 6: 'domingo'
-    }
-    meses_es = {
-        1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril',
-        5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto',
-        9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'
-    }
-    fecha_actual_formateada = f"{dias_semana_es[hoy.weekday()]}, {hoy.day} de {meses_es[hoy.month]} de {hoy.year}"
-    
-    # 6. CITAS DETALLADAS DEL DÍA (Optimizado para traer solo lo necesario de forma asíncrona)
-    query_citas_dia = (
-        select(
-            Cita,
-            Paciente.nombres.label("p_nombres"),
-            Paciente.apellidos.label("p_apellidos"),
-            Paciente.telefono.label("p_tel")
-        )
-        .outerjoin(Paciente, Cita.paciente_id == Paciente.id)
-        .where(
-            Cita.fecha == fecha_agenda,
-            Cita.is_deleted == False
-        )
-    )
-
-    # LÓGICA DE FILTRADO INTELIGENTE PARA EL ADMIN
-    if current_user.is_admin:
-        # Si eres admin y seleccionaste un doctor, filtramos por su ID.
-        # Si no seleccionaste ninguno, por defecto te mostramos tus propias citas.
-        id_a_filtrar = doctor_id if doctor_id else current_user.id
-        query_citas_dia = query_citas_dia.where(Cita.odontologo_id == id_a_filtrar)
-    else:
-        # Si es un doctor normal, solo puede ver sus propias citas
-        query_citas_dia = query_citas_dia.where(Cita.odontologo_id == current_user.id)
-    
-    query_citas_dia = query_citas_dia.order_by(Cita.hora)
-    result_citas = await db.execute(query_citas_dia)
-    rows_citas = result_citas.all()
-    
-    citas_detalladas = []
-    for row in rows_citas:
-        cita = row.Cita
-        nombre_final = f"{row.p_nombres} {row.p_apellidos or ''}".strip() if row.p_nombres else (cita.nombre_provisional or "Paciente sin registrar")
-        
-        citas_detalladas.append({
-            "id": str(cita.id),
-            "paciente_nombre": nombre_final,
-            "paciente_id": str(cita.paciente_id) if cita.paciente_id else None,
-            "hora": cita.hora.strftime('%H:%M') if cita.hora else "",
-            "motivo": cita.motivo or "Consulta",
-            "doctor": cita.doctor,
-            "estado": cita.estado,
-            "telefono": row.p_tel or cita.telefono_provisional or ""
-        })
-    
-    # 7. RESPUESTA FINAL COMPLETA
     return {
         "success": True,
         "usuario": {
@@ -538,8 +432,8 @@ async def get_home_data(
             "email": current_user.email,
             "is_admin": current_user.is_admin
         },
-        "fecha_actual_formateada": fecha_actual_formateada,
-        "total_pacientes": total_pacientes,
+        "fecha_actual_formateada": _formatear_fecha_espanol(hoy),
+        "total_pacientes": 0,
         "eventos": eventos_list,
         "citas_dia": citas_detalladas,
         "fecha_consultada": fecha_agenda.strftime('%Y-%m-%d')

@@ -3,7 +3,7 @@ import os
 import ssl
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy import NullPool
 
 load_dotenv()
@@ -23,16 +23,17 @@ if DATABASE_URL and "prepared_statement_cache_size" not in DATABASE_URL:
     separador = "&" if "?" in DATABASE_URL else "?"
     DATABASE_URL += f"{separador}prepared_statement_cache_size=0"
 
-# Contexto SSL seguro para Supabase
+# Contexto TLS cifrado para el Transaction Pooler de Supabase (puerto 6543)
+# Requiere CERT_NONE porque el pooler de Supabase opera con su propia cadena de certificados de infraestructura
 ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
+# NullPool es obligatorio en Cloud Run con CPU Throttling y PgBouncer de Supabase
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     poolclass=NullPool,
-    pool_pre_ping=True,
     connect_args={
         "statement_cache_size": 0,
         "ssl": ssl_context
@@ -45,16 +46,18 @@ AsyncSessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 async def get_db():
-    """Generador de sesiones asíncronas para inyección de dependencias con rollback ante errores"""
+    """
+    Generador de sesiones asíncronas para inyección de dependencias.
+    Los endpoints que persisten datos controlan explícitamente su commit.
+    Garantiza rollback automático ante excepciones y cierre de sesión.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()

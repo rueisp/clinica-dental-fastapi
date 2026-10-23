@@ -108,6 +108,7 @@ export default function BotConfigPage() {
       });
       if (res.ok) {
         notificarExito('¡Horarios e información de sede actualizados con éxito!');
+        await cargarDatos(); // <-- Sincroniza inmediatamente la pestaña Promos en pantalla
       } else {
         alert('Error al guardar la información');
       }
@@ -715,6 +716,7 @@ export default function BotConfigPage() {
                     <div>
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Texto de Respuesta</label>
                       <textarea
+                        key={`${item.id}-${item.respuesta}`}
                         rows={3}
                         defaultValue={item.respuesta}
                         onBlur={(e) => handleActualizarChatbotCampo(item.id, 'respuesta', e.target.value)}

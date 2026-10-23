@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import httpx
+import asyncio
 import cloudinary.uploader
 from config import Config
 from database import get_db
@@ -12,6 +12,7 @@ from dependencies.limites import verificar_permiso
 from models import Usuario
 from services.bot_engine_service import (
     SUPABASE_HEADERS,
+    cliente_http_sesion,
     poblar_plantilla_bot_doctor,
     PLANTILLA_SERVICIOS_BASE,
     PLANTILLA_CHATBOT_BASE,
@@ -88,7 +89,7 @@ async def obtener_configuracion_general(
     user_id = str(current_user.id)
     url = f"{Config.SUPABASE_URL}/rest/v1/configuracion?odontologo_id=eq.{user_id}"
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.get(url, headers=SUPABASE_HEADERS)
         if res.status_code != 200:
             raise HTTPException(status_code=500, detail="Error consultando configuración en Supabase")
@@ -113,7 +114,7 @@ async def guardar_configuracion_general(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Guarda o actualiza las claves de configuración del doctor en sesión e invalida caché"""
+    """Guarda o actualiza la configuración de la sede y sincroniza automáticamente las respuestas de Ubicación y Horarios en el Chatbot"""
     await verificar_permiso("can_use_bot", current_user, db)
     user_id = str(current_user.id)
     campos_a_actualizar = datos.model_dump(exclude_unset=True)
@@ -129,15 +130,42 @@ async def guardar_configuracion_general(
     url = f"{Config.SUPABASE_URL}/rest/v1/configuracion?on_conflict=odontologo_id,clave"
     headers = {**SUPABASE_HEADERS, "Prefer": "resolution=merge-duplicates"}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
+        # 1. Guardar claves en tabla 'configuracion'
         res = await client.post(url, json=payload, headers=headers)
         if res.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Error guardando configuración: {res.text}")
 
-    # Invalida caché de configuración en RAM para reflejo inmediato en WhatsApp
-    CACHE_CONFIG_DOCTOR.pop(user_id, None)
+        # 2. Sincronización automática de DIRECCIÓN con la intención 'ubicacion' en chatbot (insensible a mayúsculas)
+        if "direccion" in campos_a_actualizar and str(campos_a_actualizar["direccion"]).strip():
+            dir_limpia = str(campos_a_actualizar["direccion"]).strip()
+            nueva_resp_ubicacion = (
+                f"📍 *NUESTRA UBICACIÓN:*\n"
+                f"Nos encontramos ubicados en {dir_limpia}.\n\n"
+                f"¡Será un gusto atenderte! 🦷"
+            )
+            url_chat_ubicacion = f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id}&intencion=ilike.ubicacion"
+            await client.patch(url_chat_ubicacion, json={"respuesta": nueva_resp_ubicacion}, headers=SUPABASE_HEADERS)
 
-    return {"success": True, "message": "Configuración guardada correctamente"}
+        # 3. Sincronización automática de HORARIOS con la intención 'horarios' en chatbot (insensible a mayúsculas)
+        if any(k in campos_a_actualizar for k in ("horario_lunes_viernes", "horario_sabado", "horario_domingo")):
+            h_lv = str(campos_a_actualizar.get("horario_lunes_viernes") or "9:00 AM - 12:00 M y 2:00 PM - 6:00 PM").strip()
+            h_sab = str(campos_a_actualizar.get("horario_sabado") or "9:00 AM - 12:00 M y 2:00 PM - 5:00 PM").strip()
+            h_dom = str(campos_a_actualizar.get("horario_domingo") or "Cerrado").strip()
+            nueva_resp_horarios = (
+                f"📅 *Horarios de Atención:*\n"
+                f"• Lunes a Viernes: {h_lv}\n"
+                f"• Sábados: {h_sab}\n"
+                f"• Domingos y Festivos: {h_dom}."
+            )
+            url_chat_horarios = f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id}&intencion=ilike.horarios"
+            await client.patch(url_chat_horarios, json={"respuesta": nueva_resp_horarios}, headers=SUPABASE_HEADERS)
+
+    # Invalida caché de configuración y chatbot en RAM para reflejo inmediato en WhatsApp
+    CACHE_CONFIG_DOCTOR.pop(user_id, None)
+    CACHE_CHATBOT_DOCTOR.pop(user_id, None)
+
+    return {"success": True, "message": "Configuración guardada y sincronizada correctamente"}
 
 # ============================================================
 # 2. CATÁLOGO DE SERVICIOS Y TARIFAS EN COP
@@ -153,7 +181,7 @@ async def listar_servicios_doctor(
     user_id = str(current_user.id)
     url = f"{Config.SUPABASE_URL}/rest/v1/servicios?odontologo_id=eq.{user_id}&order=id.asc"
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.get(url, headers=SUPABASE_HEADERS)
         if res.status_code != 200:
             raise HTTPException(status_code=500, detail="Error consultando servicios en Supabase")
@@ -192,7 +220,7 @@ async def crear_servicio_doctor(
     url = f"{Config.SUPABASE_URL}/rest/v1/servicios"
     headers = {**SUPABASE_HEADERS, "Prefer": "return=representation"}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.post(url, json=payload, headers=headers)
         if res.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Error creando servicio: {res.text}")
@@ -219,10 +247,17 @@ async def actualizar_servicio_doctor(
     url = f"{Config.SUPABASE_URL}/rest/v1/servicios?id=eq.{servicio_id}&odontologo_id=eq.{user_id}"
     headers = {**SUPABASE_HEADERS, "Prefer": "return=representation"}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.patch(url, json=payload, headers=headers)
         if res.status_code != 200:
             raise HTTPException(status_code=500, detail=f"Error actualizando servicio: {res.text}")
+
+        actualizados = res.json()
+        if not actualizados:
+            raise HTTPException(
+                status_code=404,
+                detail="El tratamiento no existe o no tienes permiso para editarlo."
+            )
 
         # Invalidar caché en RAM
         CACHE_SERVICIOS_DOCTOR.pop(user_id, None)
@@ -239,7 +274,7 @@ async def eliminar_servicio_doctor(
     user_id = str(current_user.id)
     url = f"{Config.SUPABASE_URL}/rest/v1/servicios?id=eq.{servicio_id}&odontologo_id=eq.{user_id}"
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.delete(url, headers=SUPABASE_HEADERS)
         if res.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail=f"Error eliminando servicio: {res.text}")
@@ -262,7 +297,7 @@ async def listar_chatbot_items(
     user_id = str(current_user.id)
     url = f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id}&order=id.asc"
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.get(url, headers=SUPABASE_HEADERS)
         if res.status_code != 200:
             raise HTTPException(status_code=500, detail="Error consultando chatbot en Supabase")
@@ -289,7 +324,7 @@ async def crear_chatbot_item(
     url = f"{Config.SUPABASE_URL}/rest/v1/chatbot"
     headers = {**SUPABASE_HEADERS, "Prefer": "return=representation"}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.post(url, json=payload, headers=headers)
         if res.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Error creando respuesta: {res.text}")
@@ -316,10 +351,17 @@ async def actualizar_chatbot_item(
     url = f"{Config.SUPABASE_URL}/rest/v1/chatbot?id=eq.{item_id}&odontologo_id=eq.{user_id}"
     headers = {**SUPABASE_HEADERS, "Prefer": "return=representation"}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.patch(url, json=payload, headers=headers)
         if res.status_code != 200:
             raise HTTPException(status_code=500, detail=f"Error actualizando chatbot: {res.text}")
+
+        actualizados = res.json()
+        if not actualizados:
+            raise HTTPException(
+                status_code=404,
+                detail="La respuesta no existe o no tienes permiso para editarla."
+            )
 
         # Invalidar caché de chatbot en RAM
         CACHE_CHATBOT_DOCTOR.pop(user_id, None)
@@ -328,7 +370,6 @@ async def actualizar_chatbot_item(
 @router.delete("/chatbot/{item_id}")
 async def eliminar_chatbot_item(
     item_id: int,
-    datos: ChatbotItemUpdate = None,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -337,7 +378,7 @@ async def eliminar_chatbot_item(
     user_id = str(current_user.id)
     url = f"{Config.SUPABASE_URL}/rest/v1/chatbot?id=eq.{item_id}&odontologo_id=eq.{user_id}"
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with cliente_http_sesion(timeout=8.0) as client:
         res = await client.delete(url, headers=SUPABASE_HEADERS)
         if res.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail=f"Error eliminando respuesta: {res.text}")
@@ -352,11 +393,25 @@ async def subir_afiche_promocion(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Sube un afiche o imagen publicitaria a Cloudinary para el bot del doctor"""
+    """Sube un afiche o imagen publicitaria a Cloudinary para el bot del doctor sin bloquear el event loop"""
     await verificar_permiso("can_use_bot", current_user, db)
+
+    if not archivo.content_type or not archivo.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo seleccionado debe ser una imagen válida (JPG, PNG, WEBP)."
+        )
+
+    contenido = await archivo.read()
+    if len(contenido) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="La imagen excede el tamaño máximo permitido de 5 MB."
+        )
+
     try:
-        contenido = await archivo.read()
-        res_upload = cloudinary.uploader.upload(
+        res_upload = await asyncio.to_thread(
+            cloudinary.uploader.upload,
             contenido,
             folder=f"promociones_bot/{current_user.id}",
             overwrite=True
@@ -366,7 +421,11 @@ async def subir_afiche_promocion(
             "url": res_upload.get("secure_url")
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al subir imagen publicitaria: {str(e)}")
+        print(f"❌ [Error Cloudinary]: {e}", flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo procesar la subida de la imagen publicitaria."
+        )
 
 # ============================================================
 # 4. RESTAURAR PLANTILLA PREDETERMINADA
@@ -381,12 +440,27 @@ async def restaurar_plantilla_base(
     await verificar_permiso("can_use_bot", current_user, db)
     user_id = str(current_user.id)
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with cliente_http_sesion(timeout=10.0) as client:
         try:
-            # 1. Borrar configuración actual del doctor en Supabase
-            await client.delete(f"{Config.SUPABASE_URL}/rest/v1/configuracion?odontologo_id=eq.{user_id}", headers=SUPABASE_HEADERS)
-            await client.delete(f"{Config.SUPABASE_URL}/rest/v1/servicios?odontologo_id=eq.{user_id}", headers=SUPABASE_HEADERS)
-            await client.delete(f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id}", headers=SUPABASE_HEADERS)
+            # 1. Borrar configuración actual del doctor en Supabase verificando cada respuesta
+            del_cfg = await client.delete(
+                f"{Config.SUPABASE_URL}/rest/v1/configuracion?odontologo_id=eq.{user_id}",
+                headers=SUPABASE_HEADERS
+            )
+            del_srv = await client.delete(
+                f"{Config.SUPABASE_URL}/rest/v1/servicios?odontologo_id=eq.{user_id}",
+                headers=SUPABASE_HEADERS
+            )
+            del_bot = await client.delete(
+                f"{Config.SUPABASE_URL}/rest/v1/chatbot?odontologo_id=eq.{user_id}",
+                headers=SUPABASE_HEADERS
+            )
+
+            if not all(r.status_code in (200, 204) for r in (del_cfg, del_srv, del_bot)):
+                raise HTTPException(
+                    status_code=500,
+                    detail="No se pudo purgar la configuración previa en la base de datos."
+                )
 
             # 2. Re-poblar plantilla base oficial
             await poblar_plantilla_bot_doctor(
@@ -396,11 +470,17 @@ async def restaurar_plantilla_base(
                 telefono=current_user.telefono
             )
 
-            # 3. Purgar todas las cachés del doctor
+            # 3. Purgar todas las cachés del doctor en RAM
             CACHE_CONFIG_DOCTOR.pop(user_id, None)
             CACHE_SERVICIOS_DOCTOR.pop(user_id, None)
             CACHE_CHATBOT_DOCTOR.pop(user_id, None)
 
             return {"success": True, "message": "Plantilla restablecida a valores oficiales correctamente"}
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error restaurando plantilla: {str(e)}")
+            print(f"❌ [Error Restaurar Plantilla]: {e}", flush=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Ocurrió un error al restaurar la plantilla predeterminada."
+            )

@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from datetime import datetime
-from utils.fechas import obtener_ahora_local, limpiar_naive
-from uuid import UUID  # <--- IMPORTANTE
+from utils.fechas import ahora_naive
+from uuid import UUID
 from database import get_db
 from dependencies.auth import get_current_user
 from dependencies.limites import verificar_suscripcion_activa
 from models import Usuario, Paciente, Evolucion
 from pydantic import BaseModel
-from typing import Optional, List
 
 router = APIRouter()
 
@@ -22,25 +20,25 @@ class EvolucionUpdate(BaseModel):
 
 # --- ENDPOINTS ---
 
-# 1. Obtener evoluciones (Cambiado int a UUID)
+# 1. Obtener evoluciones
 @router.get("/pacientes/{paciente_id}")
 async def get_evoluciones(
-    paciente_id: UUID, # <--- CORREGIDO
+    paciente_id: UUID,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(Paciente).where(
-            Paciente.id == paciente_id,
-            Paciente.is_deleted == False
-        )
+    query_pac = select(Paciente).where(
+        Paciente.id == paciente_id,
+        Paciente.is_deleted == False
     )
+    if not current_user.is_admin:
+        query_pac = query_pac.where(Paciente.odontologo_id == current_user.id)
+
+    result = await db.execute(query_pac)
     paciente = result.scalar_one_or_none()
     
     if not paciente:
         raise HTTPException(404, "Paciente no encontrado")
-    if not current_user.is_admin and paciente.odontologo_id != current_user.id:
-        raise HTTPException(403, "No autorizado")
     
     result = await db.execute(
         select(Evolucion)
@@ -48,7 +46,7 @@ async def get_evoluciones(
             Evolucion.paciente_id == paciente_id,
             Evolucion.is_deleted == False
         )
-        .order_by(desc(Evolucion.fecha))
+        .order_by(desc(Evolucion.fecha), desc(Evolucion.id))
     )
     evoluciones = result.scalars().all()
     
@@ -56,7 +54,7 @@ async def get_evoluciones(
         "success": True,
         "evoluciones": [
             {
-                "id": str(e.id), # Convertir a str para el frontend
+                "id": str(e.id),
                 "descripcion": e.descripcion,
                 "fecha": e.fecha.strftime("%Y-%m-%d %H:%M"),
                 "paciente_id": str(e.paciente_id)
@@ -65,7 +63,7 @@ async def get_evoluciones(
         ]
     }
 
-# Ubicación: backend_fastapi/endpoints/evoluciones.py (en la función create_evolucion)
+# 2. Crear evolución
 @router.post("/pacientes/{paciente_id}")
 async def create_evolucion(
     paciente_id: UUID, 
@@ -75,35 +73,37 @@ async def create_evolucion(
 ):
     await verificar_suscripcion_activa(current_user, db)
 
-    if not data.descripcion or not data.descripcion.strip():
+    descripcion_limpia = (data.descripcion or "").strip()
+    if not descripcion_limpia:
         raise HTTPException(400, "La descripción de la evolución no puede estar vacía")
 
-    result = await db.execute(
-        select(Paciente).where(
-            Paciente.id == paciente_id,
-            Paciente.is_deleted == False
-        )
+    query_pac = select(Paciente).where(
+        Paciente.id == paciente_id,
+        Paciente.is_deleted == False
     )
+    if not current_user.is_admin:
+        query_pac = query_pac.where(Paciente.odontologo_id == current_user.id)
+
+    result = await db.execute(query_pac)
     paciente = result.scalar_one_or_none()
     
     if not paciente:
         raise HTTPException(404, "Paciente no encontrado")
-    if not current_user.is_admin and paciente.odontologo_id != current_user.id:
-        raise HTTPException(403, "No autorizado")
     
-    fecha_sin_zona = limpiar_naive(obtener_ahora_local('America/Bogota'))
+    fecha_sin_zona = ahora_naive()
+    # Si opera un administrador, se vincula al odontólogo dueño del paciente
+    doctor_propietario_id = paciente.odontologo_id if current_user.is_admin else current_user.id
 
     nueva = Evolucion(
-        descripcion=data.descripcion,
+        descripcion=descripcion_limpia,
         fecha=fecha_sin_zona,
         paciente_id=paciente_id,
-        odontologo_id=current_user.id, # <--- VINCULACIÓN CON EL DOCTOR
+        odontologo_id=doctor_propietario_id,
         is_deleted=False
     )
     
     db.add(nueva)
     await db.commit()
-    await db.refresh(nueva)
     
     return {
         "success": True,
@@ -115,6 +115,7 @@ async def create_evolucion(
             "paciente_id": str(nueva.paciente_id)
         }
     }
+
 
 @router.put("/{evolucion_id}")
 async def update_evolucion(
@@ -170,7 +171,7 @@ async def delete_evolucion(
         raise HTTPException(403, "No autorizado para eliminar esta nota")
 
     evolucion.is_deleted = True
-    evolucion.deleted_at = obtener_ahora_local('America/Bogota')
+    evolucion.deleted_at = ahora_naive()
     
     await db.commit()
     return {"success": True, "message": "Evolución movida a la papelera"}

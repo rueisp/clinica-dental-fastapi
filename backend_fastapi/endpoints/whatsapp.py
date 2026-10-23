@@ -1,14 +1,15 @@
 # backend_fastapi/endpoints/whatsapp.py
+import os
 import time
+import logging
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from dependencies.limites import verificar_permiso
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from dependencies.auth import get_current_user
 from models import Usuario
-
 
 from services.evolution_service import (
     crear_o_obtener_qr,
@@ -30,20 +31,22 @@ from services.bot_engine_service import (
     verificar_suscripcion_activa_bot
 )
 
+logger = logging.getLogger("whatsapp")
+
 router = APIRouter()
 
-# 🌐 URL OFICIAL DEL WEBHOOK EN CLOUD RUN
-WEBHOOK_URL = "https://dental-backend-779789369655.us-east1.run.app/api/whatsapp/webhook/evolution"
+from config import Config
 
-# ⏱️ VENTANA DE SILENCIO CONFIGURABLE (0 para pruebas continuas; cambiar a 1 o 2 en producción)
-VENTANA_SILENCIO_HORAS = 0
+# 🌐 Configuración oficial centralizada desde Config
+WEBHOOK_URL = Config.WEBHOOK_URL
+VENTANA_SILENCIO_HORAS = Config.VENTANA_SILENCIO_HORAS
 
 # 🛡️ MEMORIAS VOLÁTILES CON TTL (Deduplicación e Intervención Omnicanal)
 MENSAJES_PROCESADOS: dict[str, float] = {}
 
 class EnviarMensajeRequest(BaseModel):
-    numero: str
-    texto: str
+    numero: str = Field(..., min_length=7, max_length=40)
+    texto: str = Field(..., min_length=1, max_length=4096)
     imagen: Optional[str] = None
 
 def obtener_nombre_instancia(usuario: Usuario) -> str:
@@ -70,7 +73,6 @@ async def consultar_estado_whatsapp(
 
 @router.post("/conectar")
 async def conectar_whatsapp(
-    request: Request, 
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -270,13 +272,16 @@ async def webhook_evolution_receiver(request: Request):
             )
             print(f"🏁 [Webhook Evolution] Resultado de envío a WhatsApp: {exito_envio}", flush=True)
 
-            # 4. Registrar en Supabase
-            await registrar_historial_db(numero_paciente, texto_paciente, respuesta["texto"], instance=instance)
+            # 4. Registrar en Supabase únicamente si el despacho fue exitoso
+            if exito_envio:
+                await registrar_historial_db(numero_paciente, texto_paciente, respuesta["texto"], instance=instance)
+            else:
+                logger.warning(f"⚠️ [Webhook Evolution] No se registró en historial: fallo el despacho a {destinatario_respuesta}")
 
         return {"status": "ok"}
     except Exception as e:
-        print(f"❌ [Webhook Evolution Error]: {e}", flush=True)
-        return {"status": "error", "error": str(e)}
+        logger.error(f"❌ [Webhook Evolution Error]: {e}", exc_info=True)
+        return {"status": "error"}
 
 @router.post("/activar-webhook")
 async def activar_webhook_manual(current_user: Usuario = Depends(get_current_user)):

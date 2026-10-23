@@ -3,11 +3,10 @@ import uuid
 from datetime import datetime, date
 from sqlalchemy import (
     Column, Integer, Numeric, String, Date, Time, Boolean,
-    Text, ForeignKey, DateTime, Float, func
+    Text, ForeignKey, DateTime, Float, func, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from werkzeug.security import generate_password_hash, check_password_hash
 from database import Base 
 
 # ============================================================
@@ -34,12 +33,6 @@ class Usuario(Base):
     pagos_registrados = relationship('PagoClinico', back_populates='usuario')
     citas = relationship('Cita', back_populates='odontologo')
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
 # ============================================================
 # MODELO: SUBSCRIPTION (Vigencia y Estado del Plan del Doctor)
 # ============================================================
@@ -60,16 +53,19 @@ class Subscription(Base):
     plan = relationship('Plan')
 
 # ============================================================
-# MODELO: PACIENTE (Ficha Clínica y Antecedentes)
+# MODELO: PACIENTE (Ficha Clínica y Antecedentes Multi-Tenant)
 # ============================================================
 class Paciente(Base):
     __tablename__ = 'pacientes'
+    __table_args__ = (
+        UniqueConstraint('odontologo_id', 'documento', name='uq_paciente_odontologo_documento'),
+    )
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
     tipo_documento = Column(String(50), nullable=True)
-    documento = Column(String(50), unique=True, nullable=True, index=True)
+    documento = Column(String(50), nullable=True, index=True)
     fecha_nacimiento = Column(Date, nullable=True)
     edad = Column(Integer, nullable=True)
     sexo = Column(String(1), nullable=True)
@@ -192,8 +188,6 @@ class Plan(Base):
     can_use_voice = Column(Boolean, default=False)
     can_export_history = Column(Boolean, default=False)
     can_use_bot = Column(Boolean, default=False)
-    
-    usuarios_suscritos = relationship("Subscription", primaryjoin="Plan.nombre == Subscription.plan_type", foreign_keys="Subscription.plan_type", viewonly=True)  
 
 # ============================================================
 # MODELO: PAGO SUSCRIPCIÓN (Reportes de Upgrade y Renovación)
@@ -202,10 +196,10 @@ class PagoSuscripcion(Base):
     __tablename__ = 'pagos_suscripcion'
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id'), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('usuarios.id', ondelete="CASCADE"), nullable=False)
     plan_id = Column(UUID(as_uuid=True), ForeignKey('planes.id', ondelete="CASCADE"), nullable=False) 
     monto = Column(Integer, nullable=False)
-    referencia_pago = Column(String(50), nullable=False)
+    referencia_pago = Column(String(50), nullable=False, index=True)
     comprobante_url = Column(String(500), nullable=False)
     estado = Column(String(20), default='pendiente')
     fecha_reporte = Column(DateTime, default=func.now())

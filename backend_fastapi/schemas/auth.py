@@ -1,5 +1,5 @@
 # backend_fastapi/schemas/auth.py
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Union
 from uuid import UUID 
 
@@ -12,8 +12,8 @@ class UserPermissions(BaseModel):
     can_use_bot: bool = False
  
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=80)
+    password: str = Field(..., min_length=1, max_length=128)
 
 class TokenResponse(BaseModel):
     """Respuesta tras un login o registro exitoso"""
@@ -28,23 +28,23 @@ class TokenResponse(BaseModel):
 
 class UsuarioCreate(BaseModel):
     """Datos necesarios para registrar un nuevo odontólogo"""
-    username: str
+    username: str = Field(..., min_length=3, max_length=80)
     email: EmailStr
-    password: str
-    nombres: str
-    apellidos: Optional[str] = None
-    nombre_consultorio: Optional[str] = None
-    telefono: Optional[str] = None
+    password: str = Field(..., min_length=6, max_length=128)
+    nombres: str = Field(..., min_length=1, max_length=100)
+    apellidos: Optional[str] = Field(None, max_length=100)
+    nombre_consultorio: Optional[str] = Field(None, max_length=150)
+    telefono: Optional[str] = Field(None, max_length=50)
     plan_id: Optional[Union[UUID, str]] = None
 
 class PerfilUpdate(BaseModel):
     """Datos permitidos para actualizar el perfil de marca"""
-    nombres: str
-    apellidos: str
-    nombre_consultorio: Optional[str] = None
-    telefono: Optional[str] = None
+    nombres: str = Field(..., min_length=1, max_length=100)
+    apellidos: Optional[str] = Field(None, max_length=100)
+    nombre_consultorio: Optional[str] = Field(None, max_length=150)
+    telefono: Optional[str] = Field(None, max_length=50)
 
 class PasswordUpdate(BaseModel):
     """Esquema para el cambio de contraseña"""
-    old_password: str
-    new_password: str
+    old_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=6, max_length=128)

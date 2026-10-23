@@ -2,12 +2,49 @@
 import re
 import uuid
 import unicodedata
+import asyncio
+import contextlib
 import httpx
-import logging
+from typing import TypedDict, Optional
 from datetime import datetime, timezone, timedelta
 from config import Config
 
-logger = logging.getLogger("bot_engine")
+class RespuestaBot(TypedDict, total=False):
+    texto: str
+    imagen: Optional[str]
+    intencion: Optional[str]
+
+# ============================================================
+# CLIENTE HTTPX REUTILIZABLE (Pool de conexiones con Keep-Alive)
+# ============================================================
+_HTTP_CLIENT: httpx.AsyncClient | None = None
+
+def _obtener_cliente_singleton() -> httpx.AsyncClient:
+    global _HTTP_CLIENT
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    cliente_valido = False
+    if _HTTP_CLIENT is not None and not _HTTP_CLIENT.is_closed:
+        transporte = getattr(_HTTP_CLIENT, "_transport", None)
+        loop_transporte = getattr(transporte, "_loop", None)
+        if loop_transporte is None or loop_transporte is loop:
+            cliente_valido = True
+
+    if not cliente_valido:
+        _HTTP_CLIENT = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=5.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50)
+        )
+    return _HTTP_CLIENT
+
+@contextlib.asynccontextmanager
+async def cliente_http_sesion(timeout: float = 10.0):
+    """Reutiliza la conexión HTTPS a Supabase/Gemini sin destruirla al salir del bloque"""
+    client = _obtener_cliente_singleton()
+    yield client
 
 SUPABASE_HEADERS = {
     "apikey": Config.SUPABASE_KEY,
@@ -97,8 +134,6 @@ async def verificar_suscripcion_activa_bot(odontologo_id: str) -> bool:
         print(f"⚠️ [Error Verificando Suscripción en BD]: {e}", flush=True)
         return False
 
-    return False
-
 def extraer_user_id_de_instancia(instance_name: str) -> str | None:
     """Extrae el UUID del usuario desde el nombre de instancia 'doctor_<uuid_con_guiones_bajos>'"""
     if not instance_name or not instance_name.startswith("doctor_"):
@@ -125,7 +160,7 @@ async def poblar_plantilla_bot_doctor(user_id: str, doctor_nombre: str = "", con
     if not user_id:
         return
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with cliente_http_sesion(timeout=10.0) as client:
         try:
             # 1. VERIFICACIÓN MULTI-TABLA: Aseguramos que ninguna tabla tenga datos del doctor
             tablas_a_verificar = ["configuracion", "servicios", "chatbot"]
@@ -141,22 +176,90 @@ async def poblar_plantilla_bot_doctor(user_id: str, doctor_nombre: str = "", con
             # 2. Poblar 'configuracion'
             cfg_dict = obtener_plantilla_configuracion(doctor_nombre, consultorio_nombre, telefono)
             cfg_payload = [{"odontologo_id": user_id, "clave": k, "valor": str(v)} for k, v in cfg_dict.items()]
-            await client.post(f"{Config.SUPABASE_URL}/rest/v1/configuracion", json=cfg_payload, headers=SUPABASE_HEADERS)
+            r_cfg = await client.post(f"{Config.SUPABASE_URL}/rest/v1/configuracion", json=cfg_payload, headers=SUPABASE_HEADERS)
+            if r_cfg.status_code not in (200, 201):
+                print(f"⚠️ [Init configuracion Error {r_cfg.status_code}]: {r_cfg.text[:150]}", flush=True)
 
             # 3. Poblar 'servicios'
             srv_payload = [{**item, "odontologo_id": user_id} for item in PLANTILLA_SERVICIOS_BASE]
-            await client.post(f"{Config.SUPABASE_URL}/rest/v1/servicios", json=srv_payload, headers=SUPABASE_HEADERS)
+            r_srv = await client.post(f"{Config.SUPABASE_URL}/rest/v1/servicios", json=srv_payload, headers=SUPABASE_HEADERS)
+            if r_srv.status_code not in (200, 201):
+                print(f"⚠️ [Init servicios Error {r_srv.status_code}]: {r_srv.text[:150]}", flush=True)
 
             # 4. Poblar 'chatbot'
             bot_payload = [{**item, "odontologo_id": user_id} for item in PLANTILLA_CHATBOT_BASE]
-            await client.post(f"{Config.SUPABASE_URL}/rest/v1/chatbot", json=bot_payload, headers=SUPABASE_HEADERS)
+            r_bot = await client.post(f"{Config.SUPABASE_URL}/rest/v1/chatbot", json=bot_payload, headers=SUPABASE_HEADERS)
+            if r_bot.status_code not in (200, 201):
+                print(f"⚠️ [Init chatbot Error {r_bot.status_code}]: {r_bot.text[:150]}", flush=True)
 
-            print(f"✅ [Bot Multi-Tenant] Plantilla inicializada con éxito para doctor ID: {user_id}", flush=True)
+            if all(r.status_code in (200, 201) for r in (r_cfg, r_srv, r_bot)):
+                print(f"✅ [Bot Multi-Tenant] Plantilla inicializada con éxito para doctor ID: {user_id}", flush=True)
         except Exception as e:
             print(f"❌ [Bot Multi-Tenant Init Error]: {e}", flush=True)
 # ============================================================
 # LÓGICA DE TEXTO Y SILENCIO HUMANO
 # ============================================================
+
+
+# ============================================================
+# PATRONES DE CITA PRECOMPILADOS (Optimización de CPU en Nivel 1)
+# ============================================================
+PATRONES_CITA_CONTROL = [
+    re.compile(p) for p in [
+        r"\bcuando me toca\b",
+        r"\bmi control\b",
+        r"\bel control\b",
+        r"\bproximo control\b",
+        r"\bproximas? citas?\b",
+        r"\bproxima consulta\b",
+        r"\bfecha de mi cita\b",
+        r"\bfecha de mi control\b",
+        r"\bconfirmar mi cita\b",
+        r"\brevisar mi cita\b",
+        r"\bque dia me toca\b",
+        r"\bcitas? de control\b",
+        r"\bcitas? de revision\b",
+        r"\bcitas? de valoracion\b",
+        r"\btengo citas?\b",
+        r"\bhay citas?\b",
+        r"\btienen?\s+(?:un\s+)?citas?\b",
+        r"\btienen?\s+espacios?\b",
+        r"\btienen?\s+cupos?\b",
+        r"\bagendar(?:\s+una)?\s+cita\b",
+        r"\bapartar(?:\s+una)?\s+cita\b",
+        r"\bpedir(?:\s+una)?\s+cita\b",
+        r"\bsacar(?:\s+una)?\s+cita\b",
+        r"\bquiero(?:\s+una)?\s+cita\b",
+        r"\bme pueden agendar\b",
+        r"\bme regalan una cita\b",
+        r"\bdisponibilidad(?:\s+para)?\s+hoy\b",
+        r"\bcitas?\s+(?:para\s+)?hoy\b",
+        r"\bpuedo ir\b",
+        r"\bpuedo pasar\b",
+        r"\bcuando puedo ir\b",
+        r"\bque dia puedo ir\b",
+        r"\ba que hora puedo ir\b",
+        r"\ba que horas puedo ir\b",
+        r"\ba que hora voy\b",
+        r"\bque dia voy\b",
+        r"\ba que hora es mi cita\b",
+        r"\ba que hora tengo\b",
+        r"\bme pueden atender\b",
+        r"\bme puede atender\b",
+        r"\bme atienden\b",
+        r"\bme pueden revisar\b",
+        r"\bme puede revisar\b",
+        r"\bme revisan\b",
+        r"\bme pueden ver\b",
+        r"\bme puede ver\b",
+        r"\bpara que me revisen\b",
+        r"\bpara que me atiendan\b",
+        r"\bpara que me miren\b",
+        r"\bpara que me vean\b",
+        r"\bcuando me pueden\b"
+    ]
+]
+
 
 def eliminar_tildes_y_signos(texto: str) -> str:
     """Limpia tildes, signos y separa números pegados a palabras (ej: 'hola3' -> 'hola 3')"""
@@ -216,7 +319,7 @@ async def verificar_silencio_humano(numero: str, ventana_horas: int = 0, instanc
         url += f"&instance=eq.{instance}"
     url += "&order=created_at.desc&limit=1"
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
+    async with cliente_http_sesion(timeout=6.0) as client:
         try:
             res = await client.get(url, headers=SUPABASE_HEADERS)
             datos = res.json() if res.status_code == 200 else []
@@ -244,7 +347,7 @@ async def registrar_historial_db(numero: str, mensaje: str, respuesta: str, inst
     if instance:
         payload["instance"] = str(instance)
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with cliente_http_sesion(timeout=5.0) as client:
         try:
             await client.post(url, json=payload, headers=SUPABASE_HEADERS)
         except Exception as e:
@@ -257,7 +360,7 @@ async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str
         url += f"&instance=eq.{instance}"
     url += f"&order=created_at.desc&limit={limite}"
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with cliente_http_sesion(timeout=5.0) as client:
         try:
             res = await client.get(url, headers=SUPABASE_HEADERS)
             datos = res.json() if res.status_code == 200 else []
@@ -273,77 +376,26 @@ async def obtener_historial_reciente(numero: str, limite: int = 3, instance: str
             return "No hay conversación previa."
                 
 
-async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = None) -> dict | None:
+async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = None) -> RespuestaBot | None:
     """
     Nivel 1: Atiende consultas directas en 0.1s.
     Responde instantáneamente con mensaje unificado de confirmación de agenda para cualquier
-    solicitud de cita o turno, preservando la atención de costos de valoración y catálogo clínico.
+    solicitud de cita o turno, preservando la atención de costos de valoración/primera cita y catálogo clínico.
     Cuenta con caché en RAM (TTL 60s) para servicios y chatbot.
     """
     ahora_ts = datetime.now(timezone.utc).timestamp()
     paciente_limpio = eliminar_tildes_y_signos(texto_paciente)
 
-    # 🚨 DISCRIMINADOR PRIORITARIO: Intención de Cita, Agenda, Control o Asistencia (Tolerante a singulares y plurales)
-    patrones_cita_control = [
-        r"\bcuando me toca\b",
-        r"\bmi control\b",
-        r"\bel control\b",
-        r"\bproximo control\b",
-        r"\bproximas? citas?\b",
-        r"\bproxima consulta\b",
-        r"\bfecha de mi cita\b",
-        r"\bfecha de mi control\b",
-        r"\bconfirmar mi cita\b",
-        r"\brevisar mi cita\b",
-        r"\bque dia me toca\b",
-        r"\bcitas? de control\b",
-        r"\bcitas? de revision\b",
-        r"\bcitas? de valoracion\b",
-        r"\btengo citas?\b",
-        r"\bhay citas?\b",
-        r"\btienen?\s+(?:un\s+)?citas?\b",
-        r"\btienen?\s+espacios?\b",
-        r"\btienen?\s+cupos?\b",
-        r"\bagendar(?:\s+una)?\s+cita\b",
-        r"\bapartar(?:\s+una)?\s+cita\b",
-        r"\bpedir(?:\s+una)?\s+cita\b",
-        r"\bsacar(?:\s+una)?\s+cita\b",
-        r"\bquiero(?:\s+una)?\s+cita\b",
-        r"\bme pueden agendar\b",
-        r"\bme regalan una cita\b",
-        r"\bdisponibilidad(?:\s+para)?\s+hoy\b",
-        r"\bcitas?\s+(?:para\s+)?hoy\b",
-        r"\bpuedo ir\b",
-        r"\bpuedo pasar\b",
-        r"\bcuando puedo ir\b",
-        r"\bque dia puedo ir\b",
-        r"\ba que hora puedo ir\b",
-        r"\ba que horas puedo ir\b",
-        r"\ba que hora voy\b",
-        r"\bque dia voy\b",
-        r"\ba que hora es mi cita\b",
-        r"\ba que hora tengo\b",
-        r"\bme pueden atender\b",
-        r"\bme puede atender\b",
-        r"\bme atienden\b",
-        r"\bme pueden revisar\b",
-        r"\bme puede revisar\b",
-        r"\bme revisan\b",
-        r"\bme pueden ver\b",
-        r"\bme puede ver\b",
-        r"\bpara que me revisen\b",
-        r"\bpara que me atiendan\b",
-        r"\bpara que me miren\b",
-        r"\bcuando me pueden\b"
-    ]
+    # 🚨 DISCRIMINADOR PRIORITARIO: Intención de Cita, Agenda, Control o Asistencia (Evaluado con patrones precompilados)
+    es_consulta_agenda = any(p.search(paciente_limpio) for p in PATRONES_CITA_CONTROL)
 
-    es_consulta_agenda = any(re.search(p, paciente_limpio) for p in patrones_cita_control)
+    # 💎 Validar si es una pregunta sobre el COSTO o GRATUIDAD de valoración, primera cita o consulta inicial
+    terminos_evaluacion = ["valoracion", "revision", "primera cita", "primer cita", "consulta", "diagnostico", "chequeo", "cita inicial", "consulta inicial"]
+    terminos_costo = ["cuanto", "precio", "costo", "cobran", "vale", "cuesta", "gratis", "tarifa", "valor", "que vale", "que cuesta"]
 
-    # Validar si es una pregunta sobre el COSTO o GRATUIDAD de la valoración (debe responder tarifa gratuita en Nivel 1)
-    es_pregunta_costo_valoracion = (
-        ("valoracion" in paciente_limpio or "revision" in paciente_limpio)
-        and any(re.search(r"\b" + w + r"\b", paciente_limpio) for w in ["cuanto", "precio", "costo", "cobran", "vale", "cuesta", "gratis"])
-    )
+    tiene_termino_eval = any(t in paciente_limpio for t in terminos_evaluacion)
+    tiene_termino_costo = any(w in paciente_limpio for w in terminos_costo)
+    es_pregunta_costo_valoracion = tiene_termino_eval and tiene_termino_costo
 
     # Si es solicitud de turno o disponibilidad (y NO pregunta de precio de valoración), respuesta unificada de agenda
     if es_consulta_agenda and not es_pregunta_costo_valoracion:
@@ -353,7 +405,7 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
             "imagen": None
         }
 
-    async with httpx.AsyncClient(timeout=6.0) as client:
+    async with cliente_http_sesion(timeout=6.0) as client:
         mejor_resp_bot = None
         max_puntos_bot = 0
 
@@ -390,7 +442,7 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
 
                 puntos = calcular_puntaje_coincidencia(texto_paciente, palabras)
                 
-                if puntos >= 4:
+                if puntos >= 5:
                     servicios_coincidentes.append((fila, puntos))
 
                 if puntos > max_puntos_srv:
@@ -401,7 +453,14 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                     
                     detalle_extra = f"\n\n{desc}" if desc and len(desc) < 80 else ""
 
-                    if "resina" in servicio_nom.lower() or "calza" in servicio_nom.lower():
+                    # 🏥 Descarte honesto si el servicio no se realiza en sede (ej: Radiografías)
+                    if "no disponible" in precio.lower() or "no realizamos" in desc.lower() or "no disponible" in desc.lower():
+                        explicacion = desc if desc else f"Actualmente no realizamos toma de {servicio_nom.lower()} en nuestro consultorio."
+                        texto_formateado = (
+                            f"¡Hola! 👋 {explicacion}\n\n"
+                            f"Si necesitas una cita de valoración o asesoría para remitirte, ¡con gusto te colaboramos! 🦷✨"
+                        )
+                    elif "resina" in servicio_nom.lower() or "calza" in servicio_nom.lower():
                         texto_formateado = (
                             f"¡Hola! 👋 ¡Claro que sí! Las *resinas o calzas* tienen un valor *{precio}*."
                             f"{detalle_extra}\n\n"
@@ -453,8 +512,24 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
 
             datos_activos = [f for f in datos_bot if str(f.get("estado", "")).upper() == "ACTIVO"]
 
+            # 💎 ATENCIÓN DIRECTA DE COSTO DE VALORACIÓN:
+            # Si el paciente preguntó cuánto cuesta la primera cita/consulta/valoración y NO preguntó por un tratamiento específico:
+            if es_pregunta_costo_valoracion and max_puntos_srv < 4:
+                for fila_val in datos_activos:
+                    if fila_val.get("intencion") == "costo_valoracion":
+                        print(f"⚡ [Supabase Match Directo] Respondiendo valoración gratuita para: '{texto_paciente}'", flush=True)
+                        img_val = fila_val.get("link_imagen")
+                        img_val_limpia = str(img_val).strip() if img_val and str(img_val).strip() and str(img_val).strip().upper() != "NULL" else None
+                        return {
+                            "texto": fila_val.get("respuesta", ""),
+                            "imagen": img_val_limpia,
+                            "intencion": "costo_valoracion"
+                        }
+
             for fila in datos_activos:
-                keywords = fila.get("palabras_clave", "").split(",")
+                intencion_actual = fila.get("intencion", "")
+                keywords = [k.strip() for k in fila.get("palabras_clave", "").split(",") if k.strip()]
+
                 puntos = calcular_puntaje_coincidencia(texto_paciente, keywords)
                 if puntos > max_puntos_bot:
                     max_puntos_bot = puntos
@@ -463,13 +538,13 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
                     mejor_resp_bot = {
                         "texto": fila.get("respuesta", ""),
                         "imagen": img_limpia,
-                        "intencion": fila.get("intencion", "")
+                        "intencion": intencion_actual
                     }
         except Exception as e:
             print(f"❌ [Supabase Chatbot Error]: {e}", flush=True)
 
         # 3. ⚖️ Desempate y Prioridad Inteligente:
-        # Si coincide un servicio específico (ej: calza, resina, limpieza), nunca permitir que gane la lista general de precios
+        # A. Si coincide un servicio específico (ej: calza, resina, limpieza), nunca permitir que gane la lista general de precios
         if mejor_resp_srv and mejor_resp_bot and mejor_resp_bot.get("intencion") == "precios":
             print(f"⚡ [Supabase Match Directo] Priorizando tratamiento específico sobre lista general de precios (Puntaje srv: {max_puntos_srv})", flush=True)
             return mejor_resp_srv
@@ -488,7 +563,7 @@ async def obtener_respuesta_faq_db(texto_paciente: str, odontologo_id: str = Non
 
     return None
 
-async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instance: str = None, odontologo_id: str = None) -> dict | None:
+async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instance: str = None, odontologo_id: str = None) -> RespuestaBot | None:
     """Nivel 2: Genera respuesta contextualizada ultra-rápida (<1s) con gemini-3.5-flash-lite"""
     if not Config.GEMINI_API_KEY:
         print("❌ [Gemini] ERROR: GEMINI_API_KEY no configurada", flush=True)
@@ -510,7 +585,7 @@ async def consultar_gemini_ia(texto_paciente: str, numero_paciente: str, instanc
         config_datos = cache_cfg["datos"]
 
     if not config_datos or not servicios_datos:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with cliente_http_sesion(timeout=5.0) as client:
             try:
                 if not config_datos:
                     url_cfg = f"{Config.SUPABASE_URL}/rest/v1/configuracion"
@@ -631,7 +706,7 @@ REGLAS GENERALES:
     modelo = "gemini-3.5-flash-lite"
     gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={Config.GEMINI_API_KEY}"
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with cliente_http_sesion(timeout=30.0) as client:
         try:
             print(f"🤖 [Gemini] Consultando {modelo} (Doctor: {odontologo_id})...", flush=True)
             res = await client.post(gemini_url, json=payload)

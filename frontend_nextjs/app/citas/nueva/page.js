@@ -6,6 +6,7 @@ import { Home, Calendar, User, Phone, MessageSquare, Search } from 'lucide-react
 import Link from 'next/link';
 import Button from '@/app/components/ui/Button';
 import { API_BASE_URL, authFetch } from '@/config/api';
+import { getFechaHoyLocal, formatearFechaVisual } from '@/app/utils/fechas';
 // Ubicación: frontend_nextjs/app/citas/nueva/page.js (cabecera de imports)
 import { useUser } from '@/context/UserContext';
 
@@ -21,9 +22,22 @@ function NuevaCitaForm() {
   
   const fechaParam = searchParams.get('fecha');
   const horaParam = searchParams.get('hora');
+
+  // Máscara automática DD/MM/AAAA idéntica a la ficha de paciente
+  const aplicarMascaraFecha = (valor) => {
+    const numeros = valor.replace(/\D/g, '');
+    const corte = numeros.slice(0, 8);
+    if (corte.length <= 2) return corte;
+    if (corte.length <= 4) return `${corte.slice(0, 2)}/${corte.slice(2)}`;
+    return `${corte.slice(0, 2)}/${corte.slice(2, 4)}/${corte.slice(4)}`;
+  };
+
+  const fechaInicial = fechaParam 
+    ? formatearFechaVisual(fechaParam) 
+    : formatearFechaVisual(getFechaHoyLocal());
   
   const [formData, setFormData] = useState({
-    fecha: fechaParam || '',
+    fecha: fechaInicial,
     hora: horaParam || '',
     paciente_id: null,
     paciente_nombre: '',
@@ -145,13 +159,25 @@ function NuevaCitaForm() {
       return;
     }
 
+    // Convertir de DD/MM/AAAA a YYYY-MM-DD para el endpoint unificado del backend
+    let fechaParaEnviar = formData.fecha;
+    if (typeof fechaParaEnviar === 'string' && fechaParaEnviar.includes('/')) {
+      const [dia, mes, anio] = fechaParaEnviar.split('/');
+      if (dia && mes && anio && anio.length === 4) {
+        fechaParaEnviar = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+      } else {
+        alert("Por favor ingresa una fecha válida en formato DD/MM/AAAA (ej: 16/10/2026).");
+        return;
+      }
+    }
+
     setLoading(true);
 
     const datosLimpios = {
       paciente_id: formData.paciente_id,
       paciente_nombre: formData.paciente_nombre,
       paciente_telefono: formData.paciente_telefono,
-      fecha: formData.fecha,
+      fecha: fechaParaEnviar,
       hora: formData.hora,
       motivo: formData.motivo || "Consulta",
       doctor: formData.doctor || "Odontólogo General"
@@ -167,7 +193,7 @@ function NuevaCitaForm() {
       });
       
       if (response.ok) {
-        router.replace(`/dashboard?fecha=${formData.fecha}`);
+        router.replace(`/dashboard?fecha=${fechaParaEnviar}`);
       } else {
         const error = await response.json();
         alert("Error: " + (error.detail || "No se pudo agendar"));
@@ -244,10 +270,13 @@ function NuevaCitaForm() {
                 <Calendar className="w-3.5 h-3.5" /> Fecha
               </label>
               <input
-                type="date"
+                type="text"
+                inputMode="numeric"
+                placeholder="DD/MM/AAAA"
+                maxLength="10"
                 value={formData.fecha}
-                onChange={(e) => setFormData({...formData, fecha: e.target.value})}
-                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold"
+                onChange={(e) => setFormData({ ...formData, fecha: aplicarMascaraFecha(e.target.value) })}
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-black/5 font-bold text-black"
                 required
               />
             </div>

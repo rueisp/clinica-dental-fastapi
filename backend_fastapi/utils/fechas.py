@@ -1,5 +1,6 @@
 # backend_fastapi/utils/fechas.py
-from datetime import datetime, date, timedelta
+import math
+from datetime import datetime, date, time, timedelta
 import pytz
 
 DEFAULT_TZ = pytz.timezone('America/Bogota')
@@ -18,6 +19,7 @@ def obtener_ahora_local(zona: str = None) -> datetime:
     return datetime.now(obtener_tz_doctor(zona))
 
 def limpiar_naive(dt: datetime) -> datetime:
+    """Quita el tzinfo preservando los valores de hora local ya calculados"""
     if not dt:
         return None
     return dt.replace(tzinfo=None)
@@ -35,16 +37,20 @@ def ahora_naive(zona: str = None) -> datetime:
 def hoy_local(zona: str = None) -> date:
     return obtener_hoy_local(zona)
 
-def asegurar_tz(dt: datetime, zona: str = None) -> datetime:
+def asegurar_tz(dt, zona: str = None) -> datetime:
+    """Asegura que cualquier datetime o date esté localizado en la zona horaria del doctor"""
     if not dt:
         return None
+    # Si es date puro sin hora, elevarlo defensivamente a datetime a medianoche
+    if isinstance(dt, date) and not isinstance(dt, datetime):
+        dt = datetime.combine(dt, time.min)
+
     tz = obtener_tz_doctor(zona)
     if dt.tzinfo is not None:
         return dt.astimezone(tz)
     else:
         return tz.localize(dt)
 
-# Ubicación: backend_fastapi/utils/fechas.py (añadir o verificar esta función)
 def formatear_fecha_visual(fecha_input, zona: str = None) -> str:
     """Convierte cualquier fecha, datetime o string a formato visual DD/MM/AAAA"""
     if not fecha_input:
@@ -85,11 +91,11 @@ def calcular_dias_restantes(dt, zona: str = None) -> int:
     if dt_aware <= ahora:
         return 0
     segundos_restantes = (dt_aware - ahora).total_seconds()
-    return max(0, int(segundos_restantes // 86400) + (1 if segundos_restantes % 86400 > 0 else 0))
+    return max(0, math.ceil(segundos_restantes / 86400))
 
-def calcular_progreso_periodo(dt_fin, duracion_dias: int, zona: str = None) -> int:
+def calcular_progreso_periodo(dt_fin, duracion_dias: int, dt_inicio=None, zona: str = None) -> int:
     """Calcula el porcentaje transcurrido del plan (0 a 100%) para la interfaz visual"""
-    if not dt_fin or duracion_dias <= 0:
+    if not dt_fin or not duracion_dias or duracion_dias <= 0:
         return 100
     fin_aware = asegurar_tz(dt_fin, zona)
     if not fin_aware:
@@ -97,9 +103,14 @@ def calcular_progreso_periodo(dt_fin, duracion_dias: int, zona: str = None) -> i
     ahora = ahora_aware(zona)
     if fin_aware <= ahora:
         return 100
-    inicio_aware = fin_aware - timedelta(days=duracion_dias)
+
+    if dt_inicio:
+        inicio_aware = asegurar_tz(dt_inicio, zona)
+    else:
+        inicio_aware = fin_aware - timedelta(days=duracion_dias)
+
     duracion_total = (fin_aware - inicio_aware).total_seconds()
     tiempo_transcurrido = (ahora - inicio_aware).total_seconds()
     if duracion_total <= 0:
         return 100
-    return min(100, max(0, int((tiempo_transcurrido / duracion_total) * 100)))   
+    return min(100, max(0, int((tiempo_transcurrido / duracion_total) * 100)))

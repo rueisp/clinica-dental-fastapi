@@ -45,17 +45,44 @@ async def resolver_destinatario_lid(instance_name: str, numero_o_jid: str, addre
                     for chat in lista_chats:
                         remote_jid = chat.get("remoteJid", "")
                         last_key = chat.get("lastMessage", {}).get("key", {}) if chat.get("lastMessage") else {}
-                        alt_jid = last_key.get("remoteJidAlt", "")
                         
-                        if "@lid" in remote_jid and (numero_limpio in alt_jid or numero_limpio in str(chat)):
+                        # Extraer alt_jid de forma segura sin búsquedas sueltas en str(chat)
+                        alt_jid = (
+                            last_key.get("remoteJidAlt", "")
+                            or chat.get("remoteJidAlt", "")
+                            or str(chat.get("phone", ""))
+                            or str(chat.get("phoneNumber", ""))
+                        )
+                        alt_num = "".join(filter(str.isdigit, alt_jid.split("@")[0]))
+                        
+                        # Coincidencia exacta de número telefónico (con o sin prefijo 57 de Colombia)
+                        es_coincidencia = (
+                            alt_num == numero_limpio
+                            or (len(numero_limpio) == 10 and alt_num == f"57{numero_limpio}")
+                            or (len(alt_num) == 10 and numero_limpio == f"57{alt_num}")
+                        )
+                        
+                        if "@lid" in remote_jid and alt_num and es_coincidencia:
+                            # Control preventivo de memoria en RAM (< 512 MiB)
+                            if len(MAPA_LID_CACHE) > 500:
+                                claves_a_borrar = list(MAPA_LID_CACHE.keys())[:100]
+                                for k in claves_a_borrar:
+                                    MAPA_LID_CACHE.pop(k, None)
+                            
                             MAPA_LID_CACHE[numero_limpio] = remote_jid
-                            print(f"🔗 [LID Resolver] Mapeado exitoso: {numero_limpio} -> {remote_jid}", flush=True)
+                            print(f"🔗 [LID Resolver] Mapeado exacto exitoso: {numero_limpio} -> {remote_jid}", flush=True)
                             return remote_jid
         except Exception as e:
             print(f"⚠️ [LID Resolver Error]: {e}", flush=True)
 
     # 4. Guardar en caché como número estándar para evitar futuras consultas HTTP a Hetzner
     resultado_final = numero_limpio or jid_str
+    
+    if len(MAPA_LID_CACHE) > 500:
+        claves_a_borrar = list(MAPA_LID_CACHE.keys())[:100]
+        for k in claves_a_borrar:
+            MAPA_LID_CACHE.pop(k, None)
+
     MAPA_LID_CACHE[numero_limpio] = resultado_final
     return resultado_final
 
@@ -90,8 +117,12 @@ async def configurar_webhook_instancia(instance_name: str, webhook_url: str) -> 
 
 async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dict:
     """
-    Obtiene el QR de la instancia sin desconectar sesiones activas. Si la sesión anterior
-    fue cerrada/desconectada, reinicia la instancia para entregar un código QR fresco inmediatamente.
+    Obtiene el QR de la instancia sin desconectar sesiones activas.
+    Protección de Resiliencia:
+    - Ante errores de red o caídas de servidor (HTTP >= 500), NUNCA borra la instancia.
+    - Si la instancia no existe (HTTP 404), la crea directamente sin intentar borrarla.
+    - Si la sesión está 'open', la preserva intacta.
+    - Solo reinicia (delete -> create) si la instancia responde 200 pero la sesión está confirmadamente cerrada sin QR.
     """
     url_create = f"{Config.EVOLUTION_API_URL}/instance/create"
     url_connect = f"{Config.EVOLUTION_API_URL}/instance/connect/{instance_name}"
@@ -107,9 +138,24 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             res_connect = await client.get(url_connect, headers=HEADERS)
+
+            # 1. Protección contra caídas transitorias o errores de Hetzner (NO borrar)
+            if res_connect.status_code >= 500:
+                print(f"⚠️ [Evolution API Error]: El servidor respondió con estado {res_connect.status_code}. No se borrará la instancia.", flush=True)
+                return {
+                    "success": False,
+                    "error": f"Evolution API no disponible temporalmente (HTTP {res_connect.status_code})"
+                }
+
+            if res_connect.status_code in (401, 403):
+                return {
+                    "success": False,
+                    "error": f"Error de autenticación con Evolution API (HTTP {res_connect.status_code})"
+                }
+
             data_connect = res_connect.json() if res_connect.content else {}
-            
-            # 1. Protección: Si la sesión ya está abierta y conectada, NO borrar la instancia
+
+            # 2. Si la sesión ya está abierta y conectada, NO tocarla
             estado_actual = (
                 data_connect.get("instance", {}).get("state") 
                 or data_connect.get("state") 
@@ -131,14 +177,22 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
             )
             pairing_code = data_connect.get("pairingCode")
 
-            # 2. Si no hay QR o falló la conexión previa, reiniciar instancia limpiamente
-            if not qr_base64 or res_connect.status_code != 200:
-                print(f"[Evolution API] Reiniciando instancia '{instance_name}' para generar QR nuevo...")
-                await client.delete(url_delete, headers=HEADERS)
-                
+            # 3. Si la instancia no existe en Evolution (HTTP 404), crearla directamente sin DELETE
+            if res_connect.status_code == 404:
+                print(f"[Evolution API] Instancia '{instance_name}' no existe (404). Creando nueva...", flush=True)
                 res_create = await client.post(url_create, json=payload, headers=HEADERS)
                 data_create = res_create.json() if res_create.content else {}
-                
+                qr_base64 = (
+                    data_create.get("qrcode", {}).get("base64")
+                    or data_create.get("base64")
+                )
+                pairing_code = data_create.get("pairingCode")
+            # 4. Si la instancia existe (200), pero no tiene QR y no está 'open' (sesión cerrada o muerta), reiniciar limpiamente
+            elif not qr_base64:
+                print(f"[Evolution API] Sesión cerrada o sin QR en '{instance_name}'. Reiniciando para generar código nuevo...", flush=True)
+                await client.delete(url_delete, headers=HEADERS)
+                res_create = await client.post(url_create, json=payload, headers=HEADERS)
+                data_create = res_create.json() if res_create.content else {}
                 qr_base64 = (
                     data_create.get("qrcode", {}).get("base64")
                     or data_create.get("base64")
@@ -159,7 +213,7 @@ async def crear_o_obtener_qr(instance_name: str, webhook_url: str = None) -> dic
                 return {"success": False, "error": "No se pudo obtener el QR de Evolution API."}
 
         except Exception as e:
-            print(f"❌ [Evolution API Error]: {e}")
+            print(f"❌ [Evolution API Error]: {e}", flush=True)
             return {"success": False, "error": str(e)}
 
 async def obtener_estado_conexion(instance_name: str) -> dict:
@@ -199,6 +253,11 @@ async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, 
     elif "@" not in destinatario:
         destinatario = "".join(filter(str.isdigit, destinatario))
 
+    # Validación preventiva de destinatario
+    if not destinatario or (len(destinatario) < 7 and "@lid" not in destinatario):
+        print(f"⚠️ [Evolution API Despacho] Destinatario inválido descartado: '{numero}'", flush=True)
+        return False
+
     # Normalización universal de saltos de línea
     texto_formateado = (
         str(texto or "")
@@ -210,19 +269,48 @@ async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, 
         .strip()
     )
 
-    url = f"{Config.EVOLUTION_API_URL}/message/sendText/{instance_name}" if not imagen_url else f"{Config.EVOLUTION_API_URL}/message/sendMedia/{instance_name}"
+    if not texto_formateado and not imagen_url:
+        print("⚠️ [Evolution API Despacho] Intento de despacho con texto e imagen vacíos", flush=True)
+        return False
+
+    url = (
+        f"{Config.EVOLUTION_API_URL}/message/sendText/{instance_name}"
+        if not imagen_url
+        else f"{Config.EVOLUTION_API_URL}/message/sendMedia/{instance_name}"
+    )
     
-    payload = {
-        "number": destinatario,
-        "text": texto_formateado
-    } if not imagen_url else {
-        "number": destinatario,
-        "mediatype": "image",
-        "mimetype": "image/jpeg",
-        "media": imagen_url,
-        "caption": texto_formateado,
-        "fileName": "afiche_promocion.jpeg"
-    }
+    if imagen_url:
+        # Deducción dinámica de mimetype y extensión para soporte universal (PNG, WEBP, JPEG)
+        path_limpio = imagen_url.split("?")[0].lower()
+        if path_limpio.endswith(".png"):
+            mimetype = "image/png"
+            file_name = "imagen.png"
+        elif path_limpio.endswith(".webp"):
+            mimetype = "image/webp"
+            file_name = "imagen.webp"
+        elif path_limpio.endswith(".gif"):
+            mimetype = "image/gif"
+            file_name = "imagen.gif"
+        else:
+            mimetype = "image/jpeg"
+            file_name = "imagen.jpeg"
+
+        # WhatsApp limita el caption a 1024 caracteres
+        caption_seguro = texto_formateado[:1020] + "..." if len(texto_formateado) > 1024 else texto_formateado
+
+        payload = {
+            "number": destinatario,
+            "mediatype": "image",
+            "mimetype": mimetype,
+            "media": imagen_url,
+            "caption": caption_seguro,
+            "fileName": file_name
+        }
+    else:
+        payload = {
+            "number": destinatario,
+            "text": texto_formateado
+        }
 
     print(f"\n🚀 [Evolution API Despacho] Enviando a: {url}")
     print(f"📦 [Destinatario]: {destinatario}")
@@ -231,7 +319,7 @@ async def enviar_mensaje_evolution(instance_name: str, numero: str, texto: str, 
         try:
             res = await client.post(url, json=payload, headers=HEADERS)
             
-            # Registro limpio en consola: trunca respuestas largas para no saturar Cloud Logging con buffers binarios de fotos
+            # Truncado de log a 120 caracteres para proteger Cloud Logging contra volcados binarios
             resumen_log = (res.text[:120] + "...") if len(res.text) > 120 else res.text
             print(f"📡 [Evolution API Respuesta ({res.status_code})]: {resumen_log}\n", flush=True)
 

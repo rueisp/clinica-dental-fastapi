@@ -1,5 +1,7 @@
 # endpoints/pacientes.py
 
+import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, delete, update
@@ -8,8 +10,9 @@ from typing import Optional
 import cloudinary.uploader
 import cloudinary
 from utils.fechas import ahora_naive, hoy_local
-import os
 from pydantic import BaseModel
+
+logger = logging.getLogger("pacientes")
 from database import get_db
 from dependencies.auth import get_current_user
 from dependencies.limites import verificar_limite_pacientes, verificar_permiso, verificar_suscripcion_activa
@@ -72,30 +75,32 @@ async def crear_paciente(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    await verificar_suscripcion_activa(current_user, db)  # Verificar que el usuario tenga una suscripción activa antes de permitir crear pacientes
-    await verificar_limite_pacientes(current_user, db)
+    # 1. Validar suscripción activa y reutilizarla en memoria para el límite diario (Regla 7.E)
+    sub = await verificar_suscripcion_activa(current_user, db)
+    await verificar_limite_pacientes(current_user, db, sub=sub)
     
-    # 1. Verificar documento duplicado
+    # 1. Verificar documento duplicado por odontólogo (Aislamiento Multi-Tenant)
     if documento:
         result = await db.execute(
-            select(Paciente).where(
+            select(Paciente.id).where(
                 Paciente.documento == documento,
+                Paciente.odontologo_id == current_user.id,
                 Paciente.is_deleted == False
             )
         )
         if result.scalar_one_or_none():
-            raise HTTPException(400, detail=f"Ya existe un paciente con el documento {documento}")
+            raise HTTPException(400, detail=f"Ya tienes registrado un paciente activo con el documento {documento}")
     
-    # 2. Procesar fecha de nacimiento
+    # 2. Procesar fecha de nacimiento de forma defensiva
     fecha_nacimiento_obj = None
-    if fecha_nacimiento:
+    if fecha_nacimiento and isinstance(fecha_nacimiento, str) and fecha_nacimiento.strip():
         try:
-            fecha_nacimiento_obj = datetime.strptime(fecha_nacimiento, '%Y-%m-%d').date()
-        except:
-            pass
+            fecha_nacimiento_obj = datetime.strptime(fecha_nacimiento.strip(), '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            raise HTTPException(400, detail="Formato de fecha de nacimiento inválido (use YYYY-MM-DD).")
     
     if not edad and fecha_nacimiento_obj:
-        hoy = date.today()
+        hoy = hoy_local()
         edad = hoy.year - fecha_nacimiento_obj.year
         if (hoy.month, hoy.day) < (fecha_nacimiento_obj.month, fecha_nacimiento_obj.day):
             edad -= 1
@@ -127,32 +132,38 @@ async def crear_paciente(
     )
     
     db.add(nuevo_paciente)
-    await db.flush()  # Obtener ID sin commit final
-    await db.refresh(nuevo_paciente)
+    await db.flush()  # Obtener UUID generado sin commit final
     
-    # 4. Subir imagen de perfil (si viene)
+    # 4. Subir imagen de perfil sin bloquear el event loop (asyncio.to_thread)
     if imagen_perfil and imagen_perfil.filename:
         try:
-            upload_result = cloudinary.uploader.upload(
-                await imagen_perfil.read(),
+            contenido_img = await imagen_perfil.read()
+            upload_result = await asyncio.to_thread(
+                cloudinary.uploader.upload,
+                contenido_img,
                 public_id=f"pacientes/{current_user.id}/perfil_paciente_{nuevo_paciente.id}",
                 overwrite=True
             )
             nuevo_paciente.imagen_perfil_url = upload_result.get('secure_url')
         except Exception as e:
-            raise HTTPException(500, detail=f"Error al subir imagen de perfil: {str(e)}")
+            await db.rollback()
+            logger.error(f"Error subiendo imagen de perfil a Cloudinary: {e}")
+            raise HTTPException(500, detail="No se pudo procesar la imagen de perfil.")
     
-    # 5. Subir dentigrama (si viene)
+    # 5. Subir dentigrama sin bloquear el event loop (asyncio.to_thread)
     if dentigrama_canvas and dentigrama_canvas.startswith('data:image'):
         try:
-            upload_result = cloudinary.uploader.upload(
+            upload_result = await asyncio.to_thread(
+                cloudinary.uploader.upload,
                 dentigrama_canvas,
                 public_id=f"dentigramas/{current_user.id}/dentigrama_paciente_{nuevo_paciente.id}",
                 overwrite=True
             )
             nuevo_paciente.dentigrama_canvas = upload_result.get('secure_url')
         except Exception as e:
-            raise HTTPException(500, detail=f"Error al subir dentigrama: {str(e)}")
+            await db.rollback()
+            logger.error(f"Error subiendo dentigrama a Cloudinary: {e}")
+            raise HTTPException(500, detail="No se pudo procesar el odontograma.")
     
     # 6. Incrementar o Crear registro de límite diario
     # ✅ Usamos la misma fecha local de Colombia que en limites.py
@@ -169,15 +180,8 @@ async def crear_paciente(
     if limite:
         limite.contador_pacientes += 1
     else:
-        # Buscamos el plan para saber qué límite poner
-        res_plan = await db.execute(
-            select(Plan).join(Subscription, Subscription.plan_type == Plan.nombre)
-            .where(Subscription.user_id == current_user.id)
-        )
-        plan_actual = res_plan.scalar_one_or_none()
-        
-        # ✅ CAMBIO: El respaldo ahora es 20 en lugar de 50
-        limite_fijo = plan_actual.limite_pacientes_diario if plan_actual else 20
+        # Reutilizar el plan ya cargado en memoria sin hacer consultas SQL adicionales
+        limite_fijo = getattr(sub.plan_cargado, "limite_pacientes_diario", 20) if getattr(sub, "plan_cargado", None) else 20
 
         nuevo_registro_limite = LimiteDiario(
             user_id=current_user.id,
@@ -358,7 +362,7 @@ async def exportar_backup_excel(
     output.seek(0)
     bytes_data = BytesIO(output.getvalue().encode('utf-8'))
     
-    fecha_hoy = datetime.now().strftime('%Y_%m_%d')
+    fecha_hoy = hoy_local().strftime('%Y_%m_%d')
     filename = f"Backup_Pacientes_{fecha_hoy}.csv"
     
     return StreamingResponse(
@@ -450,7 +454,7 @@ async def get_paciente(
         "id": str(paciente.id), # Convertimos a string para el frontend
         "nombres": paciente.nombres,
         "apellidos": paciente.apellidos,
-        "nombre_completo": f"{paciente.nombres} {paciente.apellidos or ''}", # Use nombre_completo aquí
+        "nombre_completo": f"{paciente.nombres} {paciente.apellidos or ''}".strip(),
         "tipo_documento": paciente.tipo_documento,
         "documento": paciente.documento,
         "fecha_nacimiento": fecha_nacimiento_str,
@@ -516,55 +520,53 @@ async def actualizar_paciente(
     if not current_user.is_admin and paciente.odontologo_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para editar este paciente")
     
-    # Verificar documento duplicado
+    # Verificar documento duplicado por odontólogo (Aislamiento Multi-Tenant)
     if documento and documento != paciente.documento:
         result = await db.execute(
-            select(Paciente).where(
+            select(Paciente.id).where(
                 Paciente.documento == documento,
+                Paciente.odontologo_id == current_user.id,
                 Paciente.is_deleted == False,
                 Paciente.id != paciente_id
             )
         )
         if result.scalar_one_or_none():
-            raise HTTPException(400, detail=f"Ya existe otro paciente con el documento {documento}")
+            raise HTTPException(400, detail=f"Ya tienes registrado otro paciente activo con el documento {documento}")
     
     # Procesar fecha de nacimiento
     if fecha_nacimiento:
         try:
-            fecha_obj = datetime.strptime(fecha_nacimiento, '%Y-%m-%d').date()
+            fecha_obj = datetime.strptime(fecha_nacimiento.strip(), '%Y-%m-%d').date()
             paciente.fecha_nacimiento = fecha_obj
-            hoy = date.today()
+            hoy = hoy_local()
             edad_calculada = hoy.year - fecha_obj.year
             if (hoy.month, hoy.day) < (fecha_obj.month, fecha_obj.day):
                 edad_calculada -= 1
             paciente.edad = edad_calculada
-        except:
-            pass
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Formato de fecha de nacimiento inválido (use YYYY-MM-DD).")
     
     # ============================================================
-    # PROCESAR DENTIGRAMA
+    # PROCESAR DENTIGRAMA (Async sin bloquear event loop)
     # ============================================================
     dentigrama_final_url = None
     if dentigrama_canvas:
         if dentigrama_canvas.startswith('data:image'):
             try:
-                # Usar public_id COMPLETO (sin folder separado)
                 public_id_completo = f"dentigramas/{current_user.id}/dentigrama_paciente_{paciente_id}"
                 
-                upload_result = cloudinary.uploader.upload(
+                upload_result = await asyncio.to_thread(
+                    cloudinary.uploader.upload,
                     dentigrama_canvas,
-                    public_id=public_id_completo,  # ← Cambiar a public_id completo
+                    public_id=public_id_completo,
                     overwrite=True,
-                    invalidate=True  # ← Forzar invalidación de caché
+                    invalidate=True
                 )
                 dentigrama_final_url = upload_result.get('secure_url')
                 
-                # Debug: Verificar en logs
-                print(f"✅ Dentigrama actualizado - public_id: {upload_result.get('public_id')}")
-                
             except Exception as e:
-                print(f"❌ Error subiendo dentigrama: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Error al subir dentigrama: {str(e)}")
+                logger.error(f"Error subiendo dentigrama a Cloudinary: {e}")
+                raise HTTPException(status_code=500, detail="No se pudo procesar el odontograma.")
         elif dentigrama_canvas.startswith('http'):
             dentigrama_final_url = dentigrama_canvas
 
@@ -572,29 +574,25 @@ async def actualizar_paciente(
         paciente.dentigrama_canvas = dentigrama_final_url
     
     # ============================================================
-    # PROCESAR IMAGEN DE PERFIL
+    # PROCESAR IMAGEN DE PERFIL (Async sin bloquear event loop)
     # ============================================================
-    # Si viene nueva imagen
     if imagen_perfil and imagen_perfil.filename:
         try:
-            # Subir nueva imagen con public_id COMPLETO (sin folder separado)
-            upload_result = cloudinary.uploader.upload(
-                await imagen_perfil.read(),
+            contenido_img = await imagen_perfil.read()
+            upload_result = await asyncio.to_thread(
+                cloudinary.uploader.upload,
+                contenido_img,
                 public_id=f"pacientes/{current_user.id}/perfil_paciente_{paciente_id}",
                 overwrite=True,
-                invalidate=True  # Forzar invalidación de caché
+                invalidate=True
             )
             paciente.imagen_perfil_url = upload_result.get('secure_url')
             
-            # Debug: Verificar en logs
-            print(f"✅ Imagen perfil actualizada - public_id: {upload_result.get('public_id')}")
-            
         except Exception as e:
-            print(f"❌ Error subiendo imagen perfil: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error al subir imagen de perfil: {str(e)}")
+            logger.error(f"Error subiendo imagen de perfil a Cloudinary: {e}")
+            raise HTTPException(status_code=500, detail="No se pudo procesar la imagen de perfil.")
 
-    # Si se solicita eliminar imagen
-    elif eliminar_imagen == 'true':
+    elif eliminar_imagen and str(eliminar_imagen).lower() in ('true', '1', 'yes'):
         paciente.imagen_perfil_url = None
     
     # ============================================================
@@ -608,7 +606,7 @@ async def actualizar_paciente(
         paciente.tipo_documento = tipo_documento
     if documento is not None:
         paciente.documento = documento
-    if edad is not None:
+    if edad is not None and not fecha_nacimiento:
         paciente.edad = edad
     if sexo is not None:
         paciente.sexo = sexo
@@ -636,7 +634,6 @@ async def actualizar_paciente(
         paciente.habitos = habitos
     
     await db.commit()
-    await db.refresh(paciente)
     
     return {
         "success": True,
@@ -668,6 +665,7 @@ async def eliminar_paciente(
         raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este paciente")
     
     # Soft delete con hora local de Colombia
+    paciente.is_deleted = True
     paciente.deleted_at = ahora_naive()
 
     # ✅ OCULTAR CITAS: Para que no aparezcan en la agenda
@@ -751,20 +749,20 @@ async def eliminar_permanente(
         delete(Cita).where(Cita.paciente_id == paciente_id)
     )
     
-    # 3. Luego eliminar imágenes de Cloudinary (opcional)
+    # 3. Luego eliminar imágenes de Cloudinary sin bloquear el event loop
     if paciente.imagen_perfil_url:
         try:
-            public_id = paciente.imagen_perfil_url.split('/')[-1].split('.')[0]
-            cloudinary.uploader.destroy(f"pacientes/{current_user.id}/{public_id}")
-        except:
-            pass
+            public_id = f"pacientes/{paciente.odontologo_id}/perfil_paciente_{paciente.id}"
+            await asyncio.to_thread(cloudinary.uploader.destroy, public_id)
+        except Exception as e:
+            logger.warning(f"No se pudo eliminar imagen de perfil en Cloudinary: {e}")
     
     if paciente.dentigrama_canvas:
         try:
-            public_id = paciente.dentigrama_canvas.split('/')[-1].split('.')[0]
-            cloudinary.uploader.destroy(f"dentigramas/{current_user.id}/{public_id}")
-        except:
-            pass
+            public_id = f"dentigramas/{paciente.odontologo_id}/dentigrama_paciente_{paciente.id}"
+            await asyncio.to_thread(cloudinary.uploader.destroy, public_id)
+        except Exception as e:
+            logger.warning(f"No se pudo eliminar dentigrama en Cloudinary: {e}")
     
     # 4. Finalmente eliminar el paciente
     await db.delete(paciente)

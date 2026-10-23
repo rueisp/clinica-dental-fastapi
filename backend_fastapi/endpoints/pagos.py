@@ -1,13 +1,14 @@
 # backend_fastapi/endpoints/pagos.py (Bloque inicial a modificar)
 import math
+import logging
+import secrets
+import string
+import uuid
+from datetime import datetime, timedelta
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func, extract
-from typing import Optional, List
-from datetime import datetime, timedelta
-import uuid
-import random
-import string
 
 import httpx
 from config import Config
@@ -37,14 +38,11 @@ from services.bot_engine_service import (
 
 from schemas.pago import PagoCreate, PagoResponse, PagoReporte
 from dependencies.limites import verificar_suscripcion_activa
+from utils.pago_utils import generar_codigo_unico
+
+logger = logging.getLogger("pagos")
 
 router = APIRouter(prefix="/pagos", tags=["pagos"])
-
-def generar_codigo_unico(zona_horaria: str = None):
-    """Genera un código único para el recibo tipo R-20240520-ABC123 usando la hora local"""
-    fecha_str = obtener_ahora_local(zona_horaria).strftime('%Y%m%d')
-    random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"R-{fecha_str}-{random_str}"
 
 # backend_fastapi/endpoints/pagos.py (dentro de la función crear_pago)
 @router.post("/nuevo", response_model=PagoResponse, status_code=status.HTTP_201_CREATED)
@@ -57,18 +55,29 @@ async def crear_pago(
     try:
         # 1. Obtener el momento exacto usando el helper centralizado
         ahora_local = obtener_ahora_local('America/Bogota')
-        paciente_nombre_final = pago_data.paciente_nombre
-        telefono_final = pago_data.telefono
+        paciente_nombre_final = pago_data.paciente_nombre.strip()
+        telefono_final = (pago_data.telefono or "").strip()
         
+        # Validación de pertenencia estricta de paciente (Cross-tenant security)
         if pago_data.paciente_id:
-            result = await db.execute(
-                select(Paciente).where(Paciente.id == pago_data.paciente_id)
+            query_pac = select(Paciente).where(
+                Paciente.id == pago_data.paciente_id,
+                Paciente.is_deleted == False
             )
+            if not current_user.is_admin:
+                query_pac = query_pac.where(Paciente.odontologo_id == current_user.id)
+
+            result = await db.execute(query_pac)
             paciente = result.scalar_one_or_none()
-            if paciente:
-                paciente_nombre_final = f"{paciente.nombres} {paciente.apellidos}"
-                if not telefono_final and paciente.telefono:
-                    telefono_final = paciente.telefono
+            if not paciente:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="El paciente especificado no existe o no pertenece a tu consultorio."
+                )
+
+            paciente_nombre_final = f"{paciente.nombres} {paciente.apellidos or ''}".strip()
+            if not telefono_final and paciente.telefono:
+                telefono_final = paciente.telefono.strip()
         
         # 2. Crear el registro
         nuevo_pago = PagoClinico(
@@ -90,8 +99,7 @@ async def crear_pago(
         await db.commit()
         await db.refresh(nuevo_pago)
         
-
-        # 3. Formatear la fecha de forma segura como objeto date local sin modificar el objeto de la DB
+        # 3. Formatear la fecha de forma segura como objeto date local
         fecha_local = nuevo_pago.fecha
         if isinstance(fecha_local, datetime):
             tz = obtener_tz_doctor('America/Bogota')
@@ -118,11 +126,15 @@ async def crear_pago(
             created_at=nuevo_pago.fecha if isinstance(nuevo_pago.fecha, datetime) else None
         )
         
+    except HTTPException:
+        await db.rollback()
+        raise
     except Exception as e:
         await db.rollback()
+        logger.error(f"Error registrando cobro clínico: {e}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo registrar el pago clínico. Intente nuevamente."
         )
 
 @router.get("/{id}", response_model=PagoResponse)
@@ -336,15 +348,18 @@ async def reportar_pago(
     db.add(nuevo_pago)
     await db.commit()
 
-    # 4. Enviar la alerta a Telegram
+    # 4. Enviar la alerta a Telegram con monto e informe en logger
     try:
-        await enviar_alerta_pago_telegram(
+        exito_tg = await enviar_alerta_pago_telegram(
             doctor_nombre=f"{current_user.nombres} {current_user.apellidos}",
             plan_nombre=pago_data.plan_nombre,
-            referencia=pago_data.referencia_pago
+            referencia=pago_data.referencia_pago,
+            monto=pago_data.monto
         )
+        if not exito_tg:
+            logger.warning("No se pudo entregar la notificación de Telegram al administrador.")
     except Exception as e:
-        print(f"❌ Error enviando Telegram: {str(e)}")
+        logger.warning(f"Error inesperado notificando a Telegram: {e}")
 
     return {"status": "success", "message": "Pago reportado exitosamente. Revisaremos en breve."}
 
@@ -358,17 +373,19 @@ async def aprobar_pago_admin(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
 
-    # 2. Convertir y buscar el pago
+    # 2. Convertir y buscar el pago con bloqueo de fila (Idempotencia contra doble clic)
     try:
         pago_uuid = uuid.UUID(pago_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="ID de pago inválido")
 
-    result_pago = await db.execute(select(PagoSuscripcion).where(PagoSuscripcion.id == pago_uuid))
+    result_pago = await db.execute(
+        select(PagoSuscripcion).where(PagoSuscripcion.id == pago_uuid).with_for_update()
+    )
     pago = result_pago.scalar_one_or_none()
     
-    if not pago or pago.estado == "aprobado":
-        raise HTTPException(status_code=404, detail="Pago no encontrado o ya aprobado")
+    if not pago or pago.estado != "pendiente":
+        raise HTTPException(status_code=404, detail="El pago no existe o ya fue procesado previamente.")
 
     # 3. Buscar el nuevo plan solicitado y la suscripción actual
     result_plan = await db.execute(select(Plan).where(Plan.id == pago.plan_id))
@@ -392,12 +409,13 @@ async def aprobar_pago_admin(
     # Verificamos si tiene días vigentes usando la autoridad de fechas
     tiene_dias_vigentes = fecha_esta_vigente(fecha_fin_actual) if fecha_fin_actual else False
     es_mismo_plan = suscripcion and suscripcion.plan_type == plan_nuevo.nombre
+    es_trial = bool(suscripcion and suscripcion.plan_type and suscripcion.plan_type.lower() == "trial")
 
-    if not tiene_dias_vigentes or not suscripcion or suscripcion.plan_type.lower() == "trial":
+    if not tiene_dias_vigentes or not suscripcion or es_trial:
         # Caso A: Plan vencido, usuario nuevo o venía de Trial -> Inicia desde hoy
         nueva_fecha_fin = ahora + timedelta(days=dias_base_nuevo_plan)
 
-    elif es_mismo_plan:
+    elif es_mismo_plan and fecha_fin_actual:
         # Caso B: Renovación normal del mismo plan -> Se suman los días al final de su ciclo
         nueva_fecha_fin = fecha_fin_actual + timedelta(days=dias_base_nuevo_plan)
 
@@ -431,6 +449,7 @@ async def aprobar_pago_admin(
         suscripcion.plan_id = plan_nuevo.id
         suscripcion.plan_type = plan_nuevo.nombre
         suscripcion.status = "active"
+        suscripcion.current_period_start = ahora
         suscripcion.current_period_end = nueva_fecha_fin
         suscripcion.updated_at = ahora
     else:
@@ -439,6 +458,7 @@ async def aprobar_pago_admin(
             plan_id=plan_nuevo.id,
             plan_type=plan_nuevo.nombre,
             status="active",
+            current_period_start=ahora,
             current_period_end=nueva_fecha_fin,
             updated_at=ahora
         )
@@ -460,60 +480,46 @@ async def obtener_pagos_pendientes(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # Verificar que sea admin
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
     
-    # Buscar pagos pendientes
-    query = select(PagoSuscripcion).where(PagoSuscripcion.estado == "pendiente")
+    # Consulta unificada sin N+1
+    query = (
+        select(PagoSuscripcion, Usuario, Plan, Subscription)
+        .join(Usuario, PagoSuscripcion.user_id == Usuario.id)
+        .join(Plan, PagoSuscripcion.plan_id == Plan.id)
+        .outerjoin(Subscription, Subscription.user_id == PagoSuscripcion.user_id)
+        .where(PagoSuscripcion.estado == "pendiente")
+        .order_by(PagoSuscripcion.fecha_reporte.desc())
+    )
     result = await db.execute(query)
-    pagos = result.scalars().all()
+    rows = result.all()
     
-    print(f"📊 Pagos encontrados: {len(pagos)}")  # DEBUG
-    
-    # Bucle corregido para obtener_pagos_pendientes
+    ahora = limpiar_naive(obtener_ahora_local('America/Bogota'))
     respuesta = []
-    for pago in pagos:
-        print(f"🔍 Procesando pago: {pago.id}")  # DEBUG
-        
-        # 1. Obtener datos del usuario
-        result_user = await db.execute(select(Usuario).where(Usuario.id == pago.user_id))
-        usuario = result_user.scalar_one_or_none()
-        
-        # 2. Obtener datos del plan solicitado
-        result_plan = await db.execute(select(Plan).where(Plan.id == pago.plan_id))
-        plan = result_plan.scalar_one_or_none()
 
-        # 3. Obtener suscripción actual para ver cuánto tiempo le queda (CANDADO DE SEGURIDAD)
-        result_sub = await db.execute(select(Subscription).where(Subscription.user_id == pago.user_id))
-        sub = result_sub.scalar_one_or_none()
-
-        # Cálculo de días actuales (Sincronizado con Bogotá)
+    for pago, usuario, plan, sub in rows:
         dias_acumulados = 0
         if sub and sub.current_period_end:
-            ahora = limpiar_naive(obtener_ahora_local('America/Bogota'))
             vence = sub.current_period_end.replace(tzinfo=None)
             if vence > ahora:
                 dias_acumulados = (vence - ahora).days
 
-        print(f"   Usuario: {usuario.email if usuario else 'No encontrado'} - Días previos: {dias_acumulados}")  # DEBUG
-        
         respuesta.append({
             "pago": {
                 "id": str(pago.id),
-                "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}" if usuario else "Desconocido",
-                "usuario_email": usuario.email if usuario else "N/A",
-                "plan_nombre": plan.nombre if plan else "Desconocido",
+                "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}".strip(),
+                "usuario_email": usuario.email,
+                "plan_nombre": plan.nombre,
                 "monto": pago.monto,
                 "referencia_pago": pago.referencia_pago,
                 "comprobante_url": pago.comprobante_url,
                 "fecha_reporte": pago.fecha_reporte.isoformat() if pago.fecha_reporte else None,
                 "estado": pago.estado,
-                "dias_actuales": dias_acumulados  # <--- NUEVO CAMPO ENVIADO AL FRONTEND
+                "dias_actuales": dias_acumulados
             }
         })
     
-    print(f"✅ Respuesta final: {len(respuesta)} items")  # DEBUG
     return respuesta
 
 
@@ -524,41 +530,34 @@ async def obtener_todos_pagos_suscripcion(
     skip: int = 0,
     limit: int = 50
 ):
-    # 1. Verificar que sea admin
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No tienes permisos de administrador")
     
-    # 2. Buscar todos los pagos (con paginación)
-    query = select(PagoSuscripcion).order_by(
-        PagoSuscripcion.fecha_reporte.desc()
-    ).offset(skip).limit(limit)
+    limit_seguro = min(max(1, limit), 100)
     
-    result = await db.execute(query)
-    pagos = result.scalars().all()
-    
-    # 3. Contar total
-    count_query = select(func.count()).select_from(PagoSuscripcion)
+    # 1. Conteo total
+    count_query = select(func.count(PagoSuscripcion.id))
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
     
-    # 4. Enriquecer con datos de usuario y plan
-    respuesta = []
-    for pago in pagos:
-        result_user = await db.execute(
-            select(Usuario).where(Usuario.id == pago.user_id)
-        )
-        usuario = result_user.scalar_one_or_none()
-        
-        result_plan = await db.execute(
-            select(Plan).where(Plan.id == pago.plan_id)
-        )
-        plan = result_plan.scalar_one_or_none()
-        
-        respuesta.append({
+    # 2. Consulta unificada sin N+1
+    query = (
+        select(PagoSuscripcion, Usuario, Plan)
+        .join(Usuario, PagoSuscripcion.user_id == Usuario.id)
+        .join(Plan, PagoSuscripcion.plan_id == Plan.id)
+        .order_by(PagoSuscripcion.fecha_reporte.desc())
+        .offset(skip)
+        .limit(limit_seguro)
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    
+    respuesta = [
+        {
             "id": str(pago.id),
-            "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}" if usuario else "Desconocido",
-            "usuario_email": usuario.email if usuario else "N/A",
-            "plan_nombre": plan.nombre if plan else "Desconocido",
+            "usuario_nombre": f"{usuario.nombres} {usuario.apellidos}".strip(),
+            "usuario_email": usuario.email,
+            "plan_nombre": plan.nombre,
             "monto": pago.monto,
             "referencia_pago": pago.referencia_pago,
             "comprobante_url": pago.comprobante_url,
@@ -566,12 +565,14 @@ async def obtener_todos_pagos_suscripcion(
             "fecha_aprobacion": pago.fecha_aprobacion.isoformat() if pago.fecha_aprobacion else None,
             "estado": pago.estado,
             "observacion_admin": pago.observacion_admin
-        })
+        }
+        for pago, usuario, plan in rows
+    ]
     
     return {
         "total": total,
         "skip": skip,
-        "limit": limit,
+        "limit": limit_seguro,
         "pagos": respuesta
     }
 
@@ -583,24 +584,29 @@ async def obtener_resumen_usuarios(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="No autorizado")
 
-    # Unimos Usuario con Subscription para traer la información
-    query = select(Usuario, Subscription).join(Subscription, Usuario.id == Subscription.user_id)
+    # Subconsulta correlacionada para conteo de pacientes en 1 solo viaje SQL
+    pacientes_subquery = (
+        select(func.count(Paciente.id))
+        .where(
+            Paciente.odontologo_id == Usuario.id,
+            Paciente.is_deleted == False
+        )
+        .correlate(Usuario)
+        .scalar_subquery()
+    )
+
+    query = (
+        select(Usuario, Subscription, pacientes_subquery.label("total_pacientes"))
+        .join(Subscription, Usuario.id == Subscription.user_id)
+        .order_by(Usuario.nombres.asc())
+    )
     result = await db.execute(query)
     rows = result.all()
 
     ahora_colombia = obtener_ahora_local('America/Bogota')
     respuesta = []
 
-    for user, sub in rows:
-        # 1. Contamos pacientes activos del odontólogo
-        count_query = select(func.count(Paciente.id)).where(
-            Paciente.odontologo_id == user.id,
-            Paciente.is_deleted == False
-        )
-        count_result = await db.execute(count_query)
-        total_pacientes = count_result.scalar() or 0
-
-        # 2. Cálculo dinámico de vigencia del estado
+    for user, sub, total_pacientes in rows:
         if user.is_admin:
             estado_dinamico = "active"
         elif not sub or not sub.current_period_end:
@@ -622,12 +628,12 @@ async def obtener_resumen_usuarios(
 
         respuesta.append({
             "id": str(user.id),
-            "nombre": f"{user.nombres} {user.apellidos}",
+            "nombre": f"{user.nombres} {user.apellidos}".strip(),
             "email": user.email,
             "plan_actual": sub.plan_type if sub else "Sin Plan",
             "estado": estado_dinamico,
             "vence": sub.current_period_end.strftime('%d/%m/%Y') if sub.current_period_end else "N/A",
-            "total_pacientes": total_pacientes
+            "total_pacientes": total_pacientes or 0
         })
     
     return respuesta
@@ -772,6 +778,12 @@ async def eliminar_doctor_admin(
 
     if not usuario_a_eliminar:
         raise HTTPException(status_code=404, detail="El doctor no existe o ya fue eliminado.")
+
+    if usuario_a_eliminar.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Operación bloqueada: No se puede eliminar una cuenta con privilegios de administrador."
+        )
 
     user_id_str = str(target_uuid)
     instance_name = f"doctor_{user_id_str.replace('-', '_')}"

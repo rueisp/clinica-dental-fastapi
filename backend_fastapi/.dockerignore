@@ -1,0 +1,11 @@
+.env
+.env.*
+venv_fastapi/
+__pycache__/
+*.pyc
+*.pyo
+.git
+.gitignore
+.gcloudignore
+repomix-output.xml
+*.bat

@@ -1,10 +1,12 @@
 # backend_fastapi/schemas/plan.py
 from typing import Optional, Any, Union
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 
 class PlanRead(BaseModel):
     """Esquema para la lectura pública y administrativa de planes"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: Union[UUID, str]
     nombre: str
     descripcion: Optional[str] = None
@@ -21,6 +23,3 @@ class PlanRead(BaseModel):
     can_use_voice: bool = False
     can_export_history: bool = False
     can_use_bot: bool = False
-
-    class Config:
-        from_attributes = True

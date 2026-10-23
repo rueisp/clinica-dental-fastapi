@@ -135,10 +135,11 @@ export default function ListaPacientes() {
           </button>
         </div>
 
-        {/* Contador de resultados */}
-        {haBuscado && !loading && (
-          <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
-            Mostrando {pacientes.length} de {totalPacientes} pacientes encontrados
+        {/* Contador de resultados estable sin pestañeo */}
+        {haBuscado && (
+          <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between">
+            <span>Mostrando {pacientes.length} de {totalPacientes} pacientes encontrados</span>
+            {loading && <span className="text-blue-500 animate-pulse text-[10px]">Cargando...</span>}
           </div>
         )}
 
@@ -154,8 +155,8 @@ export default function ListaPacientes() {
                   <th className="px-6 py-4">Teléfono</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
+              <tbody className={`divide-y divide-gray-50 transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                {pacientes.length === 0 && loading ? (
                   <tr>
                     <td colSpan="4" className="px-6 py-12 text-center text-gray-400 italic">
                       Cargando pacientes...
@@ -206,15 +207,15 @@ export default function ListaPacientes() {
           </div>
         </div>
 
-        {haBuscado && !loading && totalPaginas > 1 && (
+        {haBuscado && totalPaginas > 1 && (
           <div className="flex justify-center items-center gap-4 mt-8">
             <button
               onClick={() => buscarPacientes(paginaActual - 1)}
-              disabled={paginaActual === 1}
-              className={`px-5 py-2 rounded-xl font-medium ${
-                paginaActual === 1
+              disabled={loading || paginaActual === 1}
+              className={`px-5 py-2 rounded-xl font-medium transition-all ${
+                loading || paginaActual === 1
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm cursor-pointer'
               }`}
             >
               ← Anterior
@@ -229,11 +230,11 @@ export default function ListaPacientes() {
             
             <button
               onClick={() => buscarPacientes(paginaActual + 1)}
-              disabled={paginaActual === totalPaginas}
-              className={`px-5 py-2 rounded-xl font-medium ${
-                paginaActual === totalPaginas
+              disabled={loading || paginaActual === totalPaginas}
+              className={`px-5 py-2 rounded-xl font-medium transition-all ${
+                loading || paginaActual === totalPaginas
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm cursor-pointer'
               }`}
             >
               Siguiente →

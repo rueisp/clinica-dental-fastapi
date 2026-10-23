@@ -1,12 +1,12 @@
 # backend_fastapi/endpoints/usuarios.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 from database import get_db
 from dependencies.auth import get_current_user
-from models import Usuario, Subscription, Plan
+from models import Usuario, Subscription, Plan, PagoSuscripcion
 from utils.auth_utils import verificar_password, hash_password
 from schemas.auth import PasswordUpdate, PerfilUpdate
 from services.bot_engine_service import CACHE_CONFIG_DOCTOR
@@ -31,11 +31,12 @@ async def get_usuario_actual(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscamos el plan y la suscripción en una sola consulta unificada
+    # 1. Buscamos el plan y la suscripción en una sola consulta unificada con prioridad por ID
     query = (
         select(Subscription, Plan)
         .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
         .where(Subscription.user_id == current_user.id)
+        .order_by(case((Subscription.plan_id == Plan.id, 1), else_=2))
     )
     result = await db.execute(query)
     row = result.first()
@@ -69,6 +70,17 @@ async def get_usuario_actual(
 
     sub_obj, plan_obj = row if row else (None, None)
 
+    # REGLA DE ORO: Trial activo garantiza acceso total a todas las herramientas y al bot
+    es_trial_activo = bool(
+        status == "active" and (
+            (plan_obj and plan_obj.nombre.lower() == "trial") or 
+            (sub_obj and sub_obj.plan_type and sub_obj.plan_type.lower() == "trial")
+        )
+    )
+
+    tiene_acceso_total = current_user.is_admin or es_trial_activo
+    plan_activo = bool(plan_obj and status == "active")
+
     return {
         "id": str(current_user.id),
         "nombres": current_user.nombres,
@@ -85,11 +97,11 @@ async def get_usuario_actual(
             "es_anual": es_anual
         },
         "permissions": {
-            "can_use_odontogram": True if current_user.is_admin else (plan_obj.can_use_odontogram if (plan_obj and status == "active") else False),
-            "can_use_multimedia": True if current_user.is_admin else (plan_obj.can_use_multimedia if (plan_obj and status == "active") else False),
-            "can_use_voice": True if current_user.is_admin else (plan_obj.can_use_voice if (plan_obj and status == "active") else False),
-            "can_export_history": True if current_user.is_admin else (plan_obj.can_export_history if (plan_obj and status == "active") else False),
-            "can_use_bot": True if current_user.is_admin else (plan_obj.can_use_bot if (plan_obj and status == "active") else False),
+            "can_use_odontogram": True if tiene_acceso_total else (plan_obj.can_use_odontogram if plan_activo else False),
+            "can_use_multimedia": True if tiene_acceso_total else (plan_obj.can_use_multimedia if plan_activo else False),
+            "can_use_voice": True if tiene_acceso_total else (plan_obj.can_use_voice if plan_activo else False),
+            "can_export_history": True if tiene_acceso_total else (plan_obj.can_export_history if plan_activo else False),
+            "can_use_bot": True if tiene_acceso_total else (plan_obj.can_use_bot if plan_activo else False),
         }
     }
 
@@ -99,12 +111,20 @@ async def cambiar_plan(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Buscar el plan destino en el catálogo
-    result = await db.execute(select(Plan).where(Plan.nombre == request.plan_nombre))
+    if current_user.is_admin:
+        raise HTTPException(
+            status_code=400,
+            detail="Los administradores cuentan con acceso ilimitado perpetuo y no requieren cambio de plan."
+        )
+
+    # 1. Buscar el plan destino activo en el catálogo
+    result = await db.execute(
+        select(Plan).where(Plan.nombre == request.plan_nombre, Plan.activo.is_(True))
+    )
     plan_destino = result.scalar_one_or_none()
     
     if not plan_destino:
-        raise HTTPException(status_code=404, detail="Plan no encontrado")
+        raise HTTPException(status_code=404, detail="El plan solicitado no existe o no se encuentra activo.")
     
     # 2. 🚫 BLOQUEO ABSOLUTO: El Trial solo se otorga al registrarse, nunca al cambiar de plan
     if plan_destino.nombre.lower() == "trial":
@@ -120,7 +140,6 @@ async def cambiar_plan(
     suscripcion = result_sub.scalar_one_or_none()
 
     # 4. Candado de seguridad: Bloquear si ya tiene un pago pendiente de aprobación
-    from models import PagoSuscripcion
     result_pago = await db.execute(
         select(PagoSuscripcion).where(
             PagoSuscripcion.user_id == current_user.id, 
@@ -135,8 +154,9 @@ async def cambiar_plan(
 
     # 5. Validación de suscripciones activas existentes (Reglas de Upgrade)
     if suscripcion and suscripcion.status == "active" and suscripcion.current_period_end:
-        # Solo aplicamos restricción de upgrade si el plan está REALMENTE VIGENTE
-        if fecha_esta_vigente(suscripcion.current_period_end) and suscripcion.plan_type.lower() != "trial":
+        plan_type_actual = (suscripcion.plan_type or "").lower()
+        # Solo aplicamos restricción de upgrade si el plan está REALMENTE VIGENTE y no es trial
+        if fecha_esta_vigente(suscripcion.current_period_end) and plan_type_actual != "trial":
             res_plan_actual = await db.execute(select(Plan).where(Plan.nombre == suscripcion.plan_type))
             plan_actual = res_plan_actual.scalar_one_or_none()
 
@@ -184,6 +204,7 @@ async def get_mi_plan_detalle(
         select(Subscription, Plan)
         .outerjoin(Plan, (Subscription.plan_id == Plan.id) | (func.lower(Subscription.plan_type) == func.lower(Plan.nombre)))
         .where(Subscription.user_id == current_user.id)
+        .order_by(case((Subscription.plan_id == Plan.id, 1), else_=2))
     )
     result = await db.execute(query)
     row = result.first()
@@ -226,8 +247,14 @@ async def get_mi_plan_detalle(
         }
 
     fecha_fin_aware = asegurar_tz(db_fecha_fin)
-    fecha_inicio_calc = fecha_fin_aware - timedelta(days=plan.duracion_dias)
-    fecha_inicio_str = f"{meses_es[fecha_inicio_calc.month]} {fecha_inicio_calc.year}"
+    
+    # Usar fecha de inicio real si está registrada en base de datos
+    if sub.current_period_start:
+        fecha_inicio_aware = asegurar_tz(sub.current_period_start)
+    else:
+        fecha_inicio_aware = fecha_fin_aware - timedelta(days=plan.duracion_dias)
+
+    fecha_inicio_str = f"{meses_es[fecha_inicio_aware.month]} {fecha_inicio_aware.year}"
     fecha_fin_str = f"{meses_es[fecha_fin_aware.month]} {fecha_fin_aware.year}"
 
     if fecha_esta_vencida(db_fecha_fin):
@@ -237,7 +264,22 @@ async def get_mi_plan_detalle(
     else:
         status_final = sub.status
         dias_restantes = calcular_dias_restantes(db_fecha_fin)
-        porcentaje = calcular_progreso_periodo(db_fecha_fin, plan.duracion_dias)
+        porcentaje = calcular_progreso_periodo(
+            db_fecha_fin, 
+            plan.duracion_dias, 
+            dt_inicio=sub.current_period_start
+        )
+
+    # REGLA DE ORO: Trial activo garantiza acceso total a todas las herramientas y al bot
+    es_trial_activo = bool(
+        status_final == "active" and (
+            (plan and plan.nombre.lower() == "trial") or 
+            (sub.plan_type and sub.plan_type.lower() == "trial")
+        )
+    )
+
+    tiene_acceso_total = es_trial_activo
+    plan_activo = bool(status_final == "active")
 
     return {
         "tiene_plan": True,
@@ -252,11 +294,11 @@ async def get_mi_plan_detalle(
         "status": status_final,
         "es_anual": plan.duracion_dias == 365,
         "permissions": {
-            "can_use_odontogram": plan.can_use_odontogram if status_final == "active" else False,
-            "can_use_multimedia": plan.can_use_multimedia if status_final == "active" else False,
-            "can_use_voice": plan.can_use_voice if status_final == "active" else False,
-            "can_export_history": plan.can_export_history if status_final == "active" else False,
-            "can_use_bot": plan.can_use_bot if status_final == "active" else False,
+            "can_use_odontogram": True if tiene_acceso_total else (plan.can_use_odontogram if plan_activo else False),
+            "can_use_multimedia": True if tiene_acceso_total else (plan.can_use_multimedia if plan_activo else False),
+            "can_use_voice": True if tiene_acceso_total else (plan.can_use_voice if plan_activo else False),
+            "can_export_history": True if tiene_acceso_total else (plan.can_export_history if plan_activo else False),
+            "can_use_bot": True if tiene_acceso_total else (plan.can_use_bot if plan_activo else False),
         }
     }
 
@@ -268,10 +310,10 @@ async def actualizar_perfil(
     db: AsyncSession = Depends(get_db)
 ):
     """Actualiza la información básica y de marca del odontólogo e invalida caché de bot"""
-    current_user.nombres = request.nombres
-    current_user.apellidos = request.apellidos
-    current_user.nombre_consultorio = request.nombre_consultorio
-    current_user.telefono = request.telefono
+    current_user.nombres = request.nombres.strip()
+    current_user.apellidos = (request.apellidos or "").strip()
+    current_user.nombre_consultorio = (request.nombre_consultorio or "").strip() or None
+    current_user.telefono = (request.telefono or "").strip() or None
     
     await db.commit()
 
@@ -286,12 +328,19 @@ async def cambiar_password(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Cambia la contraseña validando la anterior"""
+    """Cambia la contraseña validando la anterior y evitando contraseñas idénticas"""
     # 1. Verificar que la contraseña anterior sea correcta
     if not verificar_password(request.old_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
     
-    # 2. Hashear y guardar la nueva
+    # 2. Verificar que la nueva contraseña no sea idéntica
+    if request.old_password == request.new_password:
+        raise HTTPException(
+            status_code=400, 
+            detail="La nueva contraseña debe ser diferente a la contraseña actual."
+        )
+
+    # 3. Hashear y guardar la nueva
     current_user.password_hash = hash_password(request.new_password)
     await db.commit()
     
